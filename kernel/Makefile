@@ -66,9 +66,6 @@ LFLAGS = -T$(BUILD_DIR)/kldscript $(CPULFLAGS)
 # Add directories to the include and library paths
 INCPATH = $(DIRS) $(BUILD_DIR)/kern
 
-# Which files to add to backups, apart from the source code
-EXTRA_FILES = Makefile
-
 # CC tools and parameters
 #------------------------------------------------------------------------------
 CC      ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-gcc
@@ -165,12 +162,6 @@ clean:
 
 realclean: clean
 	@$(RM) -r $(BUILD_DIR)
-
-# Backup the source files
-backup:
-	@if [ ! -e .backup ]; then mkdir .backup; fi;
-	@tar jcvf .backup/backup_`date +%d-%m-%y_%H.%M`.tbz2 $(SOURCES) $(HEADERS) $(EXTRA_FILES)
-
 
 # Create compilation tree
 dirs:
