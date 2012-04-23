@@ -1,0 +1,344 @@
+/*
+ * kern/thread.h - the definition of a thread and its related operations
+ * 
+ * Copyright (c) 2008,2009,2010,2011,2012 Ghassan Almaless
+ * Copyright (c) 2011,2012 UPMC Sorbonne Universites
+ *
+ * This file is part of ALMOS-kernel.
+ *
+ * ALMOS-kernel is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2.0 of the License.
+ *
+ * ALMOS-kernel is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ALMOS-kernel; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#ifndef _THREAD_H_
+#define _THREAD_H_
+
+#include <types.h>
+#include <list.h>
+#include <spinlock.h>
+#include <wait_queue.h>
+#include <cpu.h>
+
+typedef enum
+{   
+	PTHREAD = 0,
+	KTHREAD,
+	TH_IDLE,
+	THREAD_TYPES_NR
+} thread_type_t;
+
+typedef enum
+{
+	S_CREATE = 0,
+	S_USR,
+	S_KERNEL,
+	S_READY,
+	S_WAIT,
+	S_DEAD,
+	THREAD_STATES_NR
+} thread_state_t;
+
+const char* thread_state_name[THREAD_STATES_NR];
+const char* thread_type_name[THREAD_TYPES_NR];
+
+struct cpu_desc_s;
+struct sched_s;
+struct list_entry;
+struct task_s;
+struct event_s;
+
+/** 
+ * Pthread attributes
+ * Mandatory members must be set before 
+ * initializing CPU new context.
+ */
+typedef struct
+{
+	uint_t key;
+	uint_t isDetached;
+	uint_t sched_policy;
+	uint_t inheritsched;
+	void *stack_addr;
+	size_t stack_size;
+	void *entry_func;                  /* mandatory */
+	void *exit_func;                   /* mandatory */
+	void *arg1;
+	void *arg2;
+	void *sigreturn_func;
+	void *sigstack_addr;
+	size_t sigstack_size;
+	struct sched_param  sched_param;
+	sint_t cid;
+	sint_t cpu_lid;
+	sint_t cpu_gid;
+	uint_t tid;			   /* mandatory */
+	uint_t pid;                        /* mandatory */
+} pthread_attr_t;
+
+/** 
+ * Thread additional informations
+ */
+struct thread_info
+{
+	uint_t pgfault_cntr;
+	uint_t remote_pages_cntr;
+	uint_t spurious_pgfault_cntr;
+	uint_t sched_nr;
+	uint_t u_err_nr;
+	uint_t m_err_nr;
+	bool_t isTraced;
+	bool_t isWakeable:16;
+	bool_t isWakedup:16;
+	uint_t tm_exec;
+	uint_t tm_tmp;                      /*! temporary date to compute execution duration */
+	uint_t tm_usr;                      /*! user execution duration */
+	uint_t tm_sys;                      /*! system execution duration */
+	uint_t tm_sleep;                    /*! sleeping duration */
+	uint_t tm_wait;
+	error_t errno;                      /*! errno value of last system call */
+	error_t retval;                     /*! return value of last system call */
+	uint_t sig_state;
+	uint_t sig_mask;
+	struct cpu_s *ocpu;
+	uint_t wakeup_date;                 /*! wakeup date in seconds */
+	void *exit_value;                   /*! exit value returned by thread or joined one */
+	struct thread_s *join;              /*! points to waiting thread in join case */
+	struct thread_s *waker;
+	struct wait_queue_s wait_queue;
+	struct wait_queue_s *queue;
+	struct cpu_context_s pss;	    /*! Processor Saved State */
+	uint_t tm_create;                   /*! date of the creation */
+	uint_t tm_born;                     /*! date of the thread loading */
+	uint_t tm_dead;                     /*! date of the death */
+	uint_t order;
+	uint_t usr_tls;
+	pthread_attr_t attr;
+	void  *kstack_addr;
+	uint_t kstack_size;
+	struct event_s *e_info;
+	struct page_s *page;
+};
+
+
+/**
+ * The Thread Descriptor
+ */
+struct thread_s
+{
+	struct cpu_uzone_s uzone;     /*! User related info, this offset is frozen */
+	spinlock_t lock;
+	thread_state_t state;
+	uint_t flags;                 /*! TH_NEED_TO_SCHED */
+	uint_t joinable;	  
+	error_t locks_count;	      /*! number of locks which are locked by the current thread */
+	sint_t quantum;               /*! number of clock ticks given to the thread */
+	uint_t ticks_nr;              /*! number of ticks used */
+	uint_t static_prio;
+	uint_t dynamic_prio;
+	uint_t boosted_prio;
+	uint_t prio;
+	uint_t ltid;
+	struct cpu_s *lcpu;           /*! pointer to the local CPU description structure */
+	struct sched_s *local_sched;  /*! pointer to the local scheduler structure */
+	struct task_s *task;
+	thread_type_t type;           /*! 3 types : usr (PTHREAD), kernel (KTHREAD) or idle (TH_IDLE) */
+	struct cpu_context_s pws;     /*! processor work state (register saved zone) */
+	struct list_entry list;       /*! next/pred threads at the same state */
+	struct list_entry rope;       /*! next/pred threads in the __rope list of thread */
+	struct thread_info info;      /*! (exit value, statistics, ...) */
+	uint_t signature;
+};
+
+/* Thread Attributes */
+#define thread_isJoinable(thread)   
+#define thread_set_joinable(thread) 
+#define thread_clear_joinable(thread)
+#define thread_sched_activate(thread)
+#define thread_sched_isActivated(thread)
+#define thread_sched_deactivate(thread)
+#define thread_preempt_disable(thread)
+#define thread_preempt_enable(thread)
+#define thread_isPreemptable(thread)
+#define thread_isWakeable(thread)
+#define thread_isCapWakeup(thread)
+#define thread_set_wakeable(thread)
+#define thread_set_cap_wakeup(thread)
+#define thread_clear_wakeable(thread)
+#define thread_set_no_vmregion(thread)
+#define thread_has_vmregion(thread)
+
+/* Currents task, thread, cluster, cpu  */
+#define current_task
+#define current_thread
+#define current_cpu
+#define origin_cpu
+#define current_cluster
+#define origin_cluster
+
+/* Thread's current & origin cpu, cluster */
+#define thread_current_cpu(thread)
+#define thread_current_cluster(thread)
+#define thread_origin_cpu(thread)
+#define thread_origin_cluster(thread)
+#define thread_set_current_cpu(thread,cpu)
+#define thread_set_origin_cpu(thread,cpu)
+
+struct kthread_args_s
+{
+	union
+	{
+		uint_t val[6];
+		cacheline_t pad;
+	};
+};
+
+typedef struct kthread_args_s kthread_args_t;
+typedef void* (kthread_t) (void *);
+
+int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr);
+int sys_thread_join (pthread_t tid, void **thread_return);
+int sys_thread_detach (pthread_t tid);
+int sys_thread_getattr(pthread_attr_t *attr);
+int sys_thread_exit (void *exit_val);
+int sys_thread_yield();
+int sys_thread_sleep();
+int sys_thread_wakeup(pthread_t tid, pthread_t *tid_tbl, uint_t count);
+int sys_utls(uint_t operation, uint_t value);
+
+void* thread_idle(void *arg);
+
+error_t thread_create(struct task_s *task, 
+		      pthread_attr_t *attr, 
+		      struct thread_s **new_thread);
+
+struct thread_s* kthread_create(struct task_s *task, 
+				kthread_t *kfunc, 
+				void *arg, 
+				uint_t cid, 
+				uint_t cpu_lid);
+
+error_t thread_dup(struct task_s *task, 
+		   struct thread_s *dst,
+		   struct cpu_s *dst_cpu,
+		   struct cluster_s *dst_clstr,
+		   struct thread_s *src);
+
+error_t thread_migrate(struct thread_s *thread);
+error_t thread_destroy(struct thread_s *thread);
+
+EVENT_HANDLER(thread_destroy_handler);
+
+//////////////////////////////////////////////////////////////////////
+///                       Private Section                          ///
+//////////////////////////////////////////////////////////////////////
+
+#define TH_NEED_TO_SCHED    0x01
+#define TH_JOINABLE         0x02
+#define TH_NO_VM_REGION     0x04
+#define TH_CAN_WAKEUP       0x08
+#define TH_CAP_WAKEUP       0x10
+
+/* Thread Attributes */
+#undef thread_isJoinable
+#undef thread_set_joinable
+#undef thread_clear_joinable
+#undef thread_sched_activate
+#undef thread_sched_deactivate
+#undef thread_sched_isActivated
+#undef thread_isPreemptable
+#undef thread_preempt_disable
+#undef thread_preempt_enable
+#undef thread_isWakeable
+#undef thread_isCapWakeup
+#undef thread_set_wakeable
+#undef thread_set_cap_wakeup
+#undef thread_clear_wakeable
+#undef thread_set_no_vmregion
+#undef thread_has_vmregion
+#define thread_isJoinable(_th)         ((_th)->joinable != 0)
+#define thread_set_joinable(_th)     do{(_th)->joinable = 1;}while(0)
+#define thread_clear_joinable(_th)   do{(_th)->joinable = 0;}while(0)
+
+#define thread_sched_activate(_th)   do{(_th)->flags |= TH_NEED_TO_SCHED;}while(0)
+#define thread_sched_deactivate(_th) do{(_th)->flags &= ~TH_NEED_TO_SCHED;}while(0)
+#define thread_sched_isActivated(_th) (_th)->flags & TH_NEED_TO_SCHED
+#define thread_isPreemptable(_th)     ((_th)->locks_count == 0)
+#define thread_preempt_disable(_th)				\
+	do{{							\
+			uint_t irq_state;			\
+			cpu_disable_all_irq(&irq_state);	\
+			(_th)->locks_count ++;			\
+			cpu_restore_irq(irq_state);		\
+	  }}while(0)
+
+#define thread_preempt_enable(_th)				\
+	do{{							\
+			uint_t irq_state;			\
+			cpu_disable_all_irq(&irq_state);	\
+			(_th)->locks_count --;			\
+			cpu_restore_irq(irq_state);		\
+	  }}while(0)
+
+#define thread_isWakeable(_th)         ((_th)->flags &= TH_CAN_WAKEUP)
+#define thread_isCapWakeup(_th)        ((_th)->flags &= TH_CAP_WAKEUP)
+
+#define thread_set_cap_wakeup(_th)				\
+	do{{							\
+			uint_t irq_state;			\
+			cpu_disable_all_irq(&irq_state);	\
+			(_th)->flags |= TH_CAP_WAKEUP;		\
+			cpu_restore_irq(irq_state);		\
+	  }}while(0)
+
+#define thread_set_wakeable(_th)		\
+	do{					\
+		(_th)->flags |= TH_CAN_WAKEUP;	\
+		(_th)->flags &= ~TH_CAP_WAKEUP;	\
+	}while(0)
+
+#define thread_clear_wakeable(_th)		\
+	(_th)->flags &= ~TH_CAN_WAKEUP
+
+
+#define thread_set_no_vmregion(_th) do{(_th)->flags |= TH_NO_VM_REGION;}while(0)
+#define thread_has_vmregion(_th)    (((_th)->flags & TH_NO_VM_REGION) == 0)
+
+/* Currents task, thread, cluster, cpu  */
+#undef current_task
+#undef current_thread
+#undef current_cpu
+#undef origin_cpu
+#undef current_cluster
+#undef origin_cluster
+#define current_task    (cpu_current_thread()->task)
+#define current_thread  (cpu_current_thread())
+#define current_cpu     (cpu_current_thread()->lcpu)
+#define origin_cpu      (cpu_current_thread()->info.ocpu)
+#define current_cluster (current_cpu->cluster)
+#define origin_cluster  (origin_cpu->cluster)
+
+/* Thread's current & origin cpu, cluster */
+#undef thread_current_cpu
+#undef thread_current_cluster
+#undef thread_origin_cpu
+#undef thread_origin_cluster
+#undef thread_set_current_cpu
+#undef thread_set_origin_cpu
+#define thread_current_cpu(_th)            ((_th)->lcpu)
+#define thread_current_cluster(_th)        ((_th)->lcpu->cluster)
+#define thread_origin_cpu(_th)             ((_th)->info.ocpu)
+#define thread_origin_cluster(_th)         ((_th)->info.ocpu->cluster)
+#define thread_set_current_cpu(_th,_cpu)   do{(_th)->lcpu = (_cpu);}while(0)
+#define thread_set_origin_cpu(_th,_cpu)    do{(_th)->info.ocpu = (_cpu);}while(0)
+
+#endif	/* _THREAD_H_ */

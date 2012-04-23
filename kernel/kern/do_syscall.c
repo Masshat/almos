@@ -1,0 +1,193 @@
+/*
+ * kern/do_syscall.c - kernel unified syscall entry-point
+ * 
+ * Copyright (c) 2008,2009,2010,2011,2012 Ghassan Almaless
+ * Copyright (c) 2011,2012 UPMC Sorbonne Universites
+ *
+ * This file is part of ALMOS-kernel.
+ *
+ * ALMOS-kernel is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2.0 of the License.
+ *
+ * ALMOS-kernel is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ALMOS-kernel; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#include <syscall.h>
+#include <errno.h>
+#include <time.h>
+#include <cpu.h>
+#include <dma.h>
+#include <thread.h>
+#include <task.h>
+#include <scheduler.h>
+#include <kmem.h>
+#include <kdmsg.h>
+#include <sys-vfs.h>
+#include <cpu-trace.h>
+#include <semaphore.h>
+#include <cond_var.h>
+#include <barrier.h>
+#include <rwlock.h>
+#include <vmm.h>
+#include <signal.h>
+#include <page.h>
+
+static int sys_notAvailable()
+{
+	printk(WARNING, "WARNING: User Asked a vaild Syscall NR but found no corresponding serice\n");
+	return ENOSYS;
+}
+
+typedef int (*sys_func_t) ();
+
+static sys_func_t
+sys_call_tbl[__SYS_CALL_SERVICES_NUM] = {
+	sys_thread_exit,
+	sys_mmap,
+	sys_thread_create,
+	sys_thread_join,
+	sys_thread_detach,
+	sys_thread_yield,
+	sys_sem,
+	sys_cond_var,
+	sys_barrier,
+	sys_rwlock,
+	sys_thread_sleep,
+	sys_thread_wakeup,
+	sys_open,
+	sys_creat,
+	sys_read,
+	sys_write,
+	sys_lseek,
+	sys_close,
+	sys_unlink,
+	sys_pipe,
+	sys_chdir,
+	sys_mkdir,
+	sys_mkfifo,
+	sys_opendir,
+	sys_readdir,
+	sys_closedir,
+	sys_getcwd,
+	sys_clock,
+	sys_alarm,
+	sys_dma_memcpy,
+	sys_utls,
+	sys_notAvailable,		/* Reserved for sigreturn */
+	sys_signal,
+	sys_sigreturn_setup,
+	sys_kill,
+	sys_getpid,
+	sys_fork,
+	sys_exec,
+	sys_thread_getattr,
+	sys_ps,
+	sys_madvise,
+	sys_mcntl,
+	sys_stat
+};
+
+reg_t do_syscall (reg_t arg0,
+		  reg_t arg1,
+		  reg_t arg2,
+		  reg_t arg3,
+		  reg_t service_num)
+  
+{
+	register int return_val;
+	register struct thread_s *this;
+	struct cpu_s *cpu;
+
+	return_val  = 0;
+	this        = current_thread;
+	this->state = S_KERNEL;
+	cpu         = thread_current_cpu(this);
+	
+	tm_usr_compute(this);
+
+	cpu_trace_write(cpu, __do_syscall);
+
+	return_val = cpu_context_save(&this->info.pss);
+   
+	if(return_val != 0)
+	{
+		/* Reload these pointers as the task may be forked */
+		this = current_thread;
+		cpu  = current_cpu;
+		cpu_wbflush();
+		/* ----------------------------------------------- */
+
+		return_val = this->info.retval;
+		goto END_DO_SYSCALL;
+	}
+
+	cpu_enable_all_irq(NULL);
+  
+	if(service_num >= __SYS_CALL_SERVICES_NUM)
+	{
+		printk(INFO, "INFO: %s: Unknow requested service %d, thread %x, proc %d\n",
+		       __FUNCTION__, service_num, this, cpu->gid);
+		this->info.errno = ENOSYS;
+		goto ABORT_DO_SYSCALL;
+	}
+
+	if(this->info.isTraced == true)
+	{
+		printk(DEBUG, "DEBUG: %s: Pid %d, Tid %d (%x), CPU %d, Service #%d\n  Arg0 %x, Arg1 %x, Arg2 %x, Arg3 %x\n",
+		       __FUNCTION__, 
+		       this->task->pid,
+		       this->info.order,
+		       this,
+		       cpu->gid, 
+		       service_num, 
+		       arg0, 
+		       arg1, 
+		       arg2, 
+		       arg3);
+	}
+
+	this->info.errno = 0;
+	return_val = sys_call_tbl[service_num] (arg0,arg1,arg2,arg3);
+   
+END_DO_SYSCALL:
+
+	cpu_disable_all_irq(NULL);
+   
+	if(event_is_pending(&cpu->re_listner))
+		event_listner_notify(&cpu->re_listner);
+
+	if(event_is_pending(&cpu->le_listner))
+		event_listner_notify(&cpu->le_listner);
+
+	if(thread_sched_isActivated(this))
+		sched_yield(this);
+
+ABORT_DO_SYSCALL:
+	tm_sys_compute(this);
+	this->state = S_USR;
+
+	if(this->info.isTraced == true)
+	{
+		printk(DEBUG, "DEBUG: %s: Pid %d, Tid %d (%x), CPU %d, Service #%d, Return %x, Error %d\n",
+		       __FUNCTION__, 
+		       this->task->pid,
+		       this->info.order,
+		       this,
+		       cpu->gid, 
+		       service_num, 
+		       return_val, 
+		       this->info.errno);
+	}
+
+	this->info.retval = return_val;
+	signal_notify(this);
+	return return_val;
+}

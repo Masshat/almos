@@ -1,0 +1,14 @@
+# Target CPU
+export ALMOS_CPU=mipsel
+
+# Target Architecture
+export ALMOS_ARCH=tsar
+
+# Project Top Directory
+export ALMOS_TOP=$HOME/almOS-v2
+
+# Binutils Directory
+export CCTOOLS=/home/almaless/linux/linux/crosstools/$ALMOS_CPU-unknown-elf
+
+# Plateform Simulators & Executabls 
+export PATH=$PATH:$CCTOOLS/bin:$ALMOS_TOP/platform/bin

@@ -1,0 +1,89 @@
+/*
+   This file is part of MutekP.
+  
+   MutekP is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+  
+   MutekP is distributed in the hope that it will be useful, but
+   WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+  
+   You should have received a copy of the GNU General Public License
+   along with MutekP; if not, write to the Free Software Foundation,
+   Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+  
+   UPMC / LIP6 / SOC (c) 2008
+   Copyright Ghassan Almaless <ghassan.almaless@gmail.com>
+*/
+
+#include <stdint.h>
+#include <string.h>
+#include <sys-vfs.h>
+#include <vfs.h>
+#include <page.h>
+#include <pmm.h>
+#include <ppm.h>
+#include <thread.h>
+#include <cluster.h>
+#include <blkio.h>
+#include <kminiShell.h>
+#include <bits.h>
+ 
+error_t cat2_func(void *param)
+{
+  char *path_name;
+  error_t err;
+  ssize_t size;
+  uint32_t argc;
+  uint_t count;
+  uint32_t i;
+  struct vfs_file_s *file;
+  ms_args_t *args;
+  // char ch;
+
+  args  = (ms_args_t*) param;
+  argc = args->argc;
+  err = 0;
+  struct page_s *page;
+
+  for(i=1; i< argc; i++)
+  {
+    path_name = args->argv[i];
+    
+    if((page = ppm_alloc_pages(&current_cluster->ppm, 0)) == NULL)
+      return ENOMEM;
+
+    if((err=vfs_open(ms_n_cwd,path_name,VFS_O_RDONLY,0,&file)))
+      return err;    
+
+    size = file->f_node->n_size;
+    size = ARROUND_DOWN(size, PMM_PAGE_SIZE);
+    count = 0;
+    ksh_print("file %s, size %x\n",path_name, size);
+#if 1
+    while(size)
+#endif 
+    {
+      page->index = count;
+      err = file->f_op->read_page(file, page, BLKIO_SYNC);
+      if(err)
+	printk(WARNING,"WARNING: faild to read page at index %d, err %d\n", count, err);
+      else
+	ksh_write(ppm_page2addr(page), PMM_PAGE_SIZE);
+      //if((ch=getChar()) == 'q') break;
+      count ++;
+      size -= PMM_PAGE_SIZE;
+      // if(count == 2) break;
+    }
+
+    vfs_close(file);
+   
+    if(size < 0) return size;
+  }
+
+  return 0;
+}
+
