@@ -41,6 +41,19 @@
  * introduce in the kernel a specific terminal 
  * pool of buffers */
 
+struct tty_context_s
+{
+	struct rwlock_s in_rwlock;
+	struct rwlock_s out_rwlock;
+	struct task_s *rd_owner;
+	struct task_s *wr_owner;
+	uint_t id;
+	unsigned int eol;		/* End Of Line */
+	dev_request_t *pending_rq;
+	struct wait_queue_s wait_queue;
+	struct fifomwmr_s *tty_buffer;
+};
+
 sint_t tty_open(struct device_s *tty, dev_request_t *rq)
 {
 	return 0;

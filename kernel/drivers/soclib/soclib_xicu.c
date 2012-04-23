@@ -1,23 +1,24 @@
 /*
-  This file is part of ALMOS.
-  
-  ALMOS is free software; you can redistribute it and/or modify it
-  under the terms of the GNU General Public License as published by
-  the Free Software Foundation; either version 2 of the License, or
-  (at your option) any later version.
-  
-  ALMOS is distributed in the hope that it will be useful, but
-  WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  General Public License for more details.
-  
-  You should have received a copy of the GNU General Public License
-  along with ALMOS; if not, write to the Free Software Foundation,
-  Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-  
-  UPMC / LIP6 / SOC (c) 2008
-  Copyright Ghassan Almaless <ghassan.almaless@gmail.fr>
-*/
+ * soclib_xicu.c - soclib xicu driver
+ *
+ * Copyright (c) 2007,2008,2009,2010,2011,2012 Ghassan Almaless
+ * Copyright (c) 2011,2012 UPMC Sorbonne Universites
+ *
+ * This file is part of ALMOS-kernel.
+ *
+ * ALMOS-kernel is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2.0 of the License.
+ *
+ * ALMOS-kernel is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ALMOS-kernel; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
 #include <types.h>
 #include <system.h>
@@ -35,6 +36,55 @@
 #include <vm_region.h>
 #include <pmm.h>
 #include <vfs.h>
+
+
+/** XICU Priority Decoding Macros */
+#define XICU_PRIO_WTI(val)     (((val) >> 24) & 0x1f)
+#define XICU_PRIO_HWI(val)     (((val) >> 16) & 0x1f)
+#define XICU_PRIO_PTI(val)     (((val) >> 8)  & 0x1f)
+
+#define XICU_PRIO_HAS_CNTR(val) ((val) & 0x8)
+#define XICU_PRIO_HAS_WTI(val)  ((val) & 0x4)
+#define XICU_PRIO_HAS_HWI(val)  ((val) & 0x2)
+#define XICU_PRIO_HAS_PTI(val)  ((val) & 0x1)
+
+struct irq_actions_s;
+struct device_s;
+struct event_s;
+
+typedef struct xicu_cntr_info_s
+{
+	struct event_s *event;
+	uint32_t value;
+	//uint_t signature;
+}xicu_cntr_info_t;
+
+struct xicu_context_s
+{
+	spinlock_t hwi_lock;
+	spinlock_t pti_lock;
+	spinlock_t cntr_lock;
+	uint_t next_cntr;
+	BITMAP_DECLARE(bitmap,8);
+  
+	struct irq_action_s *hwi_irq_vector[XICU_HWI_MAX];
+	xicu_cntr_info_t cntr_irq_vector[XICU_CNTR_MAX];
+};
+
+
+/** Write a value to specific XICU mapped register */
+static inline void xicu_reg_write(volatile void *base, uint_t func, uint_t id, uint32_t val)
+{
+  volatile uint32_t *_base = base;
+  _base[func << 5 | id] = val;
+}
+
+/** Read the value of specific XICU mapped register */
+static inline uint_t xicu_reg_read(volatile void *base, uint_t func, uint_t id)
+{
+  volatile uint32_t *_base = base;
+  return _base[func << 5 | id];
+}
 
 static void xicu_set_mask(struct device_s *icu, uint_t mask, uint_t type, uint_t output_irq)
 {
@@ -99,11 +149,11 @@ void xicu_irq_handler (struct irq_action_s *action)
 	cpu_trace_write(current_cpu, xicu_irq_handler);
   
 	//assert(current_thread->signature == THREAD_ID);
-	cpu = current_cpu;
+	cpu        = current_cpu;
 	output_irq = cpu->lid;
-	xicu = action->dev;
-	ctx = xicu->data;
-	prio = xicu_reg_read(xicu->base, XICU_PRIO, output_irq);
+	xicu       = action->dev;
+	ctx        = xicu->data;
+	prio       = xicu_reg_read(xicu->base, XICU_PRIO, output_irq);
   
 	if(XICU_PRIO_HAS_WTI(prio))
 	{
@@ -257,10 +307,10 @@ static VM_REGION_PAGE_FAULT(icu_pagefault)
 
 static struct vm_region_op_s icu_vm_region_op = 
 {
-	.page_in  = NULL,
-	.page_out = NULL,
+	.page_in     = NULL,
+	.page_out    = NULL,
 	.page_lookup = NULL,
-	.page_fault = icu_pagefault
+	.page_fault  = icu_pagefault
 };
 
 static error_t xicu_mmap(struct device_s *icu, dev_request_t *rq)
@@ -272,10 +322,10 @@ static error_t xicu_mmap(struct device_s *icu, dev_request_t *rq)
 	pmm_page_info_t info;
 	error_t err;
 
-	file = rq->file;
+	file   = rq->file;
 	region = rq->region;
-	pmm = &region->vmm->pmm;
-	size = PMM_PAGE_SIZE;
+	pmm    = &region->vmm->pmm;
+	size   = PMM_PAGE_SIZE;
   
 	if((region->vm_limit - region->vm_start) != size)
 	{
@@ -305,7 +355,7 @@ static error_t xicu_mmap(struct device_s *icu, dev_request_t *rq)
 	       ((vma_t)icu->base) + PMM_PAGE_SIZE,
 	       info.ppn);
   
-	info.attr = region->vm_pgprot & ~(PMM_CACHED);
+	info.attr    = region->vm_pgprot & ~(PMM_CACHED);
 	info.cluster = NULL;
  
 	if((err = pmm_set_page(pmm, region->vm_start, &info)))
@@ -327,10 +377,10 @@ static error_t xicu_munmap(struct device_s *icu, dev_request_t *rq)
 	pmm_page_info_t info;
 	error_t err;
 
-	file = rq->file;
+	file   = rq->file;
 	region = rq->region;
-	pmm = &region->vmm->pmm;
-	size = PMM_PAGE_SIZE;
+	pmm    = &region->vmm->pmm;
+	size   = PMM_PAGE_SIZE;
   
 	if((region->vm_limit - region->vm_start) != size)
 	{
@@ -351,7 +401,7 @@ static error_t xicu_munmap(struct device_s *icu, dev_request_t *rq)
 	       region->vm_limit);
     
 	info.attr = 0;
-	info.ppn = 0;
+	info.ppn  = 0;
 	info.cluster = NULL;
   
 	if((err = pmm_set_page(pmm, region->vm_start, &info)))
@@ -386,37 +436,37 @@ error_t soclib_xicu_init(struct device_s *icu, void *base, uint_t size, uint_t i
 	struct xicu_context_s *ctx;
 
 	icu->base = base;
-	icu->irq = irq;
+	icu->irq  = irq;
 
 #if CONFIG_XICU_USR_ACCESS
 	icu->type = DEV_CHR;
 #else
 	icu->type = DEV_INTERNAL;
 #endif
-	icu->action.dev = icu;
+	icu->action.dev         = icu;
 	icu->action.irq_handler = &xicu_irq_handler;
-	icu->action.data = NULL;
+	icu->action.data        = NULL;
 
 	sprintk(icu->name, "xicu%d", xicu_count++);
 	metafs_init(&icu->node, icu->name);
 
 #if CONFIG_XICU_USR_ACCESS
-	icu->op.icu.open = &xicu_open_op;
-	icu->op.icu.read = &xicu_file_op;
-	icu->op.icu.write = &xicu_file_op;
-	icu->op.icu.close = &xicu_file_op;
-	icu->op.icu.lseek = &xicu_file_op;
-	icu->op.icu.mmap = &xicu_mmap;
+	icu->op.icu.open   = &xicu_open_op;
+	icu->op.icu.read   = &xicu_file_op;
+	icu->op.icu.write  = &xicu_file_op;
+	icu->op.icu.close  = &xicu_file_op;
+	icu->op.icu.lseek  = &xicu_file_op;
+	icu->op.icu.mmap   = &xicu_mmap;
 	icu->op.icu.munmap = &xicu_munmap;
 	icu->op.icu.set_params = NULL;
 	icu->op.icu.get_params = &xicu_params_op;
 #endif
 
-	icu->op.icu.set_mask = &xicu_set_mask;
-	icu->op.icu.get_mask = &xicu_get_mask;
+	icu->op.icu.set_mask        = &xicu_set_mask;
+	icu->op.icu.get_mask        = &xicu_get_mask;
 	icu->op.icu.get_highest_irq = &xicu_get_highest_irq;
-	icu->op.icu.bind = &soclib_xicu_bind;
-	icu->op.drvid = SOCLIB_XICU_ID;
+	icu->op.icu.bind            = &soclib_xicu_bind;
+	icu->op.drvid               = SOCLIB_XICU_ID;
 
 	req.type  = KMEM_GENERIC;
 	req.size  = sizeof(*ctx);

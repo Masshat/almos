@@ -1,29 +1,40 @@
 /*
-   This file is part of AlmOS.
-  
-   AlmOS is free software; you can redistribute it and/or modify it
-   under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
-   (at your option) any later version.
-  
-   AlmOS is distributed in the hope that it will be useful, but
-   WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   General Public License for more details.
-  
-   You should have received a copy of the GNU General Public License
-   along with AlmOS; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-  
-   UPMC / LIP6 / SOC (c) 2008 - 2009
-   Copyright Ghassan Almaless <ghassan.almaless@lip6.fr>
-*/
+ * soclib_xicu.c - soclib xicu driver
+ *
+ * Copyright (c) 2007,2008,2009,2010,2011,2012 Ghassan Almaless
+ * Copyright (c) 2011,2012 UPMC Sorbonne Universites
+ *
+ * This file is part of ALMOS-kernel.
+ *
+ * ALMOS-kernel is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2.0 of the License.
+ *
+ * ALMOS-kernel is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ALMOS-kernel; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
 #ifndef _SOCLIB_XICU_H_
 #define _SOCLIB_XICU_H_
 
 #include <spinlock.h>
 #include <bits.h>
+
+#define XICU_HWI_MAX    32
+#define XICU_PTI_MAX    32
+#define XICU_CNTR_MAX   32
+#define XICU_CNTR_MASK  0xFFFFFFFF
+
+#define XICU_HWI_TYPE    XICU_MSK_HWI
+#define XICU_PTI_TYPE    XICU_MSK_PTI
+#define XICU_WTI_TYPE    XICU_MSK_WTI
+#define XICU_CNTR_TYPE   XICU_MSK_CNTR
 
 /** XICU Mapped Functions  */
 #define XICU_WTI_REG            0
@@ -49,64 +60,8 @@
 #define XICU_MSK_CNTR_DISABLE   18
 #define XICU_CNTR_ACTIVE        18
 
-/** Write a value to specific XICU mapped register */
-static inline void xicu_reg_write(volatile void *base, uint_t func, uint_t id, uint32_t val)
-{
-  volatile uint32_t *_base = base;
-  _base[func << 5 | id] = val;
-}
 
-/** Read the value of specific XICU mapped register */
-static inline uint_t xicu_reg_read(volatile void *base, uint_t func, uint_t id)
-{
-  volatile uint32_t *_base = base;
-  return _base[func << 5 | id];
-}
-
-/** XICU Priority Decoding Macros */
-#define XICU_PRIO_WTI(val)     (((val) >> 24) & 0x1f)
-#define XICU_PRIO_HWI(val)     (((val) >> 16) & 0x1f)
-#define XICU_PRIO_PTI(val)     (((val) >> 8)  & 0x1f)
-
-#define XICU_PRIO_HAS_CNTR(val) ((val) & 0x8)
-#define XICU_PRIO_HAS_WTI(val)  ((val) & 0x4)
-#define XICU_PRIO_HAS_HWI(val)  ((val) & 0x2)
-#define XICU_PRIO_HAS_PTI(val)  ((val) & 0x1)
-
-#define XICU_HWI_MAX    32
-#define XICU_PTI_MAX    32
-#define XICU_CNTR_MAX   32
-#define XICU_CNTR_MASK  0xFFFFFFFF
-
-#define XICU_HWI_TYPE    XICU_MSK_HWI
-#define XICU_PTI_TYPE    XICU_MSK_PTI
-#define XICU_WTI_TYPE    XICU_MSK_WTI
-#define XICU_CNTR_TYPE   XICU_MSK_CNTR
-
-struct irq_actions_s;
-struct device_s;
-struct event_s;
-
-typedef struct xicu_cntr_info_s
-{
-  struct event_s *event;
-  uint32_t value;
-  //uint_t signature;
-}xicu_cntr_info_t;
-
-struct xicu_context_s
-{
-  spinlock_t hwi_lock;
-  spinlock_t pti_lock;
-  spinlock_t cntr_lock;
-  uint_t next_cntr;
-  BITMAP_DECLARE(bitmap,8);
-  
-  struct irq_action_s *hwi_irq_vector[XICU_HWI_MAX];
-  xicu_cntr_info_t cntr_irq_vector[XICU_CNTR_MAX];
-};
-
-sint_t soclib_xicu_barrier_init(struct device_s *xicu, struct event_s *event, uint_t count);
+sint_t  soclib_xicu_barrier_init(struct device_s *xicu, struct event_s *event, uint_t count);
 sint_t  soclib_xicu_barrier_wait(struct device_s *xicu, uint_t barrier_id);
 error_t soclib_xicu_barrier_destroy(struct device_s *xicu, uint_t barrier_id);
 error_t soclib_xicu_ipi_send(struct device_s *xicu, uint_t port);
