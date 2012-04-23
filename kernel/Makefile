@@ -138,8 +138,8 @@ $(BUILD_DIR)/kldscript : $(ARCH_DIR)/kldscript.h $(ARCH_DIR)/arch-config.h
 $(BUILD_DIR)/%.o: %.c
 	@echo '   [  CC  ]        '$<
 	@$(CC) -Wp,-MMD,$(BUILD_DIR)/$*.dd $(CFLAGS) $(foreach INC,$(INCPATH),-I$(INC)) -c $< -o $@
-ifneq   ($(MODE), DEBUG)
-	@$(STRIP) -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
+ifneq   ($(MODE),DEBUG)
+	@$(STRIP) -x -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
 endif
 	@sed -e '1s/^\(.*\)$$/$(subst /,\/,$(dir $@))\1/' $(BUILD_DIR)/$*.dd > $(BUILD_DIR)/$*.d
 	@$(RM) $(BUILD_DIR)/$*.dd
@@ -147,8 +147,8 @@ endif
 $(BUILD_DIR)/%.o: %.S
 	@echo '   [  AS  ]        '$<
 	@$(CC) -Wp,-MMD,$(BUILD_DIR)/$*.dd $(CFLAGS) $(foreach INC,$(INCPATH),-I$(INC)) -c $< -o $@
-ifneq   ($(MODE), DEBUG)
-	@$(STRIP) -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
+ifneq   ($(MODE),DEBUG)
+	@$(STRIP) -x -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
 endif
 	@sed -e '1s/^\(.*\)$$/$(subst /,\/,$(dir $@))\1/' $(BUILD_DIR)/$*.dd > $(BUILD_DIR)/$*.d
 	@$(RM) $(BUILD_DIR)/$*.dd
