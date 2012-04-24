@@ -1,23 +1,24 @@
 /*
-   This file is part of AlmOS.
-  
-   AlmOS is free software; you can redistribute it and/or modify it
-   under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
-   (at your option) any later version.
-  
-   AlmOS is distributed in the hope that it will be useful, but
-   WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   General Public License for more details.
-  
-   You should have received a copy of the GNU General Public License
-   along with AlmOS; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-  
-   UPMC / LIP6 / SOC (c) 2009
-   Copyright Ghassan Almaless <ghassan.almaless@lip6.fr>
-*/
+ * bits.h - bits manipulation helper functions
+ *
+ * Copyright (c) 2008,2009,2010,2011,2012 Ghassan Almaless
+ * Copyright (c) 2011,2012 UPMC Sorbonne Universites
+ *
+ * This file is part of ALMOS-kernel.
+ *
+ * ALMOS-kernel is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2.0 of the License.
+ *
+ * ALMOS-kernel is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ALMOS-kernel; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
 #ifndef _BITS_H_
 #define _BITS_H_
@@ -47,28 +48,28 @@ typedef uint_t bitmap_t;
 /** Set specific bit */
 static inline void bitmap_set(bitmap_t *bitmap, uint_t index)
 {
-  register uint_t i = index / __CPU_WIDTH;
-  index %= __CPU_WIDTH;
+	register uint_t i = index / __CPU_WIDTH;
+	index %= __CPU_WIDTH;
 
-  bitmap[i] |= ( 1UL << index);
+	bitmap[i] |= ( 1UL << index);
 }
 
 /** Clear specific bit */
 static inline void bitmap_clear(bitmap_t *bitmap, uint_t index)
 {
-  register uint_t i = index / __CPU_WIDTH;
-  index %= __CPU_WIDTH;
+	register uint_t i = index / __CPU_WIDTH;
+	index %= __CPU_WIDTH;
 
-  bitmap[i] &= ~( 1UL << index);
+	bitmap[i] &= ~( 1UL << index);
 }
 
 /** Get specific bit state */
 static inline int bitmap_state(bitmap_t *bitmap, uint32_t index)
 {
-  register uint_t i = index / __CPU_WIDTH;
-  index %= __CPU_WIDTH;
+	register uint_t i = index / __CPU_WIDTH;
+	index %= __CPU_WIDTH;
 
-  return (bitmap[i] & (1UL << index)) && 1;
+	return (bitmap[i] & (1UL << index)) && 1;
 }
 
 /** Set specific range of bits, range is [index ... (index + len)[ */
@@ -86,61 +87,61 @@ sint_t bitmap_ffc2(bitmap_t *bitmap, uint_t index, size_t size);
 /** Find the index of first set bit or -1 if no bit found */
 static inline sint_t bitmap_ffs(bitmap_t *bitmap, size_t size)
 {
-  register uint_t i,j;
+	register uint_t i,j;
 
-  size <<= 3;			/* convert size from bytes to bits */
+	size <<= 3;			/* convert size from bytes to bits */
 
-  for(i = 0; i < size/__CPU_WIDTH; i++)
-  {
-    if(bitmap[i] != 0)
-    {
-      for(j = 0; j < __CPU_WIDTH; j++)
-      {
-	if(bitmap[i] & (1UL << j))
-	  return (i*__CPU_WIDTH + j);
-      }
-    }
-  }
+	for(i = 0; i < size/__CPU_WIDTH; i++)
+	{
+		if(bitmap[i] != 0)
+		{
+			for(j = 0; j < __CPU_WIDTH; j++)
+			{
+				if(bitmap[i] & (1UL << j))
+					return (i*__CPU_WIDTH + j);
+			}
+		}
+	}
 
-  return -1;
+	return -1;
 }
 
 /** Find the index of first clear bit or -1 if no bit found */
 static inline sint_t bitmap_ffc(bitmap_t *bitmap, size_t size)
 {
-  register uint_t i,j;
+	register uint_t i,j;
 
-  size <<= 3;			/* convert size from bytes to bits */
+	size <<= 3;			/* convert size from bytes to bits */
 
-  for(i = 0; i < size/__CPU_WIDTH; i++)
-  {
-    if(bitmap[i] != (uint_t)-1)
-    {
-      for(j = 0; j < __CPU_WIDTH; j++)
-      {
-	if((bitmap[i] & (1UL << j)) == 0)
-	  return (i*__CPU_WIDTH + j);
-      }
-    }
-  }
+	for(i = 0; i < size/__CPU_WIDTH; i++)
+	{
+		if(bitmap[i] != (uint_t)-1)
+		{
+			for(j = 0; j < __CPU_WIDTH; j++)
+			{
+				if((bitmap[i] & (1UL << j)) == 0)
+					return (i*__CPU_WIDTH + j);
+			}
+		}
+	}
 
-  return -1;
+	return -1;
 }
 
 
 static inline uint_t bits_nr(uint_t val)
 {
-  register uint_t i;
+	register uint_t i;
 
-  for(i=0; val > 0; i++) 
-    val = val >> 1;
+	for(i=0; val > 0; i++) 
+		val = val >> 1;
 
-  return i;
+	return i;
 }
 
 static inline uint_t bits_log2(uint_t val)
 {
-  return (val == 0) ? 1 : bits_nr(val) - 1;
+	return (val == 0) ? 1 : bits_nr(val) - 1;
 }
 
 #endif	/* _BITS_H_ */

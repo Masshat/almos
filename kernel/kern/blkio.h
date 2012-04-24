@@ -1,5 +1,5 @@
 /*
- * blkio.c: Per-page buffers I/O interface
+ * kern/blkio.c - Per-page buffers I/O interface
  * 
  * Copyright (c) 2008,2009,2010,2011,2012 Ghassan Almaless
  * Copyright (c) 2011,2012 UPMC Sorbonne Universites

@@ -1,7 +1,7 @@
 /*
  * soclib_xicu.c - soclib xicu driver
  *
- * Copyright (c) 2007,2008,2009,2010,2011,2012 Ghassan Almaless
+ * Copyright (c) 2008,2009,2010,2011,2012 Ghassan Almaless
  * Copyright (c) 2011,2012 UPMC Sorbonne Universites
  *
  * This file is part of ALMOS-kernel.
