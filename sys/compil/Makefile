@@ -28,8 +28,8 @@ SRC_MK          = $(SRC_DIR)/mk#             generic applicatiopn makefiles
 
 # System related source directories 
 #------------------------------------------------------------------------------
-SRC_CPU         = $(SRC_DIR)/cpu/$(CPU)#    CPU dependant sources (assembler)
-SRC_ARCH        = $(SRC_DIR)/arch/$(ARCH)#  plateform dependant sources
+SRC_CPU         = $(SRC_C)/cpu/$(CPU)#    CPU dependant sources (assembler)
+SRC_ARCH        = $(SRC_C)/arch/$(ARCH)#  plateform dependant sources
 
 # Include files
 #------------------------------------------------------------------------------
@@ -57,7 +57,7 @@ INCLUDES	:= $(patsubst %, $(THIS_DIR)/%, $(INCLUDES))
 EXCLUDES	:= $(patsubst %, $(TGT_INCLUDE)/%, $(EXCLUDES))
 
 ALMOS_DATE      = almOS-date.h
-LDSCRIPT        = $(SRC_MK)/$(ALMOS_ARCH_CLASS)_usr_ldscript.h
+LDSCRIPT        = $(SRC_MK)/$(ALMOS_ARCH)_usr_ldscript.h
 
 # libraries and object files
 #------------------------------------------------------------------------------
@@ -82,13 +82,13 @@ OBJ_CRYPTO     = $(patsubst %.c,%.o,$(shell cd $(SRC_CRYPTO); echo *.c))
 
 # CC tools and parameters
 #------------------------------------------------------------------------------
-CC              = $(CCTOOLS)/bin/$(CPU)-unknown-elf-gcc
-AR              = $(CCTOOLS)/bin/$(CPU)-unknown-elf-ar
-AS              = $(CCTOOLS)/bin/$(CPU)-unknown-elf-as
-OD              = $(CCTOOLS)/bin/$(CPU)-unknown-elf-objdump
-LD              = $(CCTOOLS)/bin/$(CPU)-unknown-elf-ld
-NM              = $(CCTOOLS)/bin/$(CPU)-unknown-elf-nm
-STRIP           = $(CCTOOLS)/bin/$(CPU)-unknown-elf-strip 
+CC              ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-gcc
+AR              ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-ar
+AS              ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-as
+OD              ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-objdump
+LD              ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-ld
+NM              ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-nm
+STRIP           ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-strip 
 
 USE_HARD_FLOAT=yes
 
@@ -155,19 +155,19 @@ libcrypto.a  : $(OBJ_CRYPTO)    ; @echo '   [  AR  ]        '$@ ; $(AR) -r $@ $^
 		@echo '   [  CC  ]        '$< 
 		@$(CC) $(CFLAGS) $< -o $@
 		@echo '   [ STRP ]        '$@ 
-		@$(STRIP)-x -R .comment -R .note $@
+		@$(STRIP) -x -R .comment -R .note $@
 
 %.o : $(SRC_CPU)/%.c
 		@echo '   [  CC  ]        '$< 
 		@$(CC) $(CFLAGS) $< -o $@
 		@echo '   [ STRP ]        '$@ 
-		@$(STRIP)-x -R .comment -R .note $@
+		@$(STRIP) -x -R .comment -R .note $@
 
 %.o : $(SRC_CPU)/%.S
 		@echo '   [  CC  ]        '$< 
 		@$(CC) $(CFLAGS) $< -o $@
 		@echo '   [ STRP ]        '$@ 
-		@$(STRIP)-x -R .comment -R .note $@
+		@$(STRIP) -x -R .comment -R .note $@
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 .PHONY: clean realclean ulibs start
