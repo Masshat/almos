@@ -61,7 +61,7 @@ LFLAGS = -T$(OBJDIR)/kldscript $(CPULFLAGS)
 INCPATH = . $(DIRS) $(OBJDIR)/kern
 
 CFLAGS = -O2 -fno-builtin -static -Wall -Werror $(CPUCFLAGS) $(EXTRACFLAGS)
-CFLAGS += -Wp,-MMD,$(OBJDIR)/$*.dd  $(foreach INC,$(INCPATH),-I$(INC))
+CFLAGS+= -MMD $(foreach INC,$(INCPATH),-I$(INC))
 
 GCCPREFIX = $(CPU)-unknown-elf-
 
@@ -127,18 +127,12 @@ $(OBJDIR)/kldscript : $(ARCH_DIR)/kldscript.h $(ARCH_DIR)/arch-config.h
 	@echo '   [  CPP ]        '$< 
 	@cpp $< | grep -v "#" | grep . > $@
 
-
-# Rule for creating object file and .d file, the sed magic is to add
-# the object path at the start of the file because the files gcc
-# outputs assume it will be in the same dir as the source file
 $(OBJDIR)/%.o: %.c
 	@echo '   [  CC  ]        '$<
 	@$(CC) $(CFLAGS) -c $< -o $@
 ifneq   ($(MODE),DEBUG)
 	@$(STRIP) -x -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
 endif
-	@sed -e '1s/^\(.*\)$$/$(subst /,\/,$(dir $@))\1/' $(OBJDIR)/$*.dd > $(OBJDIR)/$*.d
-	@$(RM) $(OBJDIR)/$*.dd
 
 $(OBJDIR)/%.o: %.S
 	@echo '   [  AS  ]        '$<
@@ -146,8 +140,6 @@ $(OBJDIR)/%.o: %.S
 ifneq   ($(MODE),DEBUG)
 	@$(STRIP) -x -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
 endif
-	@sed -e '1s/^\(.*\)$$/$(subst /,\/,$(dir $@))\1/' $(OBJDIR)/$*.dd > $(OBJDIR)/$*.d
-	@$(RM) $(OBJDIR)/$*.dd
 
 
 # Empty rule to prevent problems when a header is deleted
