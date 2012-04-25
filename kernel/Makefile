@@ -3,16 +3,13 @@
 #=====================================================================
 
 # CPU type
-CPU ?=$(ALMOS_CPU)
+CPU ?= mipsel
 
 # ARCH type
-ARCH ?=$(ALMOS_ARCH)
+ARCH ?= tsar
 
 # Used drivers
-DRVRS ?=$(ALMOS_DRIVERS)
-
-# Kernel bin directory
-TARGET_DIR ?=$(ALMOS_TOP)/bin
+DRVRS ?= soclib
 
 # Kernel revsion
 KERNEL_REV ?=current
@@ -66,13 +63,15 @@ LFLAGS = -T$(BUILD_DIR)/kldscript $(CPULFLAGS)
 # Add directories to the include and library paths
 INCPATH = $(DIRS) $(BUILD_DIR)/kern
 
+GCCPREFIX = $(CPU)-unknown-elf-
+
 # CC tools and parameters
 #------------------------------------------------------------------------------
-CC      ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-gcc
-LD      ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-ld
-NM      ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-nm
-STRIP   ?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-strip 
-OCPY	?= $(CCTOOLS)/bin/$(CPU)-unknown-elf-objcopy
+CC      = $(GCCPREFIX)gcc
+LD      = $(GCCPREFIX)ld
+NM      = $(GCCPREFIX)nm
+STRIP   = $(GCCPREFIX)strip
+OCPY	= $(GCCPREFIX)objcopy
 
 # Where to store object and dependancy files
 BUILD_DIR = .build
@@ -101,9 +100,9 @@ ALMOS_DEP=$(BUILD_DIR)/kern/almOS.dep
 
 # Kernel bin file name
 ifeq ($(KERNEL_REV),current)
-TARGET=$(TARGET_DIR)/almix-$(ARCH)-$(CPU)
+TARGET=$(BUILD_DIR)/almix-$(ARCH)-$(CPU)
 else
-TARGET=$(TARGET_DIR)/almix-$(ARCH)-$(CPU)-$(KERNEL_REV)
+TARGET=$(BUILD_DIR)/almix-$(ARCH)-$(CPU)-$(KERNEL_REV)
 endif
 
 # Rules that are not real files
