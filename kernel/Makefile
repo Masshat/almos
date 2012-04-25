@@ -39,9 +39,9 @@ DIRS =  cpu $(CPU_DIR)            \
 	ksh
 
 ifeq ($(MODE),DEBUG)
-EXTRACFLAGS = -g -O2
+EXTRACFLAGS = -g
 else
-EXTRACFLAGS = -O2 -fomit-frame-pointer
+EXTRACFLAGS = -fomit-frame-pointer
 endif
 
 # CPU specific flags
@@ -54,14 +54,14 @@ ifeq ($(CPU), i386)
 CPUCFLAGS = -march=i386
 endif
 
-# Compilation flags
-CFLAGS = -I. -c -fno-builtin -c -static -Wall -Werror $(CPUCFLAGS) $(EXTRACFLAGS)
-
 # LD flags
 LFLAGS = -T$(BUILD_DIR)/kldscript $(CPULFLAGS)
 
 # Add directories to the include and library paths
-INCPATH = $(DIRS) $(BUILD_DIR)/kern
+INCPATH = . $(DIRS) $(BUILD_DIR)/kern
+
+CFLAGS = -O2 -fno-builtin -static -Wall -Werror $(CPUCFLAGS) $(EXTRACFLAGS)
+CFLAGS += -Wp,-MMD,$(BUILD_DIR)/$*.dd  $(foreach INC,$(INCPATH),-I$(INC))
 
 GCCPREFIX = $(CPU)-unknown-elf-
 
@@ -133,7 +133,7 @@ $(BUILD_DIR)/kldscript : $(ARCH_DIR)/kldscript.h $(ARCH_DIR)/arch-config.h
 # outputs assume it will be in the same dir as the source file
 $(BUILD_DIR)/%.o: %.c
 	@echo '   [  CC  ]        '$<
-	@$(CC) -Wp,-MMD,$(BUILD_DIR)/$*.dd $(CFLAGS) $(foreach INC,$(INCPATH),-I$(INC)) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 ifneq   ($(MODE),DEBUG)
 	@$(STRIP) -x -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
 endif
@@ -142,7 +142,7 @@ endif
 
 $(BUILD_DIR)/%.o: %.S
 	@echo '   [  AS  ]        '$<
-	@$(CC) -Wp,-MMD,$(BUILD_DIR)/$*.dd $(CFLAGS) $(foreach INC,$(INCPATH),-I$(INC)) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 ifneq   ($(MODE),DEBUG)
 	@$(STRIP) -x -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
 endif
