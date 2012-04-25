@@ -144,8 +144,8 @@ endif
 
 # Cleans up the objects, .d files, kldscript and executables
 clean:
-	@$(RM) $(foreach DIR,$(DIRS),$(OBJDIR)/$(DIR)/*.d $(OBJDIR)/$(DIR)/*.o)
-	@$(RM) $(OBJDIR)/kldscript 
+	@$(RM) $(OBJDIR)/$(OBJECTS) $(OBJDIR)/$(DFILES)
+	@$(RM) $(OBJDIR)/kldscript
 	@$(RM) $(TARGET).elf $(TARGET).bin $(TARGET).elf.nm
 
 realclean: clean
