@@ -84,11 +84,7 @@ SOURCES := $(SOURCE_C) $(SOURCE_S)
 OBJECTS_C := $(addprefix $(OBJDIR)/, $(SOURCE_C:.c=.o))
 OBJECTS_S := $(addprefix $(OBJDIR)/, $(patsubst %.S,%.o,$(SOURCE_S)))
 OBJECTS   := $(OBJECTS_C) $(OBJECTS_S)
-
-# Same for the .d (dependancy) files
-DFILES_C := $(addprefix $(OBJDIR)/,$(SOURCE_C:.c=.d))
-DFILES_S := $(addprefix $(OBJDIR)/,$(SOURCE_S:.S=.d))
-DFILES   := $(DFILES_C) $(DFILES_S)
+DEPENDS   := $(OBJECTS:.o=.d)
 
 # Kernel bin file name
 ifeq ($(KERNEL_REV),current)
@@ -135,7 +131,7 @@ endif
 
 # Cleans up the objects, .d files, kldscript and executables
 clean:
-	@$(RM) $(OBJDIR)/$(OBJECTS) $(OBJDIR)/$(DFILES)
+	@$(RM) $(OBJDIR)/$(OBJECTS) $(OBJDIR)/$(DEPENDS)
 	@$(RM) $(OBJDIR)/kldscript
 	@$(RM) $(TARGET).elf $(TARGET).bin $(TARGET).elf.nm
 
@@ -152,4 +148,4 @@ obj:
 		fi;)
 
 # Includes the .d files so it knows the exact dependencies for every source
--include $(DFILES)
+-include $(DEPENDS)
