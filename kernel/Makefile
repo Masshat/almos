@@ -80,9 +80,6 @@ SOURCE_C:= $(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
 SOURCE_S:= $(shell echo $(CPU_DIR)/*.S)
 SOURCES := $(SOURCE_C) $(SOURCE_S)
 
-# List of header files
-HEADERS := $(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.h))
-
 # Makes a list of the object files that will have to be created
 OBJECTS_C := $(addprefix $(OBJDIR)/, $(SOURCE_C:.c=.o))
 OBJECTS_S := $(addprefix $(OBJDIR)/, $(patsubst %.S,%.o,$(SOURCE_S)))
