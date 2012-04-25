@@ -57,11 +57,10 @@ endif
 # LD flags
 LFLAGS = -T$(OBJDIR)/kldscript $(CPULFLAGS)
 
-# Add directories to the include and library paths
-INCPATH = . $(DIRS) $(OBJDIR)/kern
+INCLUDES=	$(foreach DIR,$(DIRS),-I$(DIR)) -I$(OBJDIR)/kern/
 
-CFLAGS = -O2 -fno-builtin -static -Wall -Werror $(CPUCFLAGS) $(EXTRACFLAGS)
-CFLAGS+= -MMD $(foreach INC,$(INCPATH),-I$(INC))
+CFLAGS= 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD
+CFLAGS+=	$(CPUCFLAGS) $(EXTRACFLAGS)
 
 GCCPREFIX = $(CPU)-unknown-elf-
 
@@ -96,7 +95,6 @@ DFILES   := $(DFILES_C) $(DFILES_S)
 
 # Compilation date header
 ALMOS_DATE=$(OBJDIR)/kern/almOS-date.h
-ALMOS_DEP=$(OBJDIR)/kern/almOS.dep
 
 # Kernel bin file name
 ifeq ($(KERNEL_REV),current)
@@ -121,7 +119,6 @@ $(TARGET): start $(OBJECTS) $(OBJDIR)/kldscript
 start: dirs
 	@echo  -e '\nALMIX Compilation Process ...\n'
 	$(shell echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $(ALMOS_DATE))
-#	$(shell echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y")'"' > $(ALMOS_DATE))
 
 $(OBJDIR)/kldscript : $(ARCH_DIR)/kldscript.h $(ARCH_DIR)/arch-config.h 
 	@echo '   [  CPP ]        '$< 
