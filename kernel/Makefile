@@ -136,9 +136,6 @@ ifneq   ($(MODE),DEBUG)
 endif
 
 
-# Empty rule to prevent problems when a header is deleted
-%.h: ;
-
 # Cleans up the objects, .d files, kldscript and executables
 clean:
 	@$(RM) $(OBJDIR)/$(OBJECTS) $(OBJDIR)/$(DFILES)
