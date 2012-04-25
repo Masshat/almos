@@ -48,7 +48,7 @@ TARGET=$(OBJDIR)/almix-$(ARCH)-$(CPU)-$(KERNEL_REV)
 endif
 
 
-.PHONY: clean realclean dirs start
+.PHONY: clean realclean obj
 
 
 $(TARGET): obj $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS) 
@@ -82,8 +82,6 @@ ifneq   ($(MODE),DEBUG)
 	@$(STRIP) -x -R .pdr -R .gnu.attributes -R .reginfo -R .comment $@
 endif
 
-
-# Cleans up the objects, .d files, kldscript and executables
 clean:
 	@$(RM) $(OBJDIR)/$(OBJS) $(OBJDIR)/$(DEPS)
 	@$(RM) $(OBJDIR)/kldscript
@@ -101,5 +99,4 @@ obj:
 			mkdir $(OBJDIR)/$(DIR); 			\
 		fi;)
 
-# Includes the .d files so it knows the exact dependencies for every source
 -include $(DEPS)
