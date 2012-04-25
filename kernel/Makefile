@@ -103,8 +103,8 @@ else
 TARGET=$(OBJDIR)/almix-$(ARCH)-$(CPU)-$(KERNEL_REV)
 endif
 
-# Rules that are not real files
-.PHONY: clean realclean backup export dirs start
+
+.PHONY: clean realclean dirs start
 
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 $(TARGET): start $(OBJECTS) $(OBJDIR)/kldscript
