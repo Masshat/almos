@@ -2,16 +2,8 @@
 #                      ALMOS-kernel Makefile                         #
 #=====================================================================
 
-# CPU type
-CPU ?= mipsel
+include ../common.mk
 
-# ARCH type
-ARCH ?= tsar
-
-# Used drivers
-DRVRS ?= soclib
-
-# Kernel revsion
 KERNEL_REV ?=current
 
 DIRS=	cpu/$(CPU)           	  \
@@ -19,7 +11,6 @@ DIRS=	cpu/$(CPU)           	  \
 	drivers/$(DRVRS)	  \
 	kern                      \
 	mm                        \
-	fs 			  \
 	fs/devfs                  \
 	fs/sysfs                  \
 	fs/ext2                   \
@@ -34,17 +25,6 @@ else
 EXTRACFLAGS = -fomit-frame-pointer
 endif
 
-# CPU specific flags
-ifeq ($(CPU), mipsel)
-CPUCFLAGS = -mips32 -EL -G0
-CPULFLAGS = -G0 --hash-style=sysv
-endif
-
-ifeq ($(CPU), i386)
-CPUCFLAGS = -march=i386
-endif
-
-# LD flags
 LFLAGS = -T$(OBJDIR)/kldscript $(CPULFLAGS)
 
 INCLUDES=	$(foreach DIR,$(DIRS),-I$(DIR)) -I$(OBJDIR)/kern/
