@@ -32,17 +32,6 @@ INCLUDES=	$(foreach DIR,$(DIRS),-I$(DIR)) -I$(OBJDIR)/kern/
 CFLAGS= 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD
 CFLAGS+=	$(CPUCFLAGS) $(EXTRACFLAGS)
 
-GCCPREFIX = $(CPU)-unknown-elf-
-
-# CC tools and parameters
-#------------------------------------------------------------------------------
-CC      = $(GCCPREFIX)gcc
-LD      = $(GCCPREFIX)ld
-NM      = $(GCCPREFIX)nm
-STRIP   = $(GCCPREFIX)strip
-OCPY	= $(GCCPREFIX)objcopy
-
-# Where to store object and dependancy files
 OBJDIR = .build
 
 CFILES=	$(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
