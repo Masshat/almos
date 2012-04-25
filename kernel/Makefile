@@ -90,9 +90,6 @@ DFILES_C := $(addprefix $(OBJDIR)/,$(SOURCE_C:.c=.d))
 DFILES_S := $(addprefix $(OBJDIR)/,$(SOURCE_S:.S=.d))
 DFILES   := $(DFILES_C) $(DFILES_S)
 
-# Compilation date header
-ALMOS_DATE=$(OBJDIR)/kern/almOS-date.h
-
 # Kernel bin file name
 ifeq ($(KERNEL_REV),current)
 TARGET=$(OBJDIR)/almix-$(ARCH)-$(CPU)
@@ -103,8 +100,8 @@ endif
 
 .PHONY: clean realclean dirs start
 
-#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-$(TARGET): start $(OBJECTS) $(OBJDIR)/kldscript
+
+$(TARGET): obj $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJECTS) 
 	@echo '   [  LD  ]        '$@.elf
 	@$(LD) -o $@.elf $(OBJECTS) $(LFLAGS)
 	@echo '   [  NM  ]        '$@.elf.nm 
@@ -113,9 +110,9 @@ $(TARGET): start $(OBJECTS) $(OBJDIR)/kldscript
 	@$(OCPY) -O binary  $@.elf  $@.bin
 	@echo -e '\n   [ DONE ]        \n'
 
-start: dirs
-	@echo  -e '\nALMIX Compilation Process ...\n'
-	$(shell echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $(ALMOS_DATE))
+
+$(OBJDIR)/kern/almOS-date.h:
+	$(shell echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $@
 
 $(OBJDIR)/kldscript : $(ARCH_DIR)/kldscript.h $(ARCH_DIR)/arch-config.h 
 	@echo '   [  CPP ]        '$< 
@@ -145,8 +142,7 @@ clean:
 realclean: clean
 	@$(RM) -r $(OBJDIR)
 
-# Create compilation tree
-dirs:
+obj:
 	@if [ ! -e $(OBJDIR) ]; then mkdir $(OBJDIR); fi;
 	@$(foreach DIR,$(DIRS), 					\
 		if [ ! -e $(OBJDIR)/$(DIR) ]; 			\
