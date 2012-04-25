@@ -14,19 +14,9 @@ DRVRS ?= soclib
 # Kernel revsion
 KERNEL_REV ?=current
 
-# CPU directory
-CPU_DIR=cpu/$(CPU)
-
-# ARCH directory
-ARCH_DIR=arch/$(ARCH)
-
-# Drivers directory
-DRV_DIR=drivers/$(DRVRS)
-
-# Kernel directories contain source files
-DIRS =  cpu $(CPU_DIR)            \
-	arch $(ARCH_DIR)          \
-	drivers $(DRV_DIR)        \
+DIRS=	cpu/$(CPU)           	  \
+	arch/$(ARCH)         	  \
+	drivers/$(DRVRS)	  \
 	kern                      \
 	mm                        \
 	fs 			  \
@@ -76,7 +66,7 @@ OCPY	= $(GCCPREFIX)objcopy
 OBJDIR = .build
 
 CFILES=	$(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
-SFILES=	$(wildcard $(CPU_DIR)/*.S)
+SFILES=	$(wildcard cpu/$(CPU)/*.S)
 
 OBJS=	$(addprefix $(OBJDIR)/, $(CFILES:.c=.o) $(SFILES:.S=.o))
 DEPS=	$(OBJS:.o=.d)
@@ -105,7 +95,7 @@ $(TARGET): obj $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS)
 $(OBJDIR)/kern/almOS-date.h:
 	$(shell echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $@
 
-$(OBJDIR)/kldscript : $(ARCH_DIR)/kldscript.h $(ARCH_DIR)/arch-config.h 
+$(OBJDIR)/kldscript: arch/$(ARCH)/kldscript.h arch/$(ARCH)/arch-config.h
 	@echo '   [  CPP ]        '$< 
 	@cpp $< | grep -v "#" | grep . > $@
 
