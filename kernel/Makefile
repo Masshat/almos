@@ -77,12 +77,12 @@ OBJDIR = .build
 
 # Makes a list of the source (.c) files
 SOURCE_C:= $(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
-SOURCE_S:= $(shell echo $(CPU_DIR)/*.S)
+SOURCE_S:= $(wildcard $(CPU_DIR)/*.S)
 SOURCES := $(SOURCE_C) $(SOURCE_S)
 
 # Makes a list of the object files that will have to be created
 OBJECTS_C := $(addprefix $(OBJDIR)/, $(SOURCE_C:.c=.o))
-OBJECTS_S := $(addprefix $(OBJDIR)/, $(patsubst %.S,%.o,$(SOURCE_S)))
+OBJECTS_S := $(addprefix $(OBJDIR)/, $(SOURCE_S:.S=.o))
 OBJECTS   := $(OBJECTS_C) $(OBJECTS_S)
 DEPENDS   := $(OBJECTS:.o=.d)
 
