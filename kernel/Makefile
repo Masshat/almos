@@ -75,16 +75,11 @@ OCPY	= $(GCCPREFIX)objcopy
 # Where to store object and dependancy files
 OBJDIR = .build
 
-# Makes a list of the source (.c) files
-SOURCE_C:= $(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
-SOURCE_S:= $(wildcard $(CPU_DIR)/*.S)
-SOURCES := $(SOURCE_C) $(SOURCE_S)
+CFILES=	$(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
+SFILES=	$(wildcard $(CPU_DIR)/*.S)
 
-# Makes a list of the object files that will have to be created
-OBJECTS_C := $(addprefix $(OBJDIR)/, $(SOURCE_C:.c=.o))
-OBJECTS_S := $(addprefix $(OBJDIR)/, $(SOURCE_S:.S=.o))
-OBJECTS   := $(OBJECTS_C) $(OBJECTS_S)
-DEPENDS   := $(OBJECTS:.o=.d)
+OBJS=	$(addprefix $(OBJDIR)/, $(CFILES:.c=.o) $(SFILES:.S=.o))
+DEPS=	$(OBJS:.o=.d)
 
 # Kernel bin file name
 ifeq ($(KERNEL_REV),current)
@@ -97,9 +92,9 @@ endif
 .PHONY: clean realclean dirs start
 
 
-$(TARGET): obj $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJECTS) 
+$(TARGET): obj $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS) 
 	@echo '   [  LD  ]        '$@.elf
-	@$(LD) -o $@.elf $(OBJECTS) $(LFLAGS)
+	@$(LD) -o $@.elf $(OBJS) $(LFLAGS)
 	@echo '   [  NM  ]        '$@.elf.nm 
 	@$(NM) $@.elf > $@.elf.nm
 	@echo '   [ OCPY ]        '$@.bin
@@ -131,7 +126,7 @@ endif
 
 # Cleans up the objects, .d files, kldscript and executables
 clean:
-	@$(RM) $(OBJDIR)/$(OBJECTS) $(OBJDIR)/$(DEPENDS)
+	@$(RM) $(OBJDIR)/$(OBJS) $(OBJDIR)/$(DEPS)
 	@$(RM) $(OBJDIR)/kldscript
 	@$(RM) $(TARGET).elf $(TARGET).bin $(TARGET).elf.nm
 
@@ -148,4 +143,4 @@ obj:
 		fi;)
 
 # Includes the .d files so it knows the exact dependencies for every source
--include $(DEPENDS)
+-include $(DEPS)
