@@ -66,7 +66,7 @@ ifndef TARGET
 RULE=usage
 endif
 
-ifeq ($(TARGET), TSAR)
+ifeq ($(TARGET), tsar)
 RULE=almos
 CFLAGS += $(CPU-CFLAGS) -I$(DIR_INC) -O3 -D_ALMOS_
 endif
