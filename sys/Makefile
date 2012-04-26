@@ -1,6 +1,6 @@
 
 SUBDIR=	dietlibc libm libpthread libgomp \
-	libz libcrypto libupc phoenix TinyGL 
+	libz libcrypto libupc libphoenix TinyGL 
 
 
 include ../common.mk
