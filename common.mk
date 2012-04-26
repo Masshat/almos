@@ -22,11 +22,3 @@ LD=	$(CCPREFIX)ld
 NM=	$(CCPREFIX)nm
 STRIP=	$(CCPREFIX)strip
 OCPY=	$(CCPREFIX)objcopy
-
-
-default: all
-
-$(SUBDIR)::
-	@$(MAKE) -C $@ $(MAKECMDGOALS)
-
-all clean: $(SUBDIR)
