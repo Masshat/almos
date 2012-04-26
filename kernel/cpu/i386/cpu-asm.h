@@ -73,7 +73,7 @@ static inline void cpu_context_init(struct cpu_context_s* ctx, struct cpu_contex
 	__cpu_context_init(ctx,attr);
 }
 
-static void cpu_context_destroy(struct cpu_context_s *ctx)
+inline void cpu_context_destroy(struct cpu_context_s *ctx)
 {
 }
 
