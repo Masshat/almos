@@ -7,15 +7,18 @@ CPUCFLAGS= -mips32 -EL -G0
 CPULFLAGS= -G0 --hash-style=sysv
 
 DRVRS=	soclib
-endif
-
-
-ifeq ($(ARCH), i386)
-CPUCFLAGS = -march=i386
-endif
-
 
 CCPREFIX= $(CPU)-unknown-elf-
+endif
+
+
+ifeq ($(ARCH), ibmpc)
+CPU=		i386
+CPUCFLAGS= 	-march=i386
+
+CCPREFIX=
+endif
+
 
 CC=	$(CCPREFIX)cc
 LD=	$(CCPREFIX)ld
