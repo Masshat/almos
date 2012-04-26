@@ -71,7 +71,6 @@
 #define CONFIG_CLUSTER_KEYS_NR           8
 #define CONFIG_REL_LFFB_SIZE             32
 #define CONFIG_VFS_NODES_PER_CLUSTER     40
-#define CONFIG_FB_USE_DMA                yes
 #define CONFIG_SCHED_THREADS_NR          32
 #define CONFIG_BARRIER_WQDB_NR           4
 #define CONFIG_BARRIER_ACTIVE_WAIT       no
