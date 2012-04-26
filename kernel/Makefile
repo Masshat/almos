@@ -62,7 +62,7 @@ $(TARGET): obj $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS)
 
 
 $(OBJDIR)/kern/almOS-date.h:
-	$(shell echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $@
+	@echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $@
 
 $(OBJDIR)/kldscript: arch/$(ARCH)/kldscript.h arch/$(ARCH)/arch-config.h
 	@echo '   [  CPP ]        '$< 
