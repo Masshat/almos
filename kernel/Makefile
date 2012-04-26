@@ -40,6 +40,8 @@ SFILES=	$(wildcard cpu/$(CPU)/*.S)
 OBJS=	$(addprefix $(OBJDIR)/, $(CFILES:.c=.o) $(SFILES:.S=.o))
 DEPS=	$(OBJS:.o=.d)
 
+OBJDIRS= $(addprefix $(OBJDIR)/, $(DIRS))
+
 # Kernel bin file name
 ifeq ($(KERNEL_REV),current)
 TARGET=$(OBJDIR)/almix-$(ARCH)-$(CPU)
@@ -51,7 +53,7 @@ endif
 .PHONY: clean realclean obj
 
 
-$(TARGET): obj $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS) 
+$(TARGET): $(OBJDIRS) $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS) 
 	@echo '   [  LD  ]        '$@.elf
 	@$(LD) -o $@.elf $(OBJS) $(LFLAGS)
 	@echo '   [  NM  ]        '$@.elf.nm 
@@ -90,13 +92,9 @@ clean:
 realclean: clean
 	@$(RM) -r $(OBJDIR)
 
-obj:
-	@if [ ! -e $(OBJDIR) ]; then mkdir $(OBJDIR); fi;
-	@$(foreach DIR,$(DIRS), 					\
-		if [ ! -e $(OBJDIR)/$(DIR) ]; 			\
-		then 							\
-			echo '   [ MKDIR ]       '$(OBJDIR)/$(DIR);  \
-			mkdir $(OBJDIR)/$(DIR); 			\
-		fi;)
+$(OBJDIRS):
+	@echo '   [ MKDIR ]       '$@
+	@mkdir -p $@
+
 
 -include $(DEPS)
