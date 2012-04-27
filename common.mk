@@ -7,7 +7,7 @@ CPU= 	mipsel
 CPUCFLAGS=	-mips32 -EL -G0
 CPUCFLAGS+=	-mhard-float -fomit-frame-pointer
 
-CPULFLAGS= -G0 --hash-style=sysv
+CPULFLAGS= 	--hash-style=sysv
 
 DRVRS=	soclib
 
