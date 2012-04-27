@@ -79,6 +79,7 @@ void mcs_lock(mcs_lock_t *ptr, uint_t *irq_state)
 	uint_t ticket;
 
 	cpu_disable_all_irq(irq_state);
+
 	ticket = cpu_atomic_add(&ptr->ticket.value, 1);
 
 	while(ticket != cpu_load_word(&ptr->cntr.value))
@@ -89,7 +90,13 @@ void mcs_lock(mcs_lock_t *ptr, uint_t *irq_state)
 
 void mcs_unlock(mcs_lock_t *ptr, uint_t irq_state)
 {
-	ptr->cntr.value ++;
+	register uint_t next;
+	volatile uint_t *val_ptr;
+
+	val_ptr  = &ptr->cntr.value;
+	next     = ptr->cntr.value + 1;
+	cpu_invalid_dcache_line((void*)val_ptr);
+	*val_ptr = next;
 	cpu_wbflush();
 	current_thread->locks_count --;
 	cpu_restore_irq(irq_state);
