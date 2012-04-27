@@ -1,6 +1,8 @@
-
-include ../../common.mk
-
+#
+# lib.mk - Common rules to build libraries
+#
+include $(SRCDIR)../../common.mk
+ifneq ($(SRCDIR), )
 
 
 CFLAGS=	-W -Wall -Wextra -Wchar-subscripts -Werror \
@@ -9,14 +11,38 @@ CFLAGS=	-W -Wall -Wextra -Wchar-subscripts -Werror \
 	-DUSR_LIB_COMPILER -D_ALMOS_ -DZ_PREFIX \
 	$(CPUCFLAGS) $(INCFLAGS) 
 
-OBJS= $(SRCS:.c=.o)
+VPATH?=	$(SRCDIR)
+OBJS=	$(filter %.o, $(SRCS:.c=.o) $(SRCS:.S=.o))
+
+
 
 all: lib$(LIB).a
+
+lib$(LIB).a:: $(OBJS)
+	@rm -f $@
+	@$(AR) -r $@ $^
 
 clean:
 	rm -f lib$(LIB).a $(OBJS)
 
-lib$(LIB).a:: $(OBJS)
-	@echo '   [  AR  ]        '$@
-	@rm -f lib$(LIB).a
-	@$(AR) -r $@ $^
+
+# Set of rules to for a multi-architecture build.
+#
+# See http://make.paulandlesley.org/multi-arch.html for more information
+else
+
+MAKEFLAGS+= --no-print-directory
+
+$(OBJDIR):
+	@[ -d $@ ] || mkdir -p $@
+	@cd $@ && $(MAKE) -f $(CURDIR)/Makefile SRCDIR=$(CURDIR)/ $(MAKECMDGOALS)
+
+Makefile : ;
+
+% :: $(OBJDIR) ;
+
+clean:
+	@rmdir $(OBJDIR)
+
+.PHONY:	$(OBJDIR) clean
+endif

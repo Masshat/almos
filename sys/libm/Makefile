@@ -15,6 +15,6 @@ SRCS=	e_acos.c e_acosh.c e_asin.c e_atan2.c e_atanh.c e_cosh.c e_exp.c \
 	w_lgamma_r.c w_log10.c w_log.c w_pow.c w_remainder.c w_scalb.c \
 	w_sinh.c w_sqrt.c
 
-INCFLAGS= -I../dietlibc
+INCFLAGS= -I$(SRCDIR)../dietlibc
 
-include ../lib.mk
+include $(SRCDIR)../lib.mk

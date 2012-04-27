@@ -7,6 +7,6 @@ SRCS=	gomp_affinity.c gomp_alloc.c gomp_bar.c gomp_barrier.c gomp_critical.c \
 	gomp_parallel.c gomp_proc.c gomp_ptrlock.c gomp_sections.c gomp_sem.c \
 	gomp_single.c gomp_task.c gomp_team.c gomp_time.c gomp_work.c
 
-INCFLAGS= -I. -I../dietlibc -I../libpthread
+INCFLAGS= -I$(SRCDIR) -I$(SRCDIR)../dietlibc -I$(SRCDIR)../libpthread
 
-include ../lib.mk
+include $(SRCDIR)../lib.mk

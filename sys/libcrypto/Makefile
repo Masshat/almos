@@ -6,6 +6,6 @@ SRCS=	b_dump.c bf_buff.c bf_lbuf.c bf_nbio.c bf_null.c bio_cb.c bio_err.c \
 	err.c err_def.c err_prn.c err_str.c lhash.c lh_stats.c sha1dgst.c \
 	sha1_one.c sha256.c sha512.c sha_dgst.c sha_one.c
 
-INCFLAGS= -I. -I../dietlibc
+INCFLAGS= -I$(SRCDIR) -I$(SRCDIR)../dietlibc
 
-include ../lib.mk
+include $(SRCDIR)../lib.mk

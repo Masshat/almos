@@ -1,7 +1,7 @@
 
 LIB=	TinyGL
 
-VPATH= 	src
+VPATH= 	$(SRCDIR)src
 
 SRCS=	api.c arrays.c clear.c clip.c error.c get.c image_util.c init.c \
 	light.c list.c matrix.c memory.c misc.c msghandling.c oscontext.c \
@@ -15,11 +15,7 @@ ifdef TINYGL_USE_NANOX
 SRCS+=	nglx.c
 endif
 
-INCFLAGS= -I./include -I../dietlibc -I../libm
-
-# XXX
-ztriangle.o: ztriangle.c
-	$(CC) $(CFLAGS) -Wno-uninitialized -c -o $@ $<
+INCFLAGS= -I$(SRCDIR)/include -I$(SRCDIR)../dietlibc -I$(SRCDIR)../libm
 	
 
-include ../lib.mk
+include $(SRCDIR)../lib.mk
