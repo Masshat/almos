@@ -37,7 +37,7 @@
 #include <page.h>
 #include <dqdt.h>
 
-extern mcs_sync_t boot_sync;
+extern mcs_barrier_t boot_sync;
 
 void* thread_idle(void *arg)
 {

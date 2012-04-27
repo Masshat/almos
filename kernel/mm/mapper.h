@@ -74,7 +74,7 @@ struct mapper_s
 {
 	atomic_t                      m_refcount;
 	//spinlock_t			m_lock;
-	mcs_sync_t			m_lock;
+	mcs_lock_t			m_lock;
 	radix_t			m_radix;    // pages depot
 	const struct mapper_op_s*     m_ops;	    // operations
 	struct vfs_node_s*		m_node;	    // owner

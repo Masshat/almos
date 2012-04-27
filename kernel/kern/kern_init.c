@@ -46,9 +46,9 @@
 #define BOOT_SIGNAL  0xA5A5B5B5
 #define die(args...) do {boot_dmsg(args); while(1);} while(0)
 
-mcs_sync_t boot_sync;
-static mcs_sync_t init_sync;
-static mcs_sync_t kmem_sync;
+mcs_barrier_t boot_sync;
+static mcs_barrier_t init_sync;
+static mcs_barrier_t kmem_sync;
 static kthread_args_t idle_args;
 
 static void print_boot_banner(void);

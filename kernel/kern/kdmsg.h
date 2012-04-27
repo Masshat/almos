@@ -41,7 +41,7 @@ extern spinlock_t printk_lock;
 extern spinlock_t isr_lock;
 extern spinlock_t exception_lock;
 //extern spinlock_t boot_lock;
-extern mcs_sync_t boot_lock;
+extern mcs_lock_t boot_lock;
 
 typedef struct kdmsg_channel_s
 {

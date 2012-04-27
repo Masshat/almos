@@ -51,7 +51,7 @@ struct cpu_s;
 struct task_s
 {
 	/* Various Locks */
-	mcs_sync_t block;
+	mcs_lock_t block;
 	spinlock_t lock;
 	spinlock_t th_lock;
 	struct rwlock_s cwd_lock;

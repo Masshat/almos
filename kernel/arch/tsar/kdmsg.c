@@ -34,8 +34,8 @@ spinlock_t exception_lock;
 spinlock_t printk_lock;
 spinlock_t isr_lock;
 //spinlock_t boot_lock;
-mcs_sync_t boot_lock;
-mcs_sync_t printk_sync;
+mcs_lock_t boot_lock;
+mcs_lock_t printk_sync;
 
 kdmsg_channel_t klog_tty = {{.id = 0}};
 kdmsg_channel_t kisr_tty = {{.id = 0}};

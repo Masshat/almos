@@ -45,7 +45,7 @@ struct barrier_s
   union
   {
     atomic_t waiting;
-    mcs_sync_t lock;
+    mcs_lock_t lock;
   };
 
   uint_t signature;

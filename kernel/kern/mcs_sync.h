@@ -28,29 +28,39 @@
 ///////////////////////////////////////////////
 //             Public Section                //
 ///////////////////////////////////////////////
-struct mcs_sync_s;
-typedef struct mcs_sync_s mcs_sync_t;
+struct mcs_barrier_s;
+struct mcs_lock_s;
 
-void mcs_barrier_init(mcs_sync_t *ptr, char *name, uint_t count);
-void mcs_barrier_wait(mcs_sync_t *ptr);
+typedef struct mcs_barrier_s mcs_barrier_t;
+typedef struct mcs_lock_s mcs_lock_t;
 
-void mcs_lock_init(mcs_sync_t *ptr, char *name);
+void mcs_barrier_init(mcs_barrier_t *ptr, char *name, uint_t count);
+void mcs_barrier_wait(mcs_barrier_t *ptr);
 
-void mcs_lock(mcs_sync_t *ptr, uint_t *irq_state);
-void mcs_unlock(mcs_sync_t *ptr, uint_t irq_state);
+void mcs_lock_init(mcs_lock_t *ptr, char *name);
+
+void mcs_lock(mcs_lock_t *ptr, uint_t *irq_state);
+void mcs_unlock(mcs_lock_t *ptr, uint_t irq_state);
 
 //////////////////////////////////////////////
 //             Private Section              //
 //////////////////////////////////////////////
 
-struct mcs_sync_s
+struct mcs_barrier_s
 {
-	uint_t val;
-	char *name;
-	uint_t phase;
-	uint_t cntr CACHELINE;
-	uint_t ticket CACHELINE;
-	uint_t ticket2 CACHELINE;
+	cacheline_t val;
+	cacheline_t phase;
+	cacheline_t cntr;
+	cacheline_t ticket;
+	cacheline_t ticket2;
+	char        *name;
+};
+
+struct mcs_lock_s
+{
+	cacheline_t cntr;
+	cacheline_t ticket;
+	char        *name;
 };
 
 

@@ -27,36 +27,36 @@
 #include <cpu.h>
 #include <kdmsg.h>
 
-void mcs_barrier_init(mcs_sync_t *ptr, char *name, uint_t count)
+void mcs_barrier_init(mcs_barrier_t *ptr, char *name, uint_t count)
 {
-	ptr->val     = count;
-	ptr->name    = name;
-	ptr->phase   = 0;
-	ptr->cntr    = count;
-	ptr->ticket  = 0;
-	ptr->ticket2 = 0;
+	ptr->val.value     = count;
+	ptr->phase.value   = 0;
+	ptr->cntr.value    = count;
+	ptr->ticket.value  = 0;
+	ptr->ticket2.value = 0;
+	ptr->name          = name;
 }
 
 
-void mcs_barrier_wait(mcs_sync_t *ptr)
+void mcs_barrier_wait(mcs_barrier_t *ptr)
 {
 	register uint_t phase;
 	register uint_t order;
 	uint_t *current;
 	uint_t *next;
   
-	phase   = ptr->phase;
-	current = (phase == 0) ? &ptr->ticket : &ptr->ticket2;
-	order   = cpu_atomic_add((void*)&ptr->cntr, -1);
+	phase   = ptr->phase.value;
+	current = (phase == 0) ? &ptr->ticket.value : &ptr->ticket2.value;
+	order   = cpu_atomic_add((void*)&ptr->cntr.value, -1);
 
 	if(order == 1)
 	{
-		phase      = ~(phase) & 0x1;
-		next       =  (phase == 0) ? &ptr->ticket : &ptr->ticket2;
-		ptr->phase = phase;
-		ptr->cntr  = ptr->val;
-		*next      = 0;
-		*current   = 1;
+		phase            = ~(phase) & 0x1;
+		next             =  (phase == 0) ? &ptr->ticket.value : &ptr->ticket2.value;
+		ptr->phase.value = phase;
+		ptr->cntr.value  = ptr->val.value;
+		*next            = 0;
+		*current         = 1;
 		cpu_wbflush();
 		return;
 	}
@@ -66,30 +66,30 @@ void mcs_barrier_wait(mcs_sync_t *ptr)
 }
 
 
-void mcs_lock_init(mcs_sync_t *ptr, char *name)
+void mcs_lock_init(mcs_lock_t *ptr, char *name)
 {
-	ptr->cntr   = 0;
-	ptr->name   = name;
-	ptr->ticket = 0;
+	ptr->cntr.value   = 0;
+	ptr->ticket.value = 0;
+	ptr->name         = name;
 }
 
 
-void mcs_lock(mcs_sync_t *ptr, uint_t *irq_state)
+void mcs_lock(mcs_lock_t *ptr, uint_t *irq_state)
 {
 	uint_t ticket;
 
 	cpu_disable_all_irq(irq_state);
-	ticket = cpu_atomic_add(&ptr->ticket, 1);
+	ticket = cpu_atomic_add(&ptr->ticket.value, 1);
 
-	while(ticket != cpu_load_word(&ptr->cntr))
+	while(ticket != cpu_load_word(&ptr->cntr.value))
 		;
 
 	current_thread->locks_count ++;
 }
 
-void mcs_unlock(mcs_sync_t *ptr, uint_t irq_state)
+void mcs_unlock(mcs_lock_t *ptr, uint_t irq_state)
 {
-	ptr->cntr ++;
+	ptr->cntr.value ++;
 	cpu_wbflush();
 	current_thread->locks_count --;
 	cpu_restore_irq(irq_state);
