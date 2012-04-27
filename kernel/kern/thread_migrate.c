@@ -99,6 +99,7 @@ EVENT_HANDLER(migrate_event_handler)
 	return 0;
 }
 
+/* TODO: rework this function */
 error_t thread_migrate(struct thread_s *thread)
 {
 	th_migrate_info_t info;
@@ -186,7 +187,10 @@ error_t do_migrate(th_migrate_info_t *info)
 	new = ppm_page2addr(page);
   
 	err = sched_register(new);
-  
+	/* FIXME: Redo registeration or/and reask 
+	 * for a target core either directly (dqdt)
+	 * or by returning EAGIN so caller can redo
+	 * the whole action.*/
 	assert(err == 0);
   
 	/* TODO: Review locking */
@@ -203,7 +207,7 @@ error_t do_migrate(th_migrate_info_t *info)
 	list_unlink(&thread->rope);
 	task->th_tbl[new->info.order] = new;
 
-	spinlock_lock(&thread->lock);
+	spinlock_unlock(&thread->lock);
 	spinlock_unlock(&task->th_lock);
   
 	new->info.attr.cid     = cpu->cluster->id;
