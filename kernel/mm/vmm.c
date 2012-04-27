@@ -770,85 +770,68 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 	register error_t err;
 	register struct page_s *page;
 	register struct cluster_s *cluster;
-	pmm_page_info_t info;
+	pmm_page_info_t old;
+	pmm_page_info_t new;
 	kmem_req_t req;
 	uint_t irq_state;
 
 	page      = NULL;
-	info.attr = 0;
+	old.attr  = 0;
 
 	//spinlock_lock(&region->vm_lock);
-	mcs_lock(&region->vm_lock, &irq_state);
   
-	err = pmm_get_page(&region->vmm->pmm, vaddr, &info);
+	err = pmm_get_page(&region->vmm->pmm, vaddr, &old);
   
-	if(err) goto VMM_AOD_ERR;
+	if(err) return err;
 
-	if(info.attr == 0)
-	{   
-		req.type  = KMEM_PAGE;
-		req.size  = 0;
-		req.flags = AF_USER | AF_ZERO;
-
-		if((page = kmem_alloc(&req)) == NULL)
-		{
-			err = ENOMEM;
-			goto VMM_AOD_ERR;
-		}
-
-		page->mapper = NULL;
-
-		info.attr    = region->vm_pgprot;
-		info.ppn     = ppm_page2ppn(page);
-		info.cluster = NULL;
-
-		err = pmm_set_page(&region->vmm->pmm, vaddr, &info);
-
-		if(err == 0)
-		{    
-			cluster = current_cluster;
-
-			if(page->cid != cluster->id)
-			{      
-				current_thread->info.remote_pages_cntr ++;
-	
-#if CONFIG_SHOW_REMOTE_PGALLOC   
-				printk(INFO, "%s: pid %d, tid %x, cpu %d, cid %d: got new remote page from cluster %d (vaddr %x)\n",
-				       __FUNCTION__,
-				       current_task->pid,
-				       current_thread,
-				       cpu_get_id(),
-				       cluster->id,
-				       page->cid,
-				       vaddr);
-#endif	
-			}
-		}
-	}
-	else
+	if(old.attr != 0)
 	{
 		current_thread->info.spurious_pgfault_cntr ++;
-
-#if CONFIG_SHOW_SPURIOUS_PGFAULT
-		printk(INFO, "%s: pid %d, cpu %d, nothing to do for vaddr %x\n", 
-		       __FUNCTION__, 
-		       current_task->pid, 
-		       cpu_get_id(), 
-		       vaddr);
-#endif
+		return 0;
 	}
 
+	req.type  = KMEM_PAGE;
+	req.size  = 0;
+	req.flags = AF_USER | AF_ZERO;
 
-VMM_AOD_ERR:
-	//spinlock_unlock(&region->vm_lock);
-	mcs_unlock(&region->vm_lock, irq_state);
+	if((page = kmem_alloc(&req)) == NULL)
+		return ENOMEM;
+
+	page->mapper = NULL;
+
+	new.attr    = region->vm_pgprot;
+	new.ppn     = ppm_page2ppn(page);
+	new.cluster = NULL;
+
+	mcs_lock(&region->vm_lock, &irq_state);
+
+	err = pmm_get_page(&region->vmm->pmm, vaddr, &old);
   
-	if((err) && (page != NULL))
-	{
-		req.ptr = page;
-		kmem_free(&req);
-	}
+	if(err) goto fail_get_pg;
+	
+	if(old.attr != 0) goto speculation_failed;
 
+	err = pmm_set_page(&region->vmm->pmm, vaddr, &new);
+	
+	if(err) goto fail_set_pg;
+
+	mcs_unlock(&region->vm_lock, irq_state);
+
+	cluster = current_cluster;
+
+	if(page->cid != cluster->id)
+		current_thread->info.remote_pages_cntr ++;
+
+	return 0;
+	
+speculation_failed:
+	current_thread->info.spurious_pgfault_cntr ++;
+
+fail_set_pg:
+fail_get_pg:
+	mcs_unlock(&region->vm_lock, irq_state);
+	req.ptr = page;
+	kmem_free(&req);
 	vmm_dmsg(3, "%s: ended [ err %d ]\n", __FUNCTION__, err);
 	return err;
 }
