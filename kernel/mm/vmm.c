@@ -772,11 +772,13 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 	register struct cluster_s *cluster;
 	pmm_page_info_t info;
 	kmem_req_t req;
-  
+	uint_t irq_state;
+
 	page      = NULL;
 	info.attr = 0;
 
-	spinlock_lock(&region->vm_lock);
+	//spinlock_lock(&region->vm_lock);
+	mcs_lock(&region->vm_lock, &irq_state);
   
 	err = pmm_get_page(&region->vmm->pmm, vaddr, &info);
   
@@ -838,7 +840,8 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 
 
 VMM_AOD_ERR:
-	spinlock_unlock(&region->vm_lock);
+	//spinlock_unlock(&region->vm_lock);
+	mcs_unlock(&region->vm_lock, irq_state);
   
 	if((err) && (page != NULL))
 	{
@@ -924,17 +927,20 @@ struct vm_region_op_s vm_region_default_op =
 
 void vmm_keysdb_update(struct vmm_s *vmm, struct vm_region_s *region, uint_t vaddr)
 {
-	uint_t isBusy;
+	//uint_t isBusy;
+	uint_t irq_state;
 	uint_t key;
 
 	key    = vaddr >> CONFIG_VM_REGION_KEYWIDTH;
-	isBusy = spinlock_trylock(&region->vm_lock);
+	//isBusy = spinlock_trylock(&region->vm_lock);
+	mcs_lock(&region->vm_lock, &irq_state);
   
-	if(isBusy) return;
+	//if(isBusy) return;
 
 	keysdb_bind(&vmm->regions_db, key, 1, region);
   
-	spinlock_unlock(&region->vm_lock);
+	//spinlock_unlock(&region->vm_lock);
+	mcs_unlock(&region->vm_lock, irq_state);
 }
 
 error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)

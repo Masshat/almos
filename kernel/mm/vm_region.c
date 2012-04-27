@@ -42,7 +42,8 @@ static void vm_region_ctor(struct kcm_s *kcm, void *ptr)
 	struct vm_region_s *region;
   
 	region = (struct vm_region_s*)ptr;
-	spinlock_init(&region->vm_lock, "VM Region");
+	//spinlock_init(&region->vm_lock, "VM Region");
+	mcs_lock_init(&region->vm_lock, "VM Region");
 }
 
 KMEM_OBJATTR_INIT(vm_region_kmem_init)

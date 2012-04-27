@@ -24,7 +24,8 @@
 #define _VM_REGION_H_
 
 #include <types.h>
-#include <spinlock.h>
+//#include <spinlock.h>
+#include <mcs_sync.h>
 #include <atomic.h>
 
 struct vmm_s;
@@ -57,7 +58,8 @@ struct vm_region_s;
 /* Virtual Memory Region */
 struct vm_region_s
 {
-	spinlock_t vm_lock;
+//	spinlock_t vm_lock;
+	mcs_lock_t vm_lock;
 	atomic_t vm_refcount;
 	struct list_entry vm_list;
 	struct vmm_s *vmm;
