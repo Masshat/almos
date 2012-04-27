@@ -26,8 +26,6 @@ INCLUDES=	$(foreach DIR,$(DIRS),-I$(DIR)) -I$(OBJDIR)/kern/
 CFLAGS= 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD
 CFLAGS+=	$(CPUCFLAGS)
 
-OBJDIR = .build
-
 CFILES=	$(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
 SFILES=	$(wildcard cpu/$(CPU)/*.S)
 
@@ -44,7 +42,7 @@ TARGET=$(OBJDIR)/almix-$(ARCH)-$(CPU)-$(KERNEL_REV)
 endif
 
 
-.PHONY: clean realclean obj
+.PHONY: clean
 
 
 $(TARGET): $(OBJDIRS) $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS) 
@@ -79,12 +77,7 @@ ifneq   ($(MODE),DEBUG)
 endif
 
 clean:
-	@$(RM) $(OBJDIR)/$(OBJS) $(OBJDIR)/$(DEPS)
-	@$(RM) $(OBJDIR)/kldscript
-	@$(RM) $(TARGET).elf $(TARGET).bin $(TARGET).elf.nm
-
-realclean: clean
-	@$(RM) -r $(OBJDIR)
+	rm -rf $(OBJDIR)
 
 $(OBJDIRS):
 	@echo '   [ MKDIR ]       '$@

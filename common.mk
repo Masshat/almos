@@ -1,5 +1,6 @@
 
 ARCH?=	tsar
+OBJDIR=	obj.$(ARCH)
 
 ifeq ($(ARCH), tsar)
 CPU= 	mipsel
