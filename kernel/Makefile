@@ -19,18 +19,12 @@ DIRS=	cpu/$(CPU)           	  \
 	libk                      \
 	ksh
 
-ifeq ($(MODE),DEBUG)
-EXTRACFLAGS = -g
-else
-EXTRACFLAGS = -fomit-frame-pointer
-endif
-
 LFLAGS = -T$(OBJDIR)/kldscript $(CPULFLAGS)
 
 INCLUDES=	$(foreach DIR,$(DIRS),-I$(DIR)) -I$(OBJDIR)/kern/
 
 CFLAGS= 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD
-CFLAGS+=	$(CPUCFLAGS) $(EXTRACFLAGS)
+CFLAGS+=	$(CPUCFLAGS)
 
 OBJDIR = .build
 

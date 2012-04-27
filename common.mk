@@ -3,7 +3,10 @@ ARCH?=	tsar
 
 ifeq ($(ARCH), tsar)
 CPU= 	mipsel
-CPUCFLAGS= -mips32 -EL -G0
+
+CPUCFLAGS=	-mips32 -EL -G0
+CPUCFLAGS+=	-mhard-float -fomit-frame-pointer
+
 CPULFLAGS= -G0 --hash-style=sysv
 
 DRVRS=	soclib
@@ -15,6 +18,7 @@ endif
 ifeq ($(ARCH), ibmpc)
 CPU=		i386
 CPUCFLAGS= 	-march=i386
+#CPUCFLAGS+=	-msoft-float -fomit-frame-pointer -Os
 
 CCPREFIX=
 endif

@@ -1,21 +1,6 @@
 
 include ../../common.mk
 
-USE_HARD_FLOAT=yes
-
-ifeq ($(CPU), mipsel)
-ifeq ($(USE_HARD_FLOAT), yes)
-CPUCFLAGS = -mhard-float
-else
-CPUCFLAGS = -msoft-float
-endif
-CPUCFLAGS += -mips32 -EL -G0 -fomit-frame-pointer -O3
-endif
-
-ifeq ($(CPU), i386)
-#CPUCFLAGS = -msoft-float -fomit-frame-pointer -Os
-CPUCFLAGS = -g --hash-style=sysv
-endif
 
 
 CFLAGS=	-W -Wall -Wextra -Wchar-subscripts -Werror \
