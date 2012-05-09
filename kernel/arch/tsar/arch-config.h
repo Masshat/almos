@@ -40,7 +40,7 @@
 #define CONFIG_TTY_MAX_DEV_NR             32
 #define CONFIG_TTY_BUFFER_DEPTH           40
 #define CONFIG_FB_USE_DMA                yes
-#define CONFIG_ARCH_HAS_BARRIERS          1
+#define CONFIG_ARCH_HAS_BARRIERS          no
 //////////////////////////////////////////////
 
 

@@ -113,6 +113,7 @@ static void barrier_do_broadcast(struct barrier_s *barrier)
 	       tm_end - tm_first);
 }
 
+#if ARCH_HAS_BARRIERS
 static EVENT_HANDLER(barrier_broadcast_event)
 {
 	register struct barrier_s *barrier;
@@ -132,8 +133,6 @@ static EVENT_HANDLER(barrier_broadcast_event)
 	return 0;
 }
 
-
-#if ARCH_HAS_BARRIERS
 static error_t barrier_hw_wait(struct barrier_s *barrier)
 {
 	register uint_t event;
@@ -155,7 +154,7 @@ static error_t barrier_hw_wait(struct barrier_s *barrier)
 
 	wqdbsz  = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
 	wqdb    = barrier->wqdb_tbl[index / wqdbsz];
-	event   = sched_event_make(this, SCHED_OP_WAKEUP);
+	event   = sched_event_make (this, SCHED_OP_WAKEUP);
 	listner = sched_get_listner(this, SCHED_OP_WAKEUP);
 
 	wqdb->tbl[index % wqdbsz].event   = event;
@@ -210,8 +209,8 @@ static error_t barrier_private_wait(struct barrier_s *barrier)
 	wqdbsz = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
 	wqdb   = barrier->wqdb_tbl[index / wqdbsz];
 
-	wqdb->tbl[index % wqdbsz].event   = sched_event_make(this, SCHED_OP_WAKEUP);
-	wqdb->tbl[index % wqdbsz].listner = sched_get_listner(this);
+	wqdb->tbl[index % wqdbsz].event   = sched_event_make (this, SCHED_OP_WAKEUP);
+	wqdb->tbl[index % wqdbsz].listner = sched_get_listner(this, SCHED_OP_WAKEUP);
   
 	ticket = atomic_add(&barrier->waiting, -1);
   
@@ -266,7 +265,7 @@ static error_t barrier_shared_wait(struct barrier_s *barrier)
 	if(ticket == 0)
 		barrier->tm_first = tm_now;
 
-	wqdb->tbl[ticket % wqdbsz].event   = sched_event_make(this, SCHED_OP_WAKEUP);
+	wqdb->tbl[ticket % wqdbsz].event   = sched_event_make (this, SCHED_OP_WAKEUP);
 	wqdb->tbl[ticket % wqdbsz].listner = sched_get_listner(this, SCHED_OP_WAKEUP);
   
 	mcs_unlock(&barrier->lock, irq_state);
