@@ -97,8 +97,6 @@ struct thread_info
 	uint_t u_err_nr;
 	uint_t m_err_nr;
 	bool_t isTraced;
-	bool_t isWakeable:16;
-	bool_t isWakedup:16;
 	uint_t tm_exec;
 	uint_t tm_tmp;                      /*! temporary date to compute execution duration */
 	uint_t tm_usr;                      /*! user execution duration */
