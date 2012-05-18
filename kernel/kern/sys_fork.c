@@ -251,15 +251,6 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 
 	return child_task->pid;
 
-	fork_dmsg(1, "%s: from tid %x [supposed to be the child]\n", 
-		  __FUNCTION__, 
-		  current_thread);
-
-	cpu_fpu_disable();
-	cpu_wbflush();
-	current_task->state = TASK_READY;
-	return 0;
-
 fail_do_fork:
 fail_childs_nr:
 	atomic_add(&this_task->childs_nr, -1);
@@ -277,7 +268,10 @@ error_t do_fork(fork_info_t *info)
 	error_t err;
 	sint_t order;
   
-	fork_dmsg(1, "%s: cpu %d, started [%d]\n", __FUNCTION__, cpu_get_id(), cpu_time_stamp());
+	fork_dmsg(1, "%s: cpu %d, started [%d]\n", 
+		  __FUNCTION__, 
+		  cpu_get_id(), 
+		  cpu_time_stamp());
   
 	attr.cluster = info->cpu->cluster;
 	attr.cpu = info->cpu;
