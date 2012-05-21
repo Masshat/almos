@@ -39,11 +39,12 @@
 
 typedef struct
 {
-	volatile bool_t     isDone;
 	volatile error_t    err;
-	struct thread_s     *thread;
+	struct thread_s     *victim;
 	struct task_s       *task;
-	struct cpu_s        *cpu;
+	struct cpu_s        *ocpu;
+	void                *sched_listner;
+	uint_t              sched_event;
 	struct event_s      event;
 }th_migrate_info_t;
 
@@ -59,38 +60,31 @@ EVENT_HANDLER(migrate_event_handler)
 	uint_t tm_end;
 	uint_t tid;
 	uint_t pid;
-  
-	tm_start = cpu_time_stamp();
 
-	rinfo = event_get_argument(event);
-  
-	linfo.thread  = rinfo->thread;
-	linfo.task    = rinfo->task;
-	linfo.cpu     = rinfo->cpu;
-
-	tid = linfo.thread->info.order;
-	pid = linfo.task->pid;
+	tm_start     = cpu_time_stamp();
+	rinfo        = event_get_argument(event);
+	linfo.victim = rinfo->victim;
+	linfo.task   = rinfo->task;
+	linfo.ocpu   = rinfo->ocpu;
+	tid          = linfo.victim->info.order;
+	pid          = linfo.task->pid;
 
 	cpu_wbflush();
 
-	err = do_migrate(&linfo);
+	err          = do_migrate(&linfo);
+	tm_end       = cpu_time_stamp();
+	rinfo->err   = err;
 
-	tm_end = cpu_time_stamp();
-
-	rinfo->err = err;
-	cpu_wbflush();
-
-	rinfo->isDone = true;
-	cpu_wbflush();
-
+	sched_event_send(rinfo->sched_listner, rinfo->sched_event);
+	
 	cpu = current_cpu;
 
-	printk(INFO, "%s: pid %d, tid %d, [from] clstr %d, cpu %d --> [to] clstr %d, cpu %d, done [%u - %u]\n", 
-	       __FUNCTION__,
+	printk(INFO, "INFO: [pid %d, tid %d (%x)] has been migrated from [cid %d, cpu %d] to [cid %d, cpu %d] [%u - %u]\n", 
 	       pid,
 	       tid,
-	       linfo.cpu->cluster->id,
-	       linfo.cpu->lid,
+	       linfo.victim,
+	       linfo.ocpu->cluster->id,
+	       linfo.ocpu->lid,
 	       cpu->cluster->id,
 	       cpu->lid,
 	       tm_end,
@@ -99,35 +93,39 @@ EVENT_HANDLER(migrate_event_handler)
 	return 0;
 }
 
-/* TODO: rework this function */
-error_t thread_migrate(struct thread_s *thread)
+/*
+ * Hypothesis:
+ * 1) This function is executed by the server.
+ * 2) This function is executed by the victim thread.
+ * 3) The migration decision has been already made.
+ *
+ * On Error:
+ * 1) The victim thread remainses unchagned if any error occurs.
+ *
+ * TODO: verify the compatiblity with !CONFIG_REMOTE_THREAD_CREATE
+*/
+error_t thread_migrate(struct thread_s *this)
 {
 	th_migrate_info_t info;
 	struct dqdt_attr_s attr;
-	struct thread_s *this;
 	struct task_s *task;
 	struct cpu_s *cpu;
-	uint_t tm_bRemote;
-	uint_t tm_aRemote;
 	uint_t tid,pid;
 	error_t err;
   
-	this = current_thread;
-	task = thread->task;
-	cpu  = thread_current_cpu(this);
+	task = this->task;
+	cpu  = current_cpu;
 	tid  = this->info.order;
 	pid  = task->pid;
 
-	if(cpu->owner == this)
-		cpu_fpu_context_save(&this->uzone);
-
 	err = cpu_context_save(&this->info.pss);
+	
+	if(err != 0)  return 0;	   /* DONE */
 
-	if(err != 0) return 0;
-
-	info.thread  = this;
-	info.task    = task;
-	info.cpu     = cpu;
+	info.victim        = this;
+	info.task          = task;
+	info.sched_listner = sched_get_listner(this, SCHED_OP_WAKEUP);
+	info.sched_event   = sched_event_make (this, SCHED_OP_WAKEUP);
 
 	event_set_argument(&info.event, &info);
 	event_set_handler(&info.event, migrate_event_handler);
@@ -135,33 +133,21 @@ error_t thread_migrate(struct thread_s *thread)
 
 	err = dqdt_thread_migrate(cpu->cluster->levels_tbl[0], &attr);
 
-	if(err) return EAGAIN;
+	if((err) || (attr.cpu == cpu))
+		return EAGAIN;
 
+	info.ocpu = cpu;
+	
 	event_send(&info.event, &attr.cpu->re_listner);
  
-	cpu_wbflush();
-  
-	tm_bRemote = cpu_time_stamp();
-
-	while(info.isDone == false)
-		sched_yield(this);
+	sched_sleep(this);
 
 	err = info.err;
-	tm_aRemote = cpu_time_stamp();
-
-	printk(INFO, "%s: pid %d, tid %d, cpu %d, done, err %d, e:%u, t:%u\n",
-	       __FUNCTION__,
-	       pid,
-	       tid,
-	       cpu_get_id(),
-	       err,
-	       tm_aRemote,
-	       tm_aRemote - tm_bRemote);
 
 	if(err) return err;
-
+	
 	sched_remove(this);
-	return 0;	
+	return 0;
 }
 
 error_t do_migrate(th_migrate_info_t *info)
@@ -171,12 +157,12 @@ error_t do_migrate(th_migrate_info_t *info)
 	struct cpu_s *cpu;
 	struct thread_s *new;
 	struct task_s *task;
-	struct thread_s *thread;
+	struct thread_s *victim;
 	error_t err;
 
 	cpu       = current_cpu;
 	task      = info->task;
-	thread    = info->thread;
+	victim    = info->victim;
 	req.type  = KMEM_PAGE;
 	req.size  = 0;
 	req.flags = AF_KERNEL;
@@ -186,6 +172,12 @@ error_t do_migrate(th_migrate_info_t *info)
 
 	new = ppm_page2addr(page);
   
+	/* Needed as long as !CONFIG_REMOTE_THREAD_CREATE is supported */
+	thread_set_origin_cpu(new,info->ocpu);
+	thread_set_current_cpu(new,cpu);
+	sched_setpolicy(new, new->info.attr.sched_policy);
+	/* ------------------------------------------------- */
+
 	err = sched_register(new);
 	/* FIXME: Redo registeration or/and reask 
 	 * for a target core either directly (dqdt)
@@ -195,30 +187,33 @@ error_t do_migrate(th_migrate_info_t *info)
   
 	/* TODO: Review locking */
 	spinlock_lock(&task->th_lock);
-	spinlock_lock(&thread->lock);
+	spinlock_lock(&victim->lock);
 
-	memcpy(new, thread, PMM_PAGE_SIZE);
+	memcpy(new, victim, PMM_PAGE_SIZE);
 
-	thread_set_origin_cpu(new,info->cpu);
+	thread_set_origin_cpu(new,info->ocpu);
 	thread_set_current_cpu(new,cpu);
 	sched_setpolicy(new, new->info.attr.sched_policy);
 
 	list_add_last(&task->th_root, &new->rope);
-	list_unlink(&thread->rope);
+	list_unlink(&victim->rope);
 	task->th_tbl[new->info.order] = new;
 
-	spinlock_unlock(&thread->lock);
-	spinlock_unlock(&task->th_lock);
-  
 	new->info.attr.cid     = cpu->cluster->id;
 	new->info.attr.cpu_lid = cpu->lid;
 	new->info.attr.cpu_gid = cpu->gid;
+	new->info.attr.tid     = (uint_t)  new;
+	new->info.kstack_addr  = (uint_t*) new;
 	new->info.page         = page;
+
+	wait_queue_init2(&new->info.wait_queue, &victim->info.wait_queue);
+
+	spinlock_unlock(&victim->lock);
+	spinlock_unlock(&new->lock);
+	spinlock_unlock(&task->th_lock);
 
 	cpu_context_set_tid(&new->info.pss, (reg_t)new);
 	cpu_context_dup_finlize(&new->pws, &new->info.pss);
-
-	/* TODO: MIGRATE PAGES */
 
 	sched_add(new);
 	return 0;
