@@ -92,7 +92,8 @@ sys_call_tbl[__SYS_CALL_SERVICES_NUM] = {
 	sys_ps,
 	sys_madvise,
 	sys_mcntl,
-	sys_stat
+	sys_stat,
+	sys_thread_migrate
 };
 
 reg_t do_syscall (reg_t arg0,
@@ -134,7 +135,11 @@ reg_t do_syscall (reg_t arg0,
 	if(service_num >= __SYS_CALL_SERVICES_NUM)
 	{
 		printk(INFO, "INFO: %s: Unknow requested service %d, thread %x, proc %d\n",
-		       __FUNCTION__, service_num, this, cpu->gid);
+		       __FUNCTION__, 
+		       service_num, 
+		       this, 
+		       cpu->gid);
+
 		this->info.errno = ENOSYS;
 		goto ABORT_DO_SYSCALL;
 	}
@@ -156,6 +161,12 @@ reg_t do_syscall (reg_t arg0,
 
 	this->info.errno = 0;
 	return_val = sys_call_tbl[service_num] (arg0,arg1,arg2,arg3);
+
+	/* Reload these pointers as the thread may be migrated */
+	this = current_thread;
+	cpu  = current_cpu;
+	cpu_wbflush();
+	/* ----------------------------------------------- */
    
 END_DO_SYSCALL:
 
@@ -168,7 +179,15 @@ END_DO_SYSCALL:
 		event_listner_notify(&cpu->le_listner);
 
 	if(thread_sched_isActivated(this))
+	{
+		thread_set_cap_migrate(this);
 		sched_yield(this);
+		thread_clear_cap_migrate(this);
+
+		this = current_thread;
+		cpu  = current_cpu;
+		cpu_wbflush();
+	}
 
 ABORT_DO_SYSCALL:
 	tm_sys_compute(this);
