@@ -94,7 +94,6 @@ struct scheduler_s
 	uint16_t export_nr;
 	uint16_t import_nr;
 	struct sched_db_s *db;
-	struct list_entry migration_root;
 	struct sched_s scheds_tbl[SCHEDS_NR];
 };
 
