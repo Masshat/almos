@@ -43,7 +43,7 @@ const char* thread_state_name[THREAD_STATES_NR] =
 	"S_KERNEL",
 	"S_READY",
 	"S_WAIT",
-	"S_DEAD",
+	"S_DEAD"
 };
 
 const char* thread_type_name[THREAD_TYPES_NR] =

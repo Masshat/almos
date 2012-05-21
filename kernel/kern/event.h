@@ -172,7 +172,6 @@ struct event_listner_s
 	volatile uint_t flags;
 	volatile uint_t prio;
 	uint_t count;
-	struct thread_s *worker;
 	struct event_db_s tbl[E_PRIO_NR];
 };
 

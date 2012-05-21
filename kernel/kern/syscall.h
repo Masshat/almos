@@ -68,6 +68,7 @@ enum
 	SYS_MADVISE,			/* Service NR 40 */   
 	SYS_PAGEINFO,
 	SYS_STAT,
+	SYS_MIGRATE,
 	__SYS_CALL_SERVICES_NUM,
 };
 

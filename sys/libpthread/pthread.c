@@ -148,6 +148,22 @@ int pthread_detach(pthread_t thread)
 	return retval;
 }
 
+int pthread_migrate_np(void)
+{
+	register __pthread_tls_t *tls;
+	register int retval; 
+
+	retval = (int)cpu_syscall(NULL,NULL,NULL,NULL,SYS_MIGRATE);
+
+	if(retval == 0)
+	{
+		tls = cpu_get_tls();
+		cpu_syscall(&tls->attr,NULL,NULL,NULL,SYS_GETATTR);
+	}
+
+	return retval;
+}
+
 void pthread_yield (void)
 {
 	cpu_syscall(NULL,NULL,NULL,NULL,SYS_YIELD);
@@ -187,4 +203,9 @@ pthread_t pthread_self (void)
 int pthread_equal (pthread_t thread1, pthread_t thread2)
 {
 	return thread1 == thread2;
+}
+
+int pthread_profiling_np(int cmd, pid_t pid, pthread_t tid)
+{
+	return (int)cpu_syscall((void*)cmd, (void*)pid, (void*)tid, NULL,SYS_PS);
 }

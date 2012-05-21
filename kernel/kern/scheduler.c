@@ -94,6 +94,7 @@ error_t sched_init(struct scheduler_s *scheduler)
 	}
   
 	scheduler->db = db;
+	list_root_init(&scheduler->migration_root);
 	return 0;
 }
 
@@ -103,14 +104,17 @@ error_t sched_register(struct thread_s *thread)
 	struct sched_db_s *db;
 	sint_t index;
 
-	cpu   = thread_current_cpu(thread);
-	db    = cpu->scheduler.db;
 	index = -1;
 
 #if CONFIG_REMOTE_THREAD_CREATE
+	cpu   = current_cpu;
+	db    = cpu->scheduler.db;
+
 	uint_t irq_state;
 	cpu_disable_all_irq(&irq_state);
 #else
+	cpu   = thread_current_cpu(thread);
+	db    = cpu->scheduler.db;
 	spinlock_lock(&db->lock);
 #endif
 
@@ -163,7 +167,7 @@ SCHED_SCOPE void sched_unregister(struct thread_s *thread)
 #endif
 }
 
-/* TODO: don't visit all thread, just sched->count one */
+/* TODO: don't visit all threads, just sched->count one */
 SCHED_SCOPE void sched_event_notify(struct scheduler_s *scheduler)
 {
 	register uint_t i;
@@ -244,13 +248,14 @@ void sched_setprio(struct thread_s *thread, uint_t prio)
 	thread->static_prio = prio;
 }
 
-/* TODO: call op.clock of each sched policy */
 void sched_clock(struct thread_s *this, uint_t ticks_nr)
 { 
-	//boot_dmsg("%s: started cpu %d, this %x, %d\n", __FUNCTION__, cpu_get_id(),this,ticks_nr);
 	register struct cpu_s *cpu;
+	register struct scheduler_s *scheduler;
+	register uint_t i;
 
-	cpu = thread_current_cpu(this);
+	cpu       = thread_current_cpu(this);
+	scheduler = &cpu->scheduler;
 
 	this->ticks_nr ++;
 
@@ -260,16 +265,14 @@ void sched_clock(struct thread_s *this, uint_t ticks_nr)
 	cpu_wbflush();
   
 	sched_event_notify(&thread_current_cpu(this)->scheduler);
-	this->local_sched->op.clock(this, ticks_nr);
-	//boot_dmsg("%s: ended cpu %d\n", __FUNCTION__, cpu_get_id());
+
+	for(i = 0; i < SCHEDS_NR; i++)
+		scheduler->scheds_tbl[i].op.clock(this, ticks_nr);
 }
 
-void sched_strategy(struct thread_s *this)
+void sched_strategy(struct scheduler_s *scheduler)
 {
 	register uint_t i;
-	register struct scheduler_s *scheduler;
-  
-	scheduler = &thread_current_cpu(this)->scheduler;
 
 	for(i = 0; i < SCHEDS_NR; i++)
 		scheduler->scheds_tbl[i].op.strategy(&scheduler->scheds_tbl[i]);
@@ -289,6 +292,7 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 	register struct sched_s *sched;
 	register struct cpu_s *cpu;
 	register uint_t ret, i;
+	uint_t state;
    
 	elected   = NULL;
 	cpu       = current_cpu;
@@ -310,13 +314,15 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 		cpu_set_state(cpu, CPU_ACTIVE);
 
 #if CONFIG_SCHED_DEBUG
-	printk(INFO, "%s: cpu %d, current tid %x, pid %d, next tid %x, pid %d\n", 
-	       __FUNCTION__,
-	       cpu_get_id(),
-	       this->info.order,
-	       this->task->pid,
-	       elected->info.order,
-	       elected->task->pid);
+	isr_dmsg(INFO, "%s: cpu %d, current tid %d (%x), pid %d, next tid %d (%x), pid %d\n", 
+		 __FUNCTION__,
+		 cpu_get_id(),
+		 this->info.order,
+		 this,
+		 this->task->pid,
+		 elected->info.order,
+		 elected,
+		 elected->task->pid);
 #endif
 
 	if(this->state == S_DEAD)
@@ -352,6 +358,16 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 		cpu_fpu_enable();
 	else
 		cpu_fpu_disable();
+
+	if(thread_migration_isActivated(this))
+	{
+		cpu_enable_all_irq(&state);
+		ret = thread_migrate(this);
+		cpu_restore_irq(state);
+
+		if(ret == 0)	/* this pointer is expired */
+			thread_migration_deactivate(current_thread);
+	}
 
 #if 0
 	if(event_is_pending(&cpu->re_listner))

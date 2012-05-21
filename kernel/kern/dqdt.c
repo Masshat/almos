@@ -361,12 +361,14 @@ error_t dqdt_up_traversal(struct dqdt_cluster_s *logical,
 
 DQDT_SELECT_HELPER(dqdt_placement_child_select)
 {
-	return (logical->info.tbl[child_index].U <= attr->u_threshold) ? true : false;
+	//return (logical->info.tbl[child_index].U <= attr->u_threshold) ? true : false;
+	return (logical->info.tbl[child_index].U < 100) ? true : false;
 }
 
 DQDT_SELECT_HELPER(dqdt_placement_clstr_select)
 {
-	return (logical->info.summary.U <= attr->u_threshold) ? true : false;
+	//return (logical->info.summary.U <= attr->u_threshold) ? true : false;
+	return (logical->info.summary.U <= 90) ? true : false;
 }
 
 DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
@@ -416,7 +418,7 @@ DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 
 static bool_t dqdt_cpu_isSelectable(struct cpu_s *cpu, struct dqdt_attr_s *attr)
 {
-	if((cpu->scheduler.user_nr == 0) && (cpu->busy_percent < 80))
+	if((cpu->scheduler.user_nr == 0) && (cpu->busy_percent <= 80))
 		return true;
 	else
 		return false;
@@ -474,7 +476,7 @@ error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s
 	for(threshold = 20; threshold <= 100; threshold += 20)
 	{
 		attr->u_threshold = threshold;
-
+		
 		switch(threshold)
 		{
 		case 20:
@@ -513,7 +515,7 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
   
 	attr->origin = current_cluster->levels_tbl[0];
 
-	for(threshold = 10; threshold <= 70; threshold += 10)
+	for(threshold = 10; threshold <= 80; threshold += 10)
 	{
 		attr->u_threshold = threshold;
 

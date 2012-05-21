@@ -1112,11 +1112,18 @@ FAULT_SEND_SIGBUS:
 FAULT_END:
   
 	cpu_disable_all_irq(NULL);
-  
+
 	if(old_state == S_USR)
 	{
 		if(thread_sched_isActivated(this))
+		{
+			thread_set_cap_migrate(this);
 			sched_yield(this);
+			thread_clear_cap_migrate(this);
+			
+			this = current_thread;
+			cpu_wbflush();
+		}
 
 		tm_sys_compute(this);
 		this->state = S_USR;

@@ -68,6 +68,7 @@
 #define CONFIG_DQDT_LEVELS_NR            5
 #define CONFIG_DQDT_MGR_PERIOD           3
 #define CONFIG_DQDT_ROOTMGR_PERIOD       3
+#define CONFIG_CPU_BALANCING_PERIOD      4
 #define CONFIG_CLUSTER_KEYS_NR           8
 #define CONFIG_REL_LFFB_SIZE             32
 #define CONFIG_VFS_NODES_PER_CLUSTER     40

@@ -164,6 +164,12 @@ struct thread_s
 #define thread_sched_activate(thread)
 #define thread_sched_isActivated(thread)
 #define thread_sched_deactivate(thread)
+#define thread_migration_activate(thread)
+#define thread_migration_isActivated(thread)
+#define thread_migration_deactivate(thread)
+#define thread_set_cap_migrate(thread)
+#define thread_clear_cap_migrate(thread)
+#define thread_isCapMigrate(thread)
 #define thread_preempt_disable(thread)
 #define thread_preempt_enable(thread)
 #define thread_isPreemptable(thread)
@@ -208,6 +214,7 @@ int sys_thread_join (pthread_t tid, void **thread_return);
 int sys_thread_detach (pthread_t tid);
 int sys_thread_getattr(pthread_attr_t *attr);
 int sys_thread_exit (void *exit_val);
+int sys_thread_migrate();
 int sys_thread_yield();
 int sys_thread_sleep();
 int sys_thread_wakeup(pthread_t tid, pthread_t *tid_tbl, uint_t count);
@@ -245,6 +252,8 @@ EVENT_HANDLER(thread_destroy_handler);
 #define TH_NO_VM_REGION     0x04
 #define TH_CAN_WAKEUP       0x08
 #define TH_CAP_WAKEUP       0x10
+#define TH_NEED_TO_MIGRATE  0x20
+#define TH_CAP_MIGRATE      0x40
 
 /* Thread Attributes */
 #undef thread_isJoinable
@@ -253,6 +262,12 @@ EVENT_HANDLER(thread_destroy_handler);
 #undef thread_sched_activate
 #undef thread_sched_deactivate
 #undef thread_sched_isActivated
+#undef thread_migration_activate
+#undef thread_migration_deactivate
+#undef thread_migration_isActivated
+#undef thread_set_cap_migrate
+#undef thread_clear_cap_migrate
+#undef thread_isCapMigrate
 #undef thread_isPreemptable
 #undef thread_preempt_disable
 #undef thread_preempt_enable
@@ -270,6 +285,15 @@ EVENT_HANDLER(thread_destroy_handler);
 #define thread_sched_activate(_th)   do{(_th)->flags |= TH_NEED_TO_SCHED;}while(0)
 #define thread_sched_deactivate(_th) do{(_th)->flags &= ~TH_NEED_TO_SCHED;}while(0)
 #define thread_sched_isActivated(_th) (_th)->flags & TH_NEED_TO_SCHED
+
+#define thread_migration_activate(_th)   do{(_th)->flags |= TH_NEED_TO_MIGRATE;}while(0)
+#define thread_migration_deactivate(_th) do{(_th)->flags &= ~TH_NEED_TO_MIGRATE;}while(0)
+#define thread_migration_isActivated(_th) (_th)->flags & TH_NEED_TO_MIGRATE
+
+#define thread_set_cap_migrate(_th) do{(_th)->flags |= TH_CAP_MIGRATE;}while(0)
+#define thread_isCapMigrate(_th)  ((_th)->flags &= TH_CAP_MIGRATE)
+#define thread_clear_cap_migrate(_th) do{(_th)->flags &= ~TH_CAP_MIGRATE;}while(0)
+
 #define thread_isPreemptable(_th)     ((_th)->locks_count == 0)
 #define thread_preempt_disable(_th)				\
 	do{{							\

@@ -295,6 +295,7 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier);
 #define PT_FORK_WILL_EXEC  1
 #define PT_FORK_TARGET_CPU 2
 
+int  pthread_migrate_np(void);
 int pthread_profiling_np(int cmd, pid_t pid, pthread_t tid);
 int pthread_attr_setcpuid_np(pthread_attr_t *attr, int cpu_id, int *old_cpu_id);
 int pthread_attr_getcpuid_np(int *cpu_id);

@@ -41,25 +41,94 @@
 #undef SCHED_SCOPE
 #define SCHED_SCOPE
 
-#define RR_QUANTUM     3	/* in TICs number */
-#define RR_QUANTUM_0   1	
-#define RR_QUANTUM_1   1      	
-#define RR_QUEUE_NR    5
-#define RR_MAX_PRIO    5
+#define RR_QUANTUM        4	/* in TICs number */
+#define RR_QUEUE_NR       5
+#define RR_MAX_PRIO       5
 
 typedef struct rQueues_s
 {
+	uint_t clock_cntr;
+	uint_t period;
 	struct list_entry root;
 	struct list_entry root_tbls[RR_QUEUE_NR];
 } rQueues_t;
 
 
+void __attribute__ ((noinline)) rr_sched_load_balance(struct thread_s *this,
+						      struct sched_s *sched, 
+						      rQueues_t *rQueues)
+{
+	struct thread_s *victim;
+	struct thread_s *thread;
+	struct list_entry *iter;
+	struct cpu_s *cpu;
+	register uint_t min;
+
+	cpu = current_cpu;
+
+#if CONFIG_SCHED_DEBUG
+	isr_dmsg(INFO, "%s: started cpu %d, u_rannable %d, busy %d, usage %d\n", 
+		 __FUNCTION__, 
+		 cpu_get_id(),
+		 cpu->scheduler.u_runnable,
+		 cpu->busy_percent,
+		 cpu->usage);
+#endif
+
+	this->boosted_prio >>= 1;
+	victim             = NULL;
+	min                = rQueues->period;
+
+	list_foreach(&rQueues->root, iter)
+	{
+		thread = list_element(iter, struct thread_s, list);
+		
+		if((thread->type == PTHREAD)    && 
+		   (thread->ticks_nr > 1)       && 
+		   (thread->boosted_prio < min) &&
+		   thread_isCapMigrate(thread))
+		{
+			victim = thread;
+			min    = victim->boosted_prio;
+		}
+
+
+		thread->boosted_prio >>= 1;
+	}
+
+#if CONFIG_SCHED_DEBUG
+	isr_dmsg(INFO, "%s: cpu %d ended, min %d, victim %x\n", 
+		 __FUNCTION__, 
+		 cpu_get_id(), 
+		 min,
+		 victim);
+#endif
+
+	if(min == 0)
+		thread_migration_activate(victim);
+}
+
+
 SCHED_SCOPE void rr_clock(struct thread_s *this, uint_t ticks_nr)
 {
+	register struct sched_s *sched;
+	register rQueues_t *rQueues;
+
 	this->quantum -= 1;
 
-	if((this->quantum < 0) && (this->type != TH_IDLE))
+	if((this->quantum == 0) && (this->type != TH_IDLE))
 		thread_sched_activate(this);
+
+	sched   = this->local_sched;
+	rQueues = (rQueues_t*) sched->data;
+	
+	rQueues->clock_cntr ++;
+
+	if(rQueues->clock_cntr == rQueues->period)
+	{
+		rQueues->clock_cntr = 0;
+		rr_sched_load_balance(this, sched, rQueues);
+	}
 }
 
 SCHED_SCOPE void rr_sched_strategy(struct sched_s *sched)
@@ -80,7 +149,6 @@ SCHED_SCOPE void rr_remove(struct thread_s *this)
 	cpu_wbflush();
 
 	sched_assert(this->state == S_KERNEL && "Unexpected remove op");
-	this->state = S_DEAD;
 }
 
 
@@ -98,7 +166,7 @@ SCHED_SCOPE void rr_exit(struct thread_s *this)
 SCHED_SCOPE void rr_sleep(struct thread_s *this)
 {
 	sched_assert((this->state == S_KERNEL) && "Unexpected sleep op");
-	this->state = S_WAIT;
+	this->state = S_WAIT;	
 }
 
 SCHED_SCOPE void rr_wakeup (struct thread_s *thread)
@@ -109,13 +177,13 @@ SCHED_SCOPE void rr_wakeup (struct thread_s *thread)
    
 	if(thread->state == S_READY)
 		return;
-
+	
 	sched_assert((thread->state == S_WAIT) && "Unexpected sleep wakeup op");
 
 	thread->state = S_READY;
 
-	sched = thread->local_sched;
-	type = thread->type;
+	sched   = thread->local_sched;
+	type    = thread->type;
 	rQueues = (rQueues_t*) sched->data;
 
 	sched->count ++;
@@ -171,19 +239,25 @@ SCHED_SCOPE struct thread_s *rr_elect(struct sched_s *sched)
 	elected = NULL;
   
 	count = sched->count;
-   
-	if((this->state == S_KERNEL) && (this->type != TH_IDLE))
-	{
-		this->state = S_READY;
-		list_add_last(&rQueues->root, &this->list);
-		count ++;
 
-		if(this->type == PTHREAD)
-			thread_current_cpu(this)->scheduler.u_runnable ++;
-		else
-			thread_current_cpu(this)->scheduler.k_runnable ++;
+	if(this->type != TH_IDLE)
+	{
+		this->boosted_prio += this->quantum;
+
+		if(this->state == S_KERNEL)
+		{
+			this->state = S_READY;
+			
+			list_add_last(&rQueues->root, &this->list);
+			count ++;
+
+			if(this->type == PTHREAD)
+				thread_current_cpu(this)->scheduler.u_runnable ++;
+			else
+				thread_current_cpu(this)->scheduler.k_runnable ++;
+		}
 	}
-   
+
 	if(count > 0)
 	{
 		elected = list_first(&rQueues->root, struct thread_s, list);
@@ -237,6 +311,8 @@ error_t rr_sched_init(struct sched_s *sched)
 
 	if((rQueues = kmem_alloc(&req)) == NULL)
 		PANIC("rr-sched.init: fatal error NOMEM\n", 0);
+
+	rQueues->period = CONFIG_CPU_BALANCING_PERIOD * RR_QUANTUM;
   
 	list_root_init(&rQueues->root);
 

@@ -94,6 +94,7 @@ struct scheduler_s
 	uint16_t export_nr;
 	uint16_t import_nr;
 	struct sched_db_s *db;
+	struct list_entry migration_root;
 	struct sched_s scheds_tbl[SCHEDS_NR];
 };
 
@@ -130,8 +131,8 @@ void sched_sleep(struct thread_s *this);
 /** Wakeup the given thread from its passive wait */
 void sched_wakeup(struct thread_s *thread);
 
-/** Ask the scheduling policy to take decesion about current thread */
-void sched_strategy(struct thread_s *this);
+/** Enable the scheduler to balance its load and do some internal strategie */
+void sched_strategy(struct scheduler_s *scheduler);
 
 /** Signal the clock event to current thread's scheduling policy */
 void sched_clock(struct thread_s *this, uint_t ticks_nr);

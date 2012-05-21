@@ -68,7 +68,14 @@ void do_interrupt(struct thread_s *this, uint_t irq_num)
 		event_listner_notify(&cpu->le_listner);
 
 	if(thread_sched_isActivated(this))
-		(void)sched_yield(this);
+	{
+		thread_set_cap_migrate(this);
+		sched_yield(this);
+		thread_clear_cap_migrate(this);
+
+		this = current_thread;
+		cpu_wbflush();
+	}
 
 	tm_sys_compute(this);
 	this->state = S_USR;
