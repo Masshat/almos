@@ -50,6 +50,22 @@ static inline void wait_queue_init(struct wait_queue_s *queue, const char* name)
 	list_root_init(&queue->root);
 }
 
+
+/** 
+ * Initialize the wait queue starting from a given one 
+ */
+static inline void wait_queue_init2(struct wait_queue_s *queue, struct wait_queue_s *another)
+{
+	queue->name = another->name;
+	queue->state = 0;
+	
+	if(list_empty(&another->root))
+		list_root_init(&queue->root);
+	else
+		list_replace(&another->root, &queue->root);
+}
+
+
 /** 
  * Destroy specified wait queue
  */
