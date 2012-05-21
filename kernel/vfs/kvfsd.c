@@ -54,7 +54,7 @@ static EVENT_HANDLER(kvfsd_alarm_event_handler)
 
 void* kvfsd(void *arg)
 {
-	uint64_t tm_now;
+	uint_t tm_now;
 	struct task_s *task;
 	struct thread_s *this;
 	struct cpu_s *cpu;
@@ -144,8 +144,8 @@ void* kvfsd(void *arg)
 	{
 		alarm_wait(&info, 10);
 		sched_sleep(this);
-		tm_now = cpu_get_cycles(cpu);
-		printk(INFO, "INFO: System Current TimeStamp %U\n", tm_now);
+		tm_now = cpu_time_stamp();
+		printk(INFO, "INFO: System Current TimeStamp %u\n", tm_now);
 		sync_all_pages();
 	}
 	return NULL;

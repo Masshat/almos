@@ -106,7 +106,7 @@ static void local_event_send(struct event_s *event, struct event_listner_s *el, 
 		 __FUNCTION__, 
 		 cpu_get_id(), 
 		 prio, 
-		 el->prio, 
+		 el->prio,
 		 cpu_time_stamp());
 #endif
 }
@@ -262,11 +262,11 @@ static void local_event_listner_notify(struct event_listner_s *el)
 		cpu_enable_all_irq(NULL);
 		if(cntr)
 		{
-			printk(INFO, "INFO: cpu %d, %d pending events of priority %d have been Delevired [ %U ]\n",
+			printk(INFO, "INFO: cpu %d, %d pending events of priority %d have been Delivered [ %u ]\n",
 			       cpu_get_id(),
 			       cntr, 
 			       current_prio, 
-			       cpu_get_cycles(current_cpu));
+			       cpu_time_stamp());
 		}
 		cntr = 0;
 		cpu_disable_all_irq(NULL);
