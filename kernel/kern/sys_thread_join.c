@@ -106,7 +106,7 @@ int sys_thread_join (pthread_t tid, void **thread_return)
 		spinlock_unlock(&task->th_lock);
 	}
 
-	/* Probabely will not fail */
+	/* Probably will not fail */
 	if(thread_return)
 	{
 		if((err = cpu_uspace_copy(thread_return, &retval, sizeof(void*)))) 
