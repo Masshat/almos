@@ -244,7 +244,15 @@ error_t soclib_tty_init(struct device_s *tty, void *base, uint_t size, uint_t ir
 	rwlock_init(&ctx->out_rwlock);
 	ctx->eol  = 0;
 	tty->data = (void*) ctx;
-	sprintk(tty->name, "tty%d", tty_count);
+	sprintk(tty->name,
+ 
+#if CONFIG_ROOTFS_IS_VFAT
+		"TTY%d", 
+#else
+		"tty%d", 
+#endif
+		tty_count);
+
 	metafs_init(&tty->node, tty->name);
 	wait_queue_init(&ctx->wait_queue, tty->name);
 	tty_count ++;

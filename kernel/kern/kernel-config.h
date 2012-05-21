@@ -39,8 +39,8 @@
 ////////////////////////////////////////////////////
 #define CONFIG_BOOT_USE_DMA              yes
 #define CONFIG_FIFO_SUBSYSTEM            no
-#define CONFIG_ROOTFS_IS_EXT2            yes
-#define CONFIG_ROOTFS_IS_VFAT            no
+#define CONFIG_ROOTFS_IS_EXT2            no
+#define CONFIG_ROOTFS_IS_VFAT            yes
 
 ////////////////////////////////////////////////////
 
@@ -132,15 +132,9 @@
 //////////////////////////////////////////////
 //      USER APPLICATION
 //////////////////////////////////////////////
-#if CONFIG_ROOTFS_IS_VFAT
-#define CONFIG_DEV_STDIN           "/DEV/TTY1"
-#define CONFIG_DEV_STDOUT          "/DEV/TTY1"
-#define CONFIG_DEV_STDERR          "/DEV/TTY2"
-#else
 #define CONFIG_DEV_STDIN           "/dev/tty1"
 #define CONFIG_DEV_STDOUT          "/dev/tty1"
 #define CONFIG_DEV_STDERR          "/dev/tty2"
-#endif
 //////////////////////////////////////////////
 
 #endif	/* _KERNEL_CONFIG_H_ */

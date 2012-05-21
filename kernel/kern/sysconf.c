@@ -38,7 +38,13 @@ error_t sysconf_init(void)
 	sysfs_op_t op;
 
 	sysconf_sysfs_op_init(&op);
-	sysfs_entry_init(&sysconf, &op, "sysconf");
+	sysfs_entry_init(&sysconf, &op, 
+#if CONFIG_ROOTFS_IS_VFAT
+			 "SYSCONF"
+#else
+			 "sysconf"
+#endif
+		);
 	sysfs_entry_register(&sysfs_root_entry, &sysconf);
 
 	return 0;

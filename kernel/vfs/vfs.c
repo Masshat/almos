@@ -116,6 +116,12 @@ error_t vfs_get_path(char *u_path, struct page_s **k_path_pg, char **k_path, uin
 	if(len != NULL)
 		*len = count;
 
+#if CONFIG_ROOTFS_IS_VFAT	/* FIXME: ugly way for now */
+	uint_t i;
+	for(i=0; i<count; i++)
+		path[i] = toupper(path[i]);
+#endif
+
 	vfs_dmsg(1, "%s: path [%s]\n", __FUNCTION__, path);
 	*k_path_pg = page;
 	*k_path    = path;

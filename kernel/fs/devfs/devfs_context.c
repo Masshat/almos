@@ -38,7 +38,14 @@ struct devfs_db_s devfs_db;
 void devfs_root_init(void)
 {
 	spinlock_init(&devfs_db.lock, "DevFs DB");
-	metafs_init(&devfs_db.root, "dev");
+
+	metafs_init(&devfs_db.root, 
+#if CONFIG_ROOTFS_IS_VFAT
+		    "DEV"
+#else
+		    "dev"
+#endif
+		);
 }
 
 void devfs_register(struct device_s *dev)

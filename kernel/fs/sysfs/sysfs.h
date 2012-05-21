@@ -127,7 +127,13 @@ static inline void sysfs_entry_unregister(sysfs_entry_t *parent, sysfs_entry_t *
 
 static inline void sysfs_root_init()
 {
-	metafs_init(&sysfs_root_entry.node, "sys");
+	metafs_init(&sysfs_root_entry.node, 
+#if CONFIG_ROOTFS_IS_VFAT
+		    "SYS"
+#else
+		    "sys"
+#endif
+		);
 }
 
 #undef  sysfs_container
