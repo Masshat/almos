@@ -29,6 +29,9 @@
 #include <cluster.h>
 #include <ppm.h>
 
+void kthread_destroy(struct thread_s *thread);
+void pthread_destroy(struct thread_s *thread);
+
 static void do_thread_stat(struct thread_s *thread);
 
 EVENT_HANDLER(thread_destroy_handler)
@@ -40,8 +43,46 @@ EVENT_HANDLER(thread_destroy_handler)
 	return 0;
 }
 
-/* FIXME: unmap thread region, we need a fast lookup, use a cache of pgfault */
 error_t thread_destroy(struct thread_s *thread)
+{
+	if(thread->type == PTHREAD)
+		pthread_destroy(thread);
+	else
+		kthread_destroy(thread);
+
+	return 0;
+}
+
+void kthread_destroy(struct thread_s *thread)
+{
+	kmem_req_t req; 
+
+#if CONFIG_SHOW_THREAD_DESTROY_MSG
+	printk(INFO,"%s: pid %d, tid %d (%x), current pid %d, tid %d (%x), cpu %d [%u]\n",
+	       __FUNCTION__,
+	       thread->task->pid,
+	       thread->info.order,
+	       thread,
+	       current_thread->task->pid,
+	       current_thread->info.order,
+	       current_thread,
+	       cpu_get_id(),
+	       cpu_time_stamp());
+#endif
+
+	assert(thread->state == S_DEAD && "Thread must be dead before destroying it !!");
+	thread->signature = 0;
+	spinlock_destroy(&thread->lock);
+	cpu_context_destroy(&thread->pws);
+	
+	thread->task = NULL;
+	req.type     = KMEM_PAGE; 
+	req.ptr      = thread->info.page;
+	kmem_free(&req);
+}
+
+/* FIXME: unmap thread region, we need a fast lookup, use a cache of pgfault */
+void pthread_destroy(struct thread_s *thread)
 {
 	struct task_s *task;
 	struct thread_s *this;
@@ -57,7 +98,6 @@ error_t thread_destroy(struct thread_s *thread)
 	uint_t tm_end;
 	uint_t u_err_nr;
 	uint_t m_err_nr;
-	bool_t isUserThread;
 	kmem_req_t req; 
 
 	tm_start            = cpu_time_stamp();
@@ -82,50 +122,47 @@ error_t thread_destroy(struct thread_s *thread)
 	}
 
 	thread->signature = 0;
-	isUserThread = (thread->type == PTHREAD) ? true : false;
+	
+	spinlock_lock(&task->th_lock);
 
-	if(isUserThread)
-	{
-		spinlock_lock(&task->th_lock);
-		task->th_tbl[thread->info.order] = NULL;
-		list_unlink(&thread->rope);
-		do_thread_stat(thread); 
-		count = task->threads_nr --;
-		bitmap_set(task->bitmap, thread->info.order);
+	task->th_tbl[thread->info.order] = NULL;
+	list_unlink(&thread->rope);
+	do_thread_stat(thread); 
+	count = task->threads_nr --;
+	bitmap_set(task->bitmap, thread->info.order);
   
-		if(thread->info.order < task->next_order)
-			task->next_order = thread->info.order;
+	if(thread->info.order < task->next_order)
+		task->next_order = thread->info.order;
     
-		task->vmm.pgfault_nr          += pgfault_nr;
-		task->vmm.spurious_pgfault_nr += spurious_pgfault_nr;
-		task->vmm.remote_pages_nr     += remote_pages_nr;
-		task->vmm.u_err_nr            += u_err_nr;
-		task->vmm.m_err_nr            += m_err_nr;
-
-		spinlock_unlock(&task->th_lock);
- 
+	task->vmm.pgfault_nr          += pgfault_nr;
+	task->vmm.spurious_pgfault_nr += spurious_pgfault_nr;
+	task->vmm.remote_pages_nr     += remote_pages_nr;
+	task->vmm.u_err_nr            += u_err_nr;
+	task->vmm.m_err_nr            += m_err_nr;
+	
+	spinlock_unlock(&task->th_lock);
+	
 #if 0
-		region = keysdb_lookup(&task->vmm.regions_db, 
-				       stack_addr >> CONFIG_VM_REGION_KEYWIDTH);
-  
-		if(thread_has_vmregion(thread))
-		{
-			rwlock_wrlock(&task->vmm.rwlock);
-			vm_region_detach(&task->vmm, region);
-			rwlock_unlock(&task->vmm.rwlock);
-		}
-#endif
+	region = keysdb_lookup(&task->vmm.regions_db, 
+			       stack_addr >> CONFIG_VM_REGION_KEYWIDTH);
+	
+	if(thread_has_vmregion(thread))
+	{
+		rwlock_wrlock(&task->vmm.rwlock);
+		vm_region_detach(&task->vmm, region);
+		rwlock_unlock(&task->vmm.rwlock);
 	}
-
+#endif
+	
 	spinlock_destroy(&thread->lock);
 	cpu_context_destroy(&thread->pws);
-
+	
 	thread->task = NULL;
 	req.type     = KMEM_PAGE; 
 	req.ptr      = thread->info.page;
 	kmem_free(&req);
 
-	if(isUserThread && (count == 1))
+	if(count == 1)
 		task_destroy(task);
 
 	tm_end = cpu_time_stamp();
@@ -146,9 +183,6 @@ error_t thread_destroy(struct thread_s *thread)
 	       m_err_nr,
 	       tm_end);
 #endif
-
-
-	return 0;
 }
 
 
