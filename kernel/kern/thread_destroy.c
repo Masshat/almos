@@ -94,6 +94,7 @@ void pthread_destroy(struct thread_s *thread)
 	uint_t stack_addr;
 	uint_t pid;
 	uint_t tid;
+	uint_t ticks_nr;
 	uint_t tm_start;
 	uint_t tm_end;
 	uint_t u_err_nr;
@@ -108,6 +109,7 @@ void pthread_destroy(struct thread_s *thread)
 	m_err_nr            = thread->info.m_err_nr;
 	stack_addr          = (uint_t)thread->info.attr.stack_addr;
 	task                = thread->task;
+	ticks_nr            = thread->ticks_nr;
 	this                = current_thread;
 	pid                 = task->pid;
 	tid                 = thread->info.order;
@@ -168,7 +170,7 @@ void pthread_destroy(struct thread_s *thread)
 	tm_end = cpu_time_stamp();
 
 #if CONFIG_SHOW_THREAD_DESTROY_MSG
-	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cluster %d, cpu %d, tm %u [ %d, %d, %d, %d, %d ][%u]\n",
+	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cluster %d, cpu %d, tm %u [ %d, %d, %d, %d, %d, %d ][%u]\n",
 	       __FUNCTION__,
 	       pid,
 	       tid,
@@ -181,6 +183,7 @@ void pthread_destroy(struct thread_s *thread)
 	       remote_pages_nr,
 	       u_err_nr,
 	       m_err_nr,
+	       ticks_nr,
 	       tm_end);
 #endif
 }
