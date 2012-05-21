@@ -42,10 +42,10 @@ TARGET=$(OBJDIR)/almix-$(ARCH)-$(CPU)-$(KERNEL_REV)
 endif
 
 
-.PHONY: clean
+.PHONY: clean timestamp
 
 
-$(TARGET): $(OBJDIRS) $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS) 
+$(TARGET): $(OBJDIRS) $(OBJDIR)/kldscript timestamp $(OBJS) 
 	@echo '   [  LD  ]        '$@.elf
 	@$(LD) -o $@.elf $(OBJS) $(LFLAGS)
 	@echo '   [  NM  ]        '$@.elf.nm 
@@ -55,8 +55,8 @@ $(TARGET): $(OBJDIRS) $(OBJDIR)/kldscript $(OBJDIR)/kern/almOS-date.h $(OBJS)
 	@echo -e '\n   [ DONE ]        \n'
 
 
-$(OBJDIR)/kern/almOS-date.h:
-	@echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $@
+timestamp:
+	@echo '#define ALMOS_DATE "'$(shell date +"%d %B %Y - %T")'"' > $(OBJDIR)/kern/almOS-date.h 
 
 $(OBJDIR)/kldscript: arch/$(ARCH)/kldscript.h arch/$(ARCH)/arch-config.h
 	@echo '   [  CPP ]        '$< 
