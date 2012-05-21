@@ -94,7 +94,6 @@ error_t sched_init(struct scheduler_s *scheduler)
 	}
   
 	scheduler->db = db;
-	list_root_init(&scheduler->migration_root);
 	return 0;
 }
 
