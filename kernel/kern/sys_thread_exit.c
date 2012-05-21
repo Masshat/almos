@@ -30,6 +30,7 @@ int sys_thread_exit (void *exit_val)
 {
 	struct thread_s *this = current_thread;
 	uint_t state;
+	bool_t isEmpty;
 	bool_t isReleased;
 
 	spinlock_lock(&this->lock);
@@ -41,18 +42,20 @@ int sys_thread_exit (void *exit_val)
 	}
 
 	// Check if there's a thread waiting the end of callee thread
-	if(!(state=wait_queue_isEmpty(&this->info.wait_queue)))
-	{
-		this->info.join->info.exit_value = exit_val;
-		wakeup_one(&this->info.wait_queue, WAIT_ANY);
-		spinlock_unlock_nosched(&this->lock);
-	}
-	else
+	isEmpty = wait_queue_isEmpty(&this->info.wait_queue);
+
+	if(isEmpty)
 	{
 		this->info.exit_value = exit_val;
 		wait_on(&this->info.wait_queue, WAIT_ANY);
 		spinlock_unlock_nosched(&this->lock);
 		sched_sleep(this);
+	}
+	else
+	{
+		this->info.join->info.exit_value = exit_val;
+		wakeup_one(&this->info.wait_queue, WAIT_ANY);
+		spinlock_unlock_nosched(&this->lock);		
 	}
 
 exit_dead:

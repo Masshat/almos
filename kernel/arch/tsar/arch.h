@@ -52,8 +52,8 @@ inline uint_t arch_onln_cluster_nr();
 #undef MSEC_PER_TICK
 
 #define CPU_CLOCK_TICK       1000000//80000
-#define CYCLES_PER_SECOND    1000000000
 #define MSEC_PER_TICK        1
+#define CYCLES_PER_SECOND    (1000*MSEC_PER_TICK*CPU_CLOCK_TICK)
 
 /* Terminals related macros */
 #define TTY_DEV_NR           CONFIG_TTY_MAX_DEV_NR

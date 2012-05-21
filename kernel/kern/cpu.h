@@ -77,7 +77,7 @@ struct cpu_s
 	uint_t usage;
 	uint_t busy_percent;
 	uint_t spurious_irq_nr;
-  
+
 	/* Time-Driven alarms manager */
 	struct alarm_s alarm_mgr;
 

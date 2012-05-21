@@ -197,6 +197,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	tm_bRemote = cpu_time_stamp();
 	cpu_wbflush();
 
+	/* TODO: replace this active wait be a passive one */
 	while(info.isDone == false)
 	{
 		if(thread_sched_isActivated((volatile struct thread_s*)this))

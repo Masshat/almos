@@ -96,7 +96,7 @@ inline void cpu_context_dup_finlize(struct cpu_context_s *dst, struct cpu_contex
 
 	memcpy(dst, src, sizeof(*dst));
 	thread = (struct thread_s*)dst->tid;
-  
+
 	stack_addr  = cpu_context_get_stackaddr(src);
 	stack_addr &= PMM_PAGE_MASK;
 	stack_addr |= ((reg_t)dst->tid & ~(PMM_PAGE_MASK));

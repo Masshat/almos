@@ -196,6 +196,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	fork_dmsg(1,"%s: event sent, tm_now %u\n", __FUNCTION__, tm_bRemote);
 	cpu_wbflush();
  
+	/* TODO: replace this active wait by a passive one */
 	while(info.isDone == false)
 	{
 		if(thread_sched_isActivated((volatile struct thread_s*)this_thread))
