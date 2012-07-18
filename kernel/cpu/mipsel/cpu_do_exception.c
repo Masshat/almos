@@ -81,17 +81,25 @@ static error_t CpU_exception_handler(struct thread_s *this, reg_t cpu_id, reg_t 
 	cpu_fpu_enable();
 
 	if((cpu->owner != NULL) && (cpu->owner != this))
+	{
 		cpu_fpu_context_save(&cpu->owner->uzone);
-    
-	if(cpu->owner == this)
-		cpu_fpu_context_restore(&this->uzone);
 
+		isr_dmsg(INFO, "FPU %d: ctx saved for pid %d, tid %d [%u]\n",
+			 cpu->gid,
+			 cpu->owner->task->pid,
+			 cpu->owner->info.order,
+			 cpu_time_stamp());
+	}
+	
+	cpu_fpu_context_restore(&this->uzone);
 	cpu->owner = this;
-
-	cpu_spinlock_lock(&exception_lock.val);
-	except_dmsg("FPU Enabled for Thread %x on CPU %d\n",this, cpu_id);
-	cpu_spinlock_unlock(&exception_lock.val);
-
+	
+	isr_dmsg(INFO, "FPU %d: ctx restored for pid %d, tid %d [%u]\n",
+		 cpu->gid,
+		 this->task->pid,
+		 this->info.order,
+		 cpu_time_stamp());
+       
 	return VMM_ERESOLVED;
 }
 
