@@ -179,14 +179,23 @@ static inline uint64_t cpu_get_cycles(struct cpu_s *cpu)
 #if CONFIG_CPU_64BITS
 	cycles = cpu_time_stamp();
 #else
-	register uint32_t tm_now;
+	register uint_t tm_now;
+	register uint_t tm_stmp;
+	
+        /* Spend cycles to prepare needed values */
+	tm_stmp = cpu->time.tmstmp;
+	cycles  = cpu->time.cycles;
 
-	tm_now = cpu_time_stamp();
+	/* TODO: use a memory barrier here */
 
-	if(tm_now < cpu->time.tmstmp)
-		cycles = cpu->time.cycles + (1ULL << 32) + tm_now;
+	/* Now lets read the current CPU cycles */
+	tm_now  = cpu_time_stamp();
+	
+	/* Update the total number of elapsed cycles with regard to register overlaping */
+	if(tm_now < tm_stmp)
+		cycles += (UINT32_MAX - tm_stmp) + tm_now;
 	else
-		cycles = cpu->time.cycles + tm_now - cpu->time.tmstmp;
+		cycles += tm_now - tm_stmp;
 
 #endif	/* CONFIG_CPU_64BITS */
 	return cycles;

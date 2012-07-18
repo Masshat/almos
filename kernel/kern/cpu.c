@@ -97,12 +97,11 @@ void cpu_compute_stats(struct cpu_s *cpu, sint_t threshold)
 		return;
 	}
 
-	cpu_ticks    = (cpu_ticks) ? cpu_ticks : 1;
-	idle_percent = (idle->ticks_nr * 100) / cpu_ticks;
-	idle_percent = (idle_percent > 100) ? 100 : idle_percent;
-	busy_percent = 100 - idle_percent;
-	usage        = busy_percent + (cpu->usage / 2);
-
+	cpu_ticks         = (cpu_ticks) ? cpu_ticks : 1;
+	idle_percent      = (idle->ticks_nr * 100) / cpu_ticks;
+	idle_percent      = (idle_percent > 100) ? 100 : idle_percent;
+	busy_percent      = 100 - idle_percent;
+	usage             = busy_percent + (cpu->usage / 2);
 	cpu->usage        = usage;
 	cpu->busy_percent = busy_percent;
 	cpu_wbflush();
@@ -132,24 +131,21 @@ static void cpu_time_update(struct cpu_s *cpu)
 #else
 	register uint_t tm_now;
 	register uint_t elapsed;
- 
-	tm_now = cpu_time_stamp();
-  
-	if(tm_now < cpu->time.tmstmp)
-	{
-		elapsed = (UINT32_MAX - cpu->time.tmstmp) + tm_now;
+	register uint_t tm_stmp;
 
-		except_dmsg("%s: tn %u, ts %u, e %u, c %U\n", 
-			    __FUNCTION__, 
-			    tm_now, 
-			    cpu->time.tmstmp, 
-			    elapsed, 
-			    cpu->time.cycles);
-	}
+	cycles  = cpu->time.cycles;
+	tm_stmp = cpu->time.tmstmp;
+
+	/* TODO: use memory barrier here */
+
+	tm_now  = cpu_time_stamp();
+
+	if(tm_now < tm_stmp)
+		elapsed = (UINT32_MAX - tm_stmp) + tm_now;
 	else
-		elapsed = tm_now - cpu->time.tmstmp;
+		elapsed = tm_now - tm_stmp;
     
-	cycles   = cpu->time.cycles + elapsed;
+	cycles  += elapsed;
 	ticks_nr = elapsed / cpu->time.ticks_period;
 	cpu->time.tmstmp = tm_now;
 #endif
