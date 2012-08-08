@@ -222,7 +222,7 @@ struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
 			ppm    = &clusters_tbl[cid].cluster->ppm;
 		}
 		else
-#if CONFIG_PMM_USE_SEQ_NEXT_CID
+#if CONFIG_PPM_USE_SEQ_NEXT_CID
 		{
 			cid = (cid + 1) % arch_onln_cluster_nr();
 			ppm = &clusters_tbl[cid].cluster->ppm;
