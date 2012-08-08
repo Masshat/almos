@@ -82,14 +82,15 @@ struct dqdt_attr_s
 	struct cpu_s *cpu;
 	uint_t u_threshold;
 	uint_t m_threshold;
+	uint_t t_threshold;
 	struct dqdt_cluster_s *origin;
 	void *data;
 };
 
 #undef dqdt_attr_init
 #define dqdt_attr_init(_attr_,_data_)		\
-	do{(_attr_)->cluster = NULL;		\
-		(_attr_)->cpu = NULL;		\
+	do{(_attr_)->cluster   = NULL;		\
+		(_attr_)->cpu  = NULL;		\
 		(_attr_)->data = (_data_);	\
 	}while(0)
 
@@ -105,8 +106,8 @@ typedef struct dqdt_indicators_s
 	uint_t M;
 	uint_t T;
 	uint_t U;
-	uint_t pages_tbl[CONFIG_PPM_MAX_ORDER];
-} dqdt_indicators_t CACHELINE;
+	uint_t pages_tbl[CONFIG_PPM_MAX_ORDER] CACHELINE;
+} dqdt_indicators_t;
 
 typedef struct dqdt_estimation_s
 {
