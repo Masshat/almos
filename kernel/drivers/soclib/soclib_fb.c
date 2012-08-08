@@ -250,7 +250,14 @@ error_t soclib_fb_init(struct device_s *fb, void *base, uint_t size, uint_t irq)
 	fb->op.drvid          = SOCLIB_FB_ID;
 
 	fb->data = (void*)size;
-	sprintk(fb->name, "fb%d", fb_count++);
+	sprintk(fb->name, 
+#if CONFIG_ROOTFS_IS_VFAT
+		"FB%d"
+#else
+		"fb%d"
+#endif
+		,fb_count++);
+
 	metafs_init(&fb->node, fb->name);
 	return 0;
 }

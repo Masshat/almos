@@ -169,7 +169,14 @@ error_t soclib_dma_init(struct device_s *dma, void *base, uint_t size, uint_t ir
 	if(dma_count == 0)
 		__sys_dma = dma;
 
-	sprintk(dma->name, "dma%d", dma_count++);
+	sprintk(dma->name, 
+#if CONFIG_ROOTFS_IS_VFAT
+		"DMA%d"
+#else
+		"dma%d"
+#endif
+		,dma_count++);
+
 	metafs_init(&dma->node, dma->name);
   
 	dma->op.dev.open       = &dma_open;

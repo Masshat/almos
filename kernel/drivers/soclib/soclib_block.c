@@ -241,7 +241,14 @@ error_t soclib_block_init(struct device_s *block, void *base, uint_t size, uint_
 	if(sda_count == 0)
 		__sys_blk = block;
 
-	sprintk(block->name, "sda%d", sda_count++);
+	sprintk(block->name, 
+#if CONFIG_ROOTFS_IS_VFAT
+		"SDA%d"
+#else
+		"sda%d"
+#endif
+		,sda_count++);
+
 	metafs_init(&block->node, block->name);
   
 	block->op.dev.open       = &block_open;

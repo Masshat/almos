@@ -67,7 +67,14 @@ error_t cpu_init(struct cpu_s *cpu, struct cluster_s *cluster, uint_t lid, uint_
 	event_listner_init(&cpu->le_listner, EL_LOCAL);
 	event_listner_init(&cpu->re_listner, EL_REMOTE);
 
-	sprintk(cpu->name, "cpu%d", lid);
+	sprintk(cpu->name,
+#if CONFIG_ROOTFS_IS_VFAT
+		"CPU%d"
+#else
+		"cpu%d"
+#endif
+		,lid);
+	
 	cpu_sysfs_op_init(&op);
 	sysfs_entry_init(&cpu->node, &op, cpu->name);
 	sysfs_entry_register(&cluster->node, &cpu->node);

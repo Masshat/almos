@@ -111,7 +111,6 @@ sint_t tty_read(struct device_s *tty, dev_request_t *rq)
 	return count - rq->count;
 }
 
-
 sint_t tty_write(struct device_s *tty, dev_request_t *rq)
 {
 	struct tty_context_s *ctx; 

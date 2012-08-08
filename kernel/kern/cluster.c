@@ -139,7 +139,14 @@ error_t cluster_init(struct boot_info_s *info,
 		 0, 1, 1, NULL, NULL, 
 		 &kcm_page_alloc, &kcm_page_free);
 
-	sprintk(cluster->name, "cluster%d", cid);
+	sprintk(cluster->name,
+#if CONFIG_ROOTFS_IS_VFAT
+		"CID%d"
+#else
+		"cid%d"
+#endif
+		,cid);
+
 	sysfs_entry_init(&cluster->node, NULL, cluster->name);
 
 	for(cpu = 0; cpu < cluster->cpu_nr; cpu++)
@@ -188,6 +195,8 @@ EVENT_HANDLER(manager_alarm_event_handler)
 	manager = event_get_senderId(event);
  
 	thread_preempt_disable(current_thread);
+
+	//printk(INFO, "%s: cpu %d [%u]\n", __FUNCTION__, cpu_get_id(), cpu_time_stamp());
 
 	sched_wakeup(manager);
   
