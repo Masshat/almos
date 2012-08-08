@@ -26,7 +26,8 @@
 #include <types.h>
 
 struct sched_s;
+struct scheduler_s;
 
-error_t rr_sched_init(struct sched_s *sched);
+error_t rr_sched_init(struct scheduler_s *scheduler, struct sched_s *sched);
 
 #endif	/* _RR_SCHED_H_ */

@@ -84,7 +84,7 @@ error_t sched_init(struct scheduler_s *scheduler)
 
 	bitmap_set_range(db->bitmap, 0, SCHED_THREADS_NR);
 
-	err = rr_sched_init(&scheduler->scheds_tbl[SCHED_RR]);
+	err = rr_sched_init(scheduler, &scheduler->scheds_tbl[SCHED_RR]);
 
 	if(err != 0)
 	{
@@ -350,22 +350,37 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 	else
 		this->state = S_KERNEL;
 
-	if(this->type == TH_IDLE)
+	if(this->type != PTHREAD)
 		return;
 
 	if(this == cpu->owner)
 		cpu_fpu_enable();
 	else
 		cpu_fpu_disable();
-
-	if(thread_migration_isActivated(this))
+	
+	if(thread_isCapMigrate(this) && thread_migration_isActivated(this))
 	{
+		thread_clear_cap_migrate(this);
 		cpu_enable_all_irq(&state);
 		ret = thread_migrate(this);
 		cpu_restore_irq(state);
-
-		if(ret == 0)	/* this pointer is expired */
-			thread_migration_deactivate(current_thread);
+		
+		if(ret == 0)
+		{
+			this = current_thread; 
+			thread_migration_deactivate(this);
+		}
+		else
+		{
+			isr_dmsg(INFO, 
+				 "%s: cpu %d, migration failed for victim pid %d, "
+				 "tid %d, err %d\n", 
+				 __FUNCTION__, 
+				 cpu_get_id(),
+				 this->task->pid,
+				 this->info.order,
+				 ret);
+		}
 	}
 
 #if 0

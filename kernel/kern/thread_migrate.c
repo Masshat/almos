@@ -100,7 +100,7 @@ EVENT_HANDLER(migrate_event_handler)
  * 3) The migration decision has been already made.
  *
  * On Error:
- * 1) The victim thread remainses unchagned if any error occurs.
+ * 1) The victim thread remainses unchagned.
  *
  * TODO: verify the compatiblity with !CONFIG_REMOTE_THREAD_CREATE
 */
@@ -111,6 +111,7 @@ error_t thread_migrate(struct thread_s *this)
 	struct task_s *task;
 	struct cpu_s *cpu;
 	uint_t tid,pid;
+	uint_t state;
 	error_t err;
   
 	task = this->task;
@@ -118,9 +119,28 @@ error_t thread_migrate(struct thread_s *this)
 	tid  = this->info.order;
 	pid  = task->pid;
 
+	err = dqdt_thread_migrate(cpu->cluster->levels_tbl[0], &attr);
+
+	if((err) || (attr.cpu == cpu))
+	{
+		this->info.migration_fail_cntr ++;
+		return EAGAIN;
+	}
+
+	cpu_disable_all_irq(&state);
+
+	if(cpu->owner == this)
+	{
+		cpu_fpu_context_save(&this->uzone);
+		cpu->owner = NULL;
+		cpu_fpu_disable();
+	}
+
+	cpu_restore_irq(state);
+
 	err = cpu_context_save(&this->info.pss);
 	
-	if(err != 0)  return 0;	   /* DONE */
+	if(err != 0) return 0;	   /* DONE */
 
 	info.victim        = this;
 	info.task          = task;
@@ -131,21 +151,23 @@ error_t thread_migrate(struct thread_s *this)
 	event_set_handler(&info.event, migrate_event_handler);
 	event_set_priority(&info.event, E_MIGRATE);
 
-	err = dqdt_thread_migrate(cpu->cluster->levels_tbl[0], &attr);
-
-	if((err) || (attr.cpu == cpu))
-		return EAGAIN;
-
 	info.ocpu = cpu;
-	
+
+	thread_set_exported(this);
+
 	event_send(&info.event, &attr.cpu->re_listner);
  
 	sched_sleep(this);
 
 	err = info.err;
 
-	if(err) return err;
-	
+	if(err)
+	{
+		this->info.migration_fail_cntr ++;
+		thread_clear_exported(this);
+		return err;
+	}
+
 	sched_remove(this);
 	return 0;
 }
@@ -172,19 +194,6 @@ error_t do_migrate(th_migrate_info_t *info)
 
 	new = ppm_page2addr(page);
   
-	/* Needed as long as !CONFIG_REMOTE_THREAD_CREATE is supported */
-	thread_set_origin_cpu(new,info->ocpu);
-	thread_set_current_cpu(new,cpu);
-	sched_setpolicy(new, new->info.attr.sched_policy);
-	/* ------------------------------------------------- */
-
-	err = sched_register(new);
-	/* FIXME: Redo registeration or/and reask 
-	 * for a target core either directly (dqdt)
-	 * or by returning EAGIN so caller can redo
-	 * the whole action.*/
-	assert(err == 0);
-  
 	/* TODO: Review locking */
 	spinlock_lock(&task->th_lock);
 	spinlock_lock(&victim->lock);
@@ -195,6 +204,13 @@ error_t do_migrate(th_migrate_info_t *info)
 	thread_set_current_cpu(new,cpu);
 	sched_setpolicy(new, new->info.attr.sched_policy);
 
+	err = sched_register(new);
+	/* FIXME: Redo registeration or/and reask 
+	 * for a target core either directly (dqdt)
+	 * or by returning EAGIN so caller can redo
+	 * the whole action.*/
+	assert(err == 0);
+  
 	list_add_last(&task->th_root, &new->rope);
 	list_unlink(&victim->rope);
 	task->th_tbl[new->info.order] = new;
@@ -214,7 +230,10 @@ error_t do_migrate(th_migrate_info_t *info)
 
 	cpu_context_set_tid(&new->info.pss, (reg_t)new);
 	cpu_context_dup_finlize(&new->pws, &new->info.pss);
-
+	
+	thread_set_imported(new);
+	thread_clear_exported(new);
+	new->info.migration_cntr ++;
 	sched_add(new);
 	return 0;
 }

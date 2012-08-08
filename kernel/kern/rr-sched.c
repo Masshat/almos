@@ -23,12 +23,17 @@
 #include <config.h>
 #include <types.h>
 #include <list.h>
+#include <kdmsg.h>
 #include <spinlock.h>
+#include <cpu.h>
+#include <cluster.h>
+#include <dqdt.h>
 #include <thread.h>
 #include <task.h>
 #include <kmem.h>
+
 #include <scheduler.h>
-#include <kdmsg.h>
+
 
 #if CONFIG_SCHED_RR_CHECK
 #define sched_assert(cond) assert((cond))
@@ -41,94 +46,239 @@
 #undef SCHED_SCOPE
 #define SCHED_SCOPE
 
-#define RR_QUANTUM        4	/* in TICs number */
-#define RR_QUEUE_NR       5
-#define RR_MAX_PRIO       5
+#define RR_QUANTUM          4	/* in TICs number */
+#define RR_MIN_QUANTUM      2
+#define RR_LOW_THRESHOLD    -8
+#define SCHED_THREADS_NR    CONFIG_SCHED_THREADS_NR
+
+#if CONFIG_SCHED_DEBUG
+#define rr_dmsg(...) \
+	isr_dmsg(__VA_ARGS__)
+#else
+#define rr_dmsg(...)
+#endif
 
 typedef struct rQueues_s
 {
+	struct cpu_s *cpu;
 	uint_t clock_cntr;
 	uint_t period;
-	struct list_entry root;
-	struct list_entry root_tbls[RR_QUEUE_NR];
+	uint_t u_runnable;
+	uint_t m_runnable;
+	struct scheduler_s *scheduler;
+	struct list_entry kthreads;
+	struct list_entry runnable;
+	struct list_entry migrate;
+
+#if CONFIG_SCHED_DEBUG
+	uint8_t cond1;
+	uint8_t cond2;
+	uint8_t cond3;
+	uint8_t cond4;
+#endif
+
 } rQueues_t;
 
+void __attribute__ ((noinline)) rr_sched_load_balance_s1(struct thread_s *this,
+							 struct sched_s *sched,
+							 rQueues_t *rQueues,
+							 bool_t isUrgent)
+{
+	struct thread_s *victim;
+	struct thread_s *thread;
+	struct list_entry *iter;
+	struct cpu_s *cpu;
+	register sint_t min;
+	
+	cpu = current_cpu;
 
-void __attribute__ ((noinline)) rr_sched_load_balance(struct thread_s *this,
-						      struct sched_s *sched, 
-						      rQueues_t *rQueues)
+	this->boosted_prio >>= 1;
+	victim             = NULL;
+	min                = rQueues->period;
+
+	list_foreach(&rQueues->runnable, iter)
+	{
+		thread = list_element(iter, struct thread_s, list);
+		
+		rr_dmsg(INFO, 
+			"%s: cpu %d, usage %d, u_runnable [%d,%d], "
+			"thread pid %d, tid %d, flags %x, bprio %d, isUrg %d\n", 
+			__FUNCTION__, 
+			cpu_get_id(),
+			cpu->usage,
+			rQueues->u_runnable,
+			rQueues->m_runnable,
+			thread->task->pid,
+			thread->info.order,
+			thread->flags,
+			thread->boosted_prio,
+			isUrgent);
+
+		if((thread_isExported(thread)) || !(thread_migration_isEnabled(thread)))
+			continue;
+
+		if(thread->boosted_prio < min)
+		{
+			victim = thread;
+			min    = victim->boosted_prio;
+		}
+
+		thread->boosted_prio >>= 1;
+		
+		if(thread->boosted_prio < RR_LOW_THRESHOLD)
+			thread->boosted_prio = RR_MIN_QUANTUM;
+	}
+
+	if((min < RR_MIN_QUANTUM) && (rQueues->scheduler->user_nr > 1))
+	{
+		thread_migration_activate(victim);
+		list_unlink(&victim->list);
+		list_add_last(&rQueues->migrate, &victim->list);
+		rQueues->m_runnable ++;
+
+
+		rr_dmsg(INFO, "%s: cpu %d, u_runnable [%d,%d], victim pid %d, tid %d [%u]\n", 
+			__FUNCTION__, 
+			cpu_get_id(),
+			rQueues->u_runnable,
+			rQueues->m_runnable,
+			victim->task->pid,
+			victim->info.order,
+			cpu_time_stamp());
+	}
+}
+
+
+void __attribute__ ((noinline)) rr_sched_load_balance_s2(struct thread_s *this,
+							 struct sched_s *sched,
+							 rQueues_t *rQueues,
+							 bool_t isUrgent)
 {
 	struct thread_s *victim;
 	struct thread_s *thread;
 	struct list_entry *iter;
 	struct cpu_s *cpu;
 	register uint_t min;
-
+	
 	cpu = current_cpu;
-
-#if CONFIG_SCHED_DEBUG
-	isr_dmsg(INFO, "%s: started cpu %d, u_rannable %d, busy %d, usage %d\n", 
-		 __FUNCTION__, 
-		 cpu_get_id(),
-		 cpu->scheduler.u_runnable,
-		 cpu->busy_percent,
-		 cpu->usage);
-#endif
 
 	this->boosted_prio >>= 1;
 	victim             = NULL;
 	min                = rQueues->period;
 
-	list_foreach(&rQueues->root, iter)
+	list_foreach(&rQueues->runnable, iter)
 	{
 		thread = list_element(iter, struct thread_s, list);
 		
-		if((thread->type == PTHREAD)    && 
-		   (thread->ticks_nr > 1)       && 
-		   (thread->boosted_prio < min) &&
-		   thread_isCapMigrate(thread))
+		rr_dmsg(INFO, 
+			"%s: cpu %d, usage %d, u_runnable [%d,%d], "
+			"thread pid %d, tid %d, flags %x, bprio %d, isUrg %d\n", 
+			__FUNCTION__, 
+			cpu_get_id(),
+			cpu->usage,
+			rQueues->u_runnable,
+			rQueues->m_runnable,
+			thread->task->pid,
+			thread->info.order,
+			thread->flags,
+			thread->boosted_prio,
+			isUrgent);
+
+		if(thread_migration_isEnabled(thread)      && 
+		   (thread->boosted_prio < RR_MIN_QUANTUM) && 
+		   (rQueues->scheduler->user_nr > 1)       && 
+		   !(thread_isExported(thread)))
 		{
-			victim = thread;
-			min    = victim->boosted_prio;
+			thread_migration_activate(thread);
+			list_unlink(&thread->list);
+			list_add_last(&rQueues->migrate, &thread->list);
+			rQueues->m_runnable ++;
+			
+			rr_dmsg(INFO, 
+				"%s: cpu %d, u_runnable [%d,%d], victim pid %d, tid %d [%u]\n", 
+				__FUNCTION__, 
+				cpu_get_id(),
+				rQueues->u_runnable,
+				rQueues->m_runnable,
+				svictim->task->pid,
+				svictim->info.order,
+				cpu_time_stamp());
 		}
 
-
 		thread->boosted_prio >>= 1;
+		
+		if(thread->boosted_prio < RR_LOW_THRESHOLD)
+			thread->boosted_prio = RR_MIN_QUANTUM;
 	}
-
-#if CONFIG_SCHED_DEBUG
-	isr_dmsg(INFO, "%s: cpu %d ended, min %d, victim %x\n", 
-		 __FUNCTION__, 
-		 cpu_get_id(), 
-		 min,
-		 victim);
-#endif
-
-	if(min == 0)
-		thread_migration_activate(victim);
 }
 
 
-SCHED_SCOPE void rr_clock(struct thread_s *this, uint_t ticks_nr)
+SCHED_SCOPE void rr_clock_balancing(struct thread_s *this, uint_t ticks_nr)
 {
 	register struct sched_s *sched;
 	register rQueues_t *rQueues;
+	struct cpu_s *cpu;
+	struct cluster_s *cluster;
+	struct dqdt_cluster_s *logical;
+	bool_t isUrgent, cond1, cond2, cond3;
+	void (*load_balance_strategy)();
 
-	this->quantum -= 1;
+	if(this->quantum > 0)
+		this->quantum -= 1;
 
 	if((this->quantum == 0) && (this->type != TH_IDLE))
 		thread_sched_activate(this);
 
 	sched   = this->local_sched;
 	rQueues = (rQueues_t*) sched->data;
-	
-	rQueues->clock_cntr ++;
+	cpu     = rQueues->cpu;
+	cluster = cpu->cluster;
+	logical = cluster->levels_tbl[0];
 
-	if(rQueues->clock_cntr == rQueues->period)
+	cond1   = ((rQueues->u_runnable > 0) && (rQueues->scheduler->user_nr > 1));
+	cond2   = (rQueues->u_runnable > (logical->info.summary.T / cluster->onln_cpu_nr));
+	cond3   = ((cpu->usage >= 180) && ((logical->info.summary.U < 80) || (logical->parent->info.summary.U < 95)));
+
+	isUrgent = (cond1 && (cond2 || cond3)) ? true : false;
+
+	if(isUrgent)
+	{
+		rQueues->clock_cntr  += (rQueues->period >> 1);
+		load_balance_strategy = &rr_sched_load_balance_s2;
+	}
+	else
+	{
+		rQueues->clock_cntr  += 1;
+		load_balance_strategy = &rr_sched_load_balance_s1;
+	}
+
+	if(rQueues->clock_cntr >= rQueues->period)
 	{
 		rQueues->clock_cntr = 0;
-		rr_sched_load_balance(this, sched, rQueues);
+		load_balance_strategy(this, sched, rQueues, isUrgent);
 	}
+
+	if((rQueues->m_runnable > 0) && !thread_isExported(this))
+	{
+		thread_sched_activate(this);
+		this->quantum = 0;
+	}
+
+#if CONFIG_SCHED_DEBUG
+	rQueues->cond1 = cond1;
+	rQueues->cond2 = cond2;
+	rQueues->cond3 = cond3;
+#endif	
+
+}
+
+SCHED_SCOPE void rr_clock(struct thread_s *this, uint_t ticks_nr)
+{
+	if(this->quantum > 0)
+		this->quantum -= 1;
+
+	if((this->quantum == 0) && (this->type != TH_IDLE))
+		thread_sched_activate(this);
 }
 
 SCHED_SCOPE void rr_sched_strategy(struct sched_s *sched)
@@ -172,9 +322,10 @@ SCHED_SCOPE void rr_sleep(struct thread_s *this)
 SCHED_SCOPE void rr_wakeup (struct thread_s *thread)
 {
 	register struct sched_s *sched;
+	register struct thread_s *this;
 	register rQueues_t *rQueues;
 	register thread_type_t type;
-   
+
 	if(thread->state == S_READY)
 		return;
 	
@@ -190,14 +341,17 @@ SCHED_SCOPE void rr_wakeup (struct thread_s *thread)
 
 	if(type == KTHREAD)
 	{
-		thread_sched_activate(current_thread);
-		thread_current_cpu(thread)->scheduler.k_runnable ++;
-		list_add_first(&rQueues->root, &thread->list);
+		rQueues->scheduler->k_runnable ++;
+		list_add_last(&rQueues->kthreads, &thread->list);
+		this = current_thread;
+		thread_sched_activate(this);
+		thread_set_forced_yield(this);
 	}
 	else
 	{
-		thread_current_cpu(thread)->scheduler.u_runnable ++;
-		list_add_last(&rQueues->root, &thread->list);
+		rQueues->u_runnable ++;
+		rQueues->scheduler->u_runnable ++;
+		list_add_last(&rQueues->runnable, &thread->list);
 	}
 }
 
@@ -207,23 +361,133 @@ SCHED_SCOPE void rr_add_created(struct thread_s *thread)
 	register rQueues_t *rQueues;
 	register thread_type_t type;
 
-	sched = thread->local_sched;
+	sched   = thread->local_sched;
 	rQueues = (rQueues_t*) sched->data;
-	type = thread->type;
+	type    = thread->type;
+
 	sched->count ++;
-	thread_current_cpu(thread)->scheduler.total_nr ++;
+	rQueues->scheduler->total_nr ++;
 
 	if(type == KTHREAD)
 	{
-		thread_current_cpu(thread)->scheduler.k_runnable ++;
-		list_add_first(&rQueues->root, &thread->list);
+		rQueues->scheduler->k_runnable ++;
+		list_add_last(&rQueues->kthreads, &thread->list);
 	}
 	else
 	{
-		thread_current_cpu(thread)->scheduler.user_nr ++;
-		thread_current_cpu(thread)->scheduler.u_runnable ++;
-		list_add_last(&rQueues->root, &thread->list);
+		rQueues->scheduler->user_nr ++;
+		rQueues->scheduler->u_runnable ++;
+		rQueues->u_runnable ++;
+		list_add_last(&rQueues->runnable, &thread->list);
+
+		if(thread_isImported(thread))
+		{
+			thread_clear_imported(thread);
+			thread->boosted_prio = -1;
+		}
 	}
+}
+
+SCHED_SCOPE struct thread_s *rr_elect_balancing(struct sched_s *sched)
+{
+	register struct thread_s *elected;
+	register rQueues_t *rQueues;
+	register struct thread_s *this;
+	register uint_t count;
+
+	this    = current_thread;
+	rQueues = (rQueues_t*) sched->data;
+	elected = NULL;
+	count   = sched->count;
+
+	thread_sched_deactivate(this);
+
+	if(this->type != TH_IDLE)
+	{
+		this->boosted_prio += this->quantum;
+
+		if(this->state == S_KERNEL)
+		{
+			this->state = S_READY;
+			count ++;
+			
+			if(this->type == PTHREAD)
+			{
+				if(thread_isForcedYield(this))
+				{
+					list_add_first(&rQueues->runnable, &this->list);
+					this->boosted_prio -= this->quantum;
+				}
+				else
+				{
+					list_add_last(&rQueues->runnable, &this->list);
+					thread_migration_deactivate(this);
+					this->quantum = RR_QUANTUM;
+				}
+
+				rQueues->scheduler->u_runnable ++;
+				rQueues->u_runnable ++;
+			}
+			else
+			{
+				list_add_last(&rQueues->kthreads, &this->list);
+				rQueues->scheduler->k_runnable ++;
+				this->quantum = RR_QUANTUM;
+			}
+		
+		}
+	}
+
+	if(count > 0)
+	{
+		if(!(list_empty(&rQueues->kthreads)))
+		{
+			elected = list_first(&rQueues->kthreads, struct thread_s, list);
+			rQueues->scheduler->k_runnable --;
+		}
+		else if(!(list_empty(&rQueues->migrate)))
+		{
+			elected = list_first(&rQueues->migrate, struct thread_s, list);
+			rQueues->scheduler->u_runnable --;
+			rQueues->m_runnable --;
+			rQueues->u_runnable --;
+		}
+		else
+		{
+			elected = list_first(&rQueues->runnable, struct thread_s, list);
+			rQueues->scheduler->u_runnable --;
+			rQueues->u_runnable --;
+		}
+
+		rr_dmsg(INFO, 
+			"%s: cpu %d, usage %d, u_runnable [%d,%d], count %d, usr %d, this type %d, "
+			"elected pid %d, tid %d, type %d, flags %x, (%d && (%d || %d)) [%u]\n", 
+			__FUNCTION__, 
+			cpu_get_id(),
+			rQueues->cpu->usage,
+			rQueues->u_runnable,
+			rQueues->m_runnable,
+			count,
+			rQueues->scheduler->user_nr,
+			this->type,
+			elected->task->pid,
+			elected->info.order,
+			elected->type,
+			elected->flags,
+			rQueues->cond1,
+			rQueues->cond2,
+			rQueues->cond3,
+			cpu_time_stamp());
+
+		list_unlink(&elected->list);
+		count --;
+
+		thread_sched_deactivate(elected);
+		thread_clear_forced_yield(elected);
+	}
+   
+	sched->count = count;
+	return elected;
 }
 
 SCHED_SCOPE struct thread_s *rr_elect(struct sched_s *sched)
@@ -239,42 +503,47 @@ SCHED_SCOPE struct thread_s *rr_elect(struct sched_s *sched)
 	elected = NULL;
   
 	count = sched->count;
-
-	if(this->type != TH_IDLE)
+   
+	if((this->state == S_KERNEL) && (this->type != TH_IDLE))
 	{
-		this->boosted_prio += this->quantum;
+		this->state = S_READY;
 
-		if(this->state == S_KERNEL)
+		if(this->type == PTHREAD)
 		{
-			this->state = S_READY;
-			
-			list_add_last(&rQueues->root, &this->list);
-			count ++;
-
-			if(this->type == PTHREAD)
-				thread_current_cpu(this)->scheduler.u_runnable ++;
-			else
-				thread_current_cpu(this)->scheduler.k_runnable ++;
+			list_add_last(&rQueues->runnable, &this->list);
+			rQueues->scheduler->u_runnable ++;
 		}
+		else
+		{
+			list_add_first(&rQueues->kthreads, &this->list);
+			rQueues->scheduler->k_runnable ++;
+		}
+		count ++;
 	}
-
+   
 	if(count > 0)
 	{
-		elected = list_first(&rQueues->root, struct thread_s, list);
+		if(!(list_empty(&rQueues->kthreads)))
+		{
+			elected = list_first(&rQueues->kthreads, struct thread_s, list);
+			rQueues->scheduler->k_runnable --;
+		}
+		else
+		{
+			elected = list_first(&rQueues->runnable, struct thread_s, list);
+			rQueues->scheduler->u_runnable --;
+			rQueues->u_runnable --;
+		}
+		
 		list_unlink(&elected->list);
 		count --;
    
-		if(elected->type == PTHREAD)
-			thread_current_cpu(elected)->scheduler.u_runnable --;
-		else
-			thread_current_cpu(elected)->scheduler.k_runnable --;
-
 		if((elected->state != S_CREATE) && (elected->state != S_READY))
 			except_dmsg("cpu %d, tid %x, state %s\n",
 				    cpu_get_id(), 
 				    elected, 
 				    thread_state_name[elected->state]);
-
+		
 		elected->quantum = RR_QUANTUM;
 		thread_sched_deactivate(elected);
 	}
@@ -286,40 +555,46 @@ SCHED_SCOPE struct thread_s *rr_elect(struct sched_s *sched)
 
 static const struct sched_ops_s rr_sched_op = 
 {
-	.exit   = &rr_exit,
-	.elect  = &rr_elect,
-	.yield  = &rr_yield,
-	.sleep  = &rr_sleep,
-	.wakeup = &rr_wakeup,
-	.strategy = &rr_sched_strategy,
-	.clock  = &rr_clock,
+	.exit        = &rr_exit,
+	.yield       = &rr_yield,
+	.sleep       = &rr_sleep,
+	.wakeup      = &rr_wakeup,
+	.strategy    = &rr_sched_strategy,
 	.add_created = &rr_add_created,
-	.add = &rr_add_created,
-	.remove = &rr_remove,
+	.add         = &rr_add_created,
+	.remove      = &rr_remove,
+
+#if CONFIG_CPU_LOAD_BALANCING
+	.elect       = &rr_elect_balancing,
+	.clock       = &rr_clock_balancing,
+#else
+	.elect       = &rr_elect,
+	.clock       = &rr_clock,
+#endif
 };
 
-error_t rr_sched_init(struct sched_s *sched)
+error_t rr_sched_init(struct scheduler_s *scheduler, struct sched_s *sched)
 {
 	kmem_req_t req;
 	register rQueues_t *rQueues;
-	register uint_t i;
 
 	req.type  = KMEM_GENERIC;
 	req.size  = sizeof(rQueues_t);
 	req.flags = AF_BOOT | AF_ZERO;
-	sched->count = 0;
 
 	if((rQueues = kmem_alloc(&req)) == NULL)
 		PANIC("rr-sched.init: fatal error NOMEM\n", 0);
 
-	rQueues->period = CONFIG_CPU_BALANCING_PERIOD * RR_QUANTUM;
-  
-	list_root_init(&rQueues->root);
+	rQueues->cpu       = current_cpu;
+	rQueues->period    = CONFIG_CPU_BALANCING_PERIOD * RR_QUANTUM;
+	rQueues->scheduler = scheduler;
 
-	for(i=0; i < RR_QUEUE_NR; i++)
-		list_root_init(&rQueues->root_tbls[i]);
-
-	sched->data = rQueues;
-	sched->op = rr_sched_op;
+	list_root_init(&rQueues->kthreads);
+	list_root_init(&rQueues->runnable);
+	list_root_init(&rQueues->migrate);
+	
+	sched->count     = 0;
+	sched->op        = rr_sched_op;
+	sched->data      = rQueues;
 	return 0;
 }

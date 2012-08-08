@@ -30,8 +30,9 @@
 
 struct sched_s;
 struct thread_s;
+struct scheduler_s;
 
-typedef error_t sched_init_t     (struct sched_s *sched);
+typedef error_t sched_init_t     (struct scheduler_s *scheduler, struct sched_s *sched);
 typedef void sched_add_t         (struct thread_s *thread);
 typedef void sched_remove_t      (struct thread_s *thread);
 typedef void sched_exit_t        (struct thread_s *thread);

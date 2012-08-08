@@ -21,6 +21,7 @@
  */
 
 #include <cpu.h>
+#include <task.h>
 #include <thread.h>
 #include <cpu-trace.h>
 #include <device.h>
@@ -29,15 +30,19 @@
 
 void do_interrupt(struct thread_s *this, uint_t irq_num)
 {
+	register thread_state_t old_state;
+	register bool_t isYield;
 	struct irq_action_s *action;
 	struct cpu_s *cpu;
-	register thread_state_t old_state;
+	uint_t irq_state;
+	error_t ret;
 
 	cpu_trace_write(thread_current_cpu(this), do_interrupt);
 
 	cpu = thread_current_cpu(this);
 
 	cpu->irq_nr ++;
+	isYield   = false;
 	old_state = this->state;
 
 	if(old_state == S_USR)
@@ -48,36 +53,57 @@ void do_interrupt(struct thread_s *this, uint_t irq_num)
 
 	arch_cpu_get_irq_entry(cpu, irq_num, &action);
 	action->irq_handler(action);
-   
-	if(old_state != S_USR)
+
+	if((this != cpu->event_mgr) && 
+	   ((event_is_pending(&cpu->re_listner)) || 
+	    (event_is_pending(&cpu->le_listner))))
 	{
-		if((this != cpu->event_mgr) && 
-		   ((event_is_pending(&cpu->re_listner)) || 
-		    (event_is_pending(&cpu->le_listner))))
-		{
-			(void)wakeup_one(&cpu->event_mgr->info.wait_queue, WAIT_ANY);
-		}
-     
-		return;
+		(void)wakeup_one(&cpu->event_mgr->info.wait_queue, WAIT_ANY);
+		thread_set_forced_yield(this);
+		isYield = true;
 	}
 
-	if(event_is_pending(&cpu->re_listner))
-		event_listner_notify(&cpu->re_listner);
+	if(old_state != S_USR)
+		return;
 
-	if(event_is_pending(&cpu->le_listner))
-		event_listner_notify(&cpu->le_listner);
+	if(thread_isCapMigrate(this) && thread_migration_isActivated(this))
+	{
+		thread_clear_cap_migrate(this);
+		cpu_enable_all_irq(&irq_state);
+		ret = thread_migrate(this);
+		cpu_restore_irq(irq_state);
 
-	if(thread_sched_isActivated(this))
+                /* this pointer has expired */
+		this = current_thread;
+		cpu_wbflush();
+
+		if(ret == 0)	
+			thread_migration_deactivate(this);
+		else
+		{
+			isr_dmsg(INFO, "%s: cpu %d, migration failed for victim pid %d, tid %d, err %d\n", 
+				 __FUNCTION__, 
+				 cpu_get_id(),
+				 this->task->pid,
+				 this->info.order,
+				 ret);
+		}
+
+		thread_set_cap_migrate(this);
+	}
+	
+	if(isYield || (thread_sched_isActivated(this)))
 	{
 		thread_set_cap_migrate(this);
 		sched_yield(this);
 		thread_clear_cap_migrate(this);
-
+	        
+                /* this pointer might expired */
 		this = current_thread;
 		cpu_wbflush();
 	}
 
 	tm_sys_compute(this);
-	this->state = S_USR;
+	this->state = old_state;
 	signal_notify(this);
 }

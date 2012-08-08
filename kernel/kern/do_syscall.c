@@ -103,10 +103,10 @@ reg_t do_syscall (reg_t arg0,
 		  reg_t service_num)
   
 {
-	register int return_val;
+	register int return_val, ret;
 	register struct thread_s *this;
 	struct cpu_s *cpu;
-
+	
 	return_val  = 0;
 	this        = current_thread;
 	this->state = S_KERNEL;
@@ -115,6 +115,20 @@ reg_t do_syscall (reg_t arg0,
 	tm_usr_compute(this);
 
 	cpu_trace_write(cpu, __do_syscall);
+
+	if(thread_migration_isActivated(this))
+	{
+		cpu_enable_all_irq(NULL);
+		ret = thread_migrate(this);
+		cpu_disable_all_irq(NULL);
+
+                /* this pointer is expired */
+		this = current_thread;
+		cpu_wbflush();
+
+		if(ret == 0)
+			thread_migration_deactivate(this);
+	}
 
 	return_val = cpu_context_save(&this->info.pss);
    
@@ -178,14 +192,41 @@ END_DO_SYSCALL:
 	if(event_is_pending(&cpu->le_listner))
 		event_listner_notify(&cpu->le_listner);
 
+
+	if(thread_migration_isActivated(this))
+	{
+		cpu_enable_all_irq(NULL);
+		ret = thread_migrate(this);
+		cpu_disable_all_irq(NULL);
+
+                /* this pointer is expired */
+		this = current_thread;
+		cpu_wbflush();
+
+		if(ret == 0)
+		{
+			thread_migration_deactivate(this);
+		}
+		else
+		{
+
+			isr_dmsg(INFO, "%s: cpu %d, migration failed for victim pid %d, tid %d, err %d\n", 
+				 __FUNCTION__, 
+				 cpu_get_id(),
+				 this->task->pid,
+				 this->info.order,
+				 ret);
+		}
+	}
+	
 	if(thread_sched_isActivated(this))
 	{
 		thread_set_cap_migrate(this);
 		sched_yield(this);
 		thread_clear_cap_migrate(this);
-
+        
+                /* this pointer might expired */
 		this = current_thread;
-		cpu  = current_cpu;
 		cpu_wbflush();
 	}
 
