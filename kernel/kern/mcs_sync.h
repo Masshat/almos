@@ -53,14 +53,14 @@ struct mcs_barrier_s
 	cacheline_t cntr;
 	cacheline_t ticket;
 	cacheline_t ticket2;
-	char        *name;
+	char        *name CACHELINE;
 };
 
 struct mcs_lock_s
 {
 	cacheline_t cntr;
 	cacheline_t ticket;
-	char        *name;
+	char        *name CACHELINE;
 };
 
 

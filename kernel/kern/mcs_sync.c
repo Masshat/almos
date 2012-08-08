@@ -27,6 +27,14 @@
 #include <cpu.h>
 #include <kdmsg.h>
 
+#define mcs_barrier_flush(_ptr)						\
+	do{								\
+		cpu_invalid_dcache_line(&(_ptr)->phase);		\
+		cpu_invalid_dcache_line(&(_ptr)->ticket);		\
+		cpu_invalid_dcache_line(&(_ptr)->ticket2);		\
+		cpu_invalid_dcache_line(&(_ptr)->cntr);			\
+	}while(0);
+
 void mcs_barrier_init(mcs_barrier_t *ptr, char *name, uint_t count)
 {
 	ptr->val.value     = count;
@@ -35,6 +43,10 @@ void mcs_barrier_init(mcs_barrier_t *ptr, char *name, uint_t count)
 	ptr->ticket.value  = 0;
 	ptr->ticket2.value = 0;
 	ptr->name          = name;
+	
+	cpu_wbflush();
+	cpu_invalid_dcache_line(&ptr->val);
+	mcs_barrier_flush(ptr);
 }
 
 
@@ -44,7 +56,7 @@ void mcs_barrier_wait(mcs_barrier_t *ptr)
 	register uint_t order;
 	uint_t *current;
 	uint_t *next;
-  
+ 
 	phase   = ptr->phase.value;
 	current = (phase == 0) ? &ptr->ticket.value : &ptr->ticket2.value;
 	order   = cpu_atomic_add((void*)&ptr->cntr.value, -1);
@@ -58,11 +70,16 @@ void mcs_barrier_wait(mcs_barrier_t *ptr)
 		*next            = 0;
 		*current         = 1;
 		cpu_wbflush();
+		mcs_barrier_flush(ptr);
 		return;
 	}
 
+	mcs_barrier_flush(ptr);
+
 	while(cpu_load_word(current) == 0)
 		;
+
+	cpu_invalid_dcache_line(current);
 }
 
 
@@ -71,6 +88,10 @@ void mcs_lock_init(mcs_lock_t *ptr, char *name)
 	ptr->cntr.value   = 0;
 	ptr->ticket.value = 0;
 	ptr->name         = name;
+	
+	cpu_wbflush();
+	cpu_invalid_dcache_line(&ptr->cntr);
+	cpu_invalid_dcache_line(&ptr->ticket);
 }
 
 
@@ -95,9 +116,15 @@ void mcs_unlock(mcs_lock_t *ptr, uint_t irq_state)
 
 	val_ptr  = &ptr->cntr.value;
 	next     = ptr->cntr.value + 1;
-	cpu_invalid_dcache_line((void*)val_ptr);
-	*val_ptr = next;
+
 	cpu_wbflush();
+	cpu_invalid_dcache_line((void*)val_ptr);
+
+	*val_ptr = next;
+
+	cpu_wbflush();
+	cpu_invalid_dcache_line((void*)val_ptr);
+
 	current_thread->locks_count --;
 	cpu_restore_irq(irq_state);
 }
