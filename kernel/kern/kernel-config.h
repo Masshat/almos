@@ -80,6 +80,10 @@
 #define CONFIG_PPM_USE_PRIO              yes
 #define CONFIG_PPM_USE_SEQ_NEXT_CID      no
 #define CONFIG_AUTO_NEXT_TOUCH           yes
+#define CONFIG_CPU_LOAD_BALANCING        yes
+#define CONFIG_PTHREAD_THREADS_MAX       2048
+#define CONFIG_PTHREAD_STACK_SIZE        512*1024
+#define CONFIG_PTHREAD_STACK_MIN         4096
 
 ////////////////////////////////////////////////////
 //          KERNEL DEBUG CONFIGURATIONS           //
@@ -123,6 +127,7 @@
 #define CONFIG_VFS_DEBUG                 no
 #define CONFIG_DEVFS_DEBUG               no
 #define CONFIG_SYSFS_DEBUG               no
+#define CONFIG_BLKIO_DEBUG               no
 #define CONFIG_BC_DEBUG                  no
 #define CONFIG_BC_INSTRUMENT             no
 #define CONFIG_LOCKS_DEBUG               no

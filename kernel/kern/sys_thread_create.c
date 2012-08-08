@@ -39,6 +39,7 @@ typedef struct
 {
 	volatile bool_t   isDone;
 	volatile error_t  err;
+	bool_t            isPinned;
 	struct thread_s   *new_thread;
 	void              *sched_listner;
 	struct event_s    event;
@@ -59,9 +60,10 @@ EVENT_HANDLER(thread_create_event_handler)
 	rinfo = event_get_argument(event);
 	memcpy(&attr, rinfo->attr, sizeof(attr));
 
-	linfo.key  = rinfo->key;
-	linfo.attr = &attr;
-	linfo.task = rinfo->task;
+	linfo.isPinned = rinfo->isPinned;
+	linfo.key      = rinfo->key;
+	linfo.attr     = &attr;
+	linfo.task     = rinfo->task;
 
 	err = do_thread_create(&linfo);
   
@@ -120,6 +122,9 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 		goto fail_attr_inval;
 	}
 
+	if(attr.stack_size == 0)
+		attr.stack_size = CONFIG_PTHREAD_STACK_SIZE;
+
 	if(task->threads_nr == task->threads_limit) 
 	{
 		err = EAGAIN;
@@ -149,6 +154,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	{
 		struct dqdt_attr_s dqdt_attr;
 
+		info.isPinned = false;
 		dqdt_attr_init(&dqdt_attr, NULL);
     
 		err = dqdt_thread_placement(current_cluster->levels_tbl[0], &dqdt_attr);
@@ -162,9 +168,10 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	}
 	else
 	{
-		attr.cpu_gid = attr.cpu_gid % arch_onln_cpu_nr();
-		attr.cpu_lid = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
-		attr.cid     = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
+		attr.cpu_gid  = attr.cpu_gid % arch_onln_cpu_nr();
+		attr.cpu_lid  = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
+		attr.cid      = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
+		info.isPinned = true; 
 	}
 
 	if(attr.cpu_gid < 0)
@@ -262,8 +269,8 @@ error_t do_thread_create(thread_info_t *info)
 
 	if(attr->stack_addr == NULL)
 	{
-		attr->stack_size = (attr->stack_size < PTHREAD_STACK_MIN) ? 
-			PTHREAD_STACK_MIN : attr->stack_size;
+		attr->stack_size = (attr->stack_size < CONFIG_PTHREAD_STACK_MIN) ? 
+			CONFIG_PTHREAD_STACK_MIN : attr->stack_size;
 
 		attr->stack_addr = vmm_mmap(task, NULL, 
 					    NULL, attr->stack_size, 
@@ -289,6 +296,12 @@ error_t do_thread_create(thread_info_t *info)
 	if((err = thread_create(task, attr, &new_thread)))
 		goto fail_create;
 
+        // Set migration intial state
+	if(info->isPinned)
+		thread_migration_disabled(new_thread);
+	else
+		thread_migration_enabled(new_thread);
+
 	tm_astep2       = cpu_time_stamp();
 	online_clusters = arch_onln_cluster_nr();
 
@@ -311,7 +324,7 @@ error_t do_thread_create(thread_info_t *info)
 	spinlock_unlock(&task->th_lock);
 
 	tm_astep4 = cpu_time_stamp();
-
+	
 	// Register the new thread 
 	err = sched_register(new_thread);
 	assert(err == 0);
@@ -327,11 +340,14 @@ error_t do_thread_create(thread_info_t *info)
 	// l: add to task thread list, 
 	// s: sched_add_create, 
 	// e: total time
-	printk(INFO, "INFO: %s: tid %x, pid %d, order %d, cluster %d, cpu %d [ m %d, c %d, a %d, l %d, s %d, e %d ][%u]\n",
+	printk(INFO, 
+	       "INFO: %s: tid %x, pid %d, order %d, flags %x, cluster %d, "
+	       "cpu %d [ m %d, c %d, a %d, l %d, s %d, e %d ][%u]\n",
 	       __FUNCTION__,
 	       new_thread,
 	       task->pid,
 	       info->key,
+	       new_thread->flags,
 	       attr->cid, 
 	       attr->cpu_lid,
 	       tm_astep1 - tm_start,

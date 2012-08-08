@@ -35,30 +35,6 @@
 #define TRUE                1
 #define true                1
 
-#define RETURN_SUCCESS      0
-#define RETURN_FAILURE      1
-#define EXIT_SUCCESS        0
-#define EXIT_FAILURE        1
-#define SCOPE_SYS           1
-#define SCOPE_USR           2
-
-/* Pthread related constants */
-#define PTHREAD_THREADS_MAX           2048
-#define PTHREAD_KEYS_MAX              64
-#define PTHREAD_DESTRUCTOR_ITERATIONS 32
-#define PTHREAD_STACK_SIZE            64*4096
-#define PTHREAD_STACK_MIN             4096
-#define PTHREAD_BARRIER_SERIAL_THREAD 1
-#define PTHREAD_PROCESS_PRIVATE       0
-#define PTHREAD_PROCESS_SHARED        1
-#define PTHREAD_CREATE_DETACHED       1
-#define PTHREAD_CREATE_JOINABLE       0 
-#define PTHREAD_EXPLICIT_SCHED        0
-#define PTHREAD_INHERIT_SCHED         1
-#define PTHREAD_SCOPE_SYSTEM          0
-#define PTHREAD_SCOPE_PROCESS         1
-#define SEM_VALUE_MAX                 PTHREAD_THREADS_MAX
-
 /* Pthread related types */
 typedef unsigned long pthread_t;
 typedef unsigned long pthread_mutexattr_t;

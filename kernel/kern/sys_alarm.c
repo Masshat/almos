@@ -45,7 +45,7 @@ int sys_alarm (unsigned nb_sec)
 	struct alarm_info_s info;
 
 	if( nb_sec == 0)
-		return RETURN_SUCCESS;
+		return 0;
 
 	this = current_thread;
 	event_set_handler(&event, &sys_alarm_event_handler);

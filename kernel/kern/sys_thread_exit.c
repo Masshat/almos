@@ -81,5 +81,5 @@ exit_dead:
 	sched_exit(this);
 
 	PANIC ("Thread %x, CPU %d must never return", this, current_cpu->gid);
-	return RETURN_FAILURE; // fake return !
+	return -1;		/* Fake return ! */
 }

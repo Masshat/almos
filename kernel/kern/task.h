@@ -87,7 +87,7 @@ struct task_s
 	uint_t threads_limit;
 	uint_t next_order;
 	uint_t max_order;
-	BITMAP_DECLARE(bitmap, (PTHREAD_THREADS_MAX >> 3));
+	BITMAP_DECLARE(bitmap, (CONFIG_PTHREAD_THREADS_MAX >> 3));
 	struct thread_s **th_tbl;
 	struct list_entry th_root;
 	struct page_s *th_tbl_pg;

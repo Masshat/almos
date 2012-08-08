@@ -28,6 +28,9 @@
 #include <wait_queue.h>
 #include <kmem.h>
 
+#define SEM_SCOPE_SYS  1
+#define SEM_SCOPE_USR  2
+
 typedef enum
 {
 	SEM_INIT,

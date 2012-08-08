@@ -299,8 +299,8 @@ error_t do_exec(struct task_s *task,
 		if(err) goto DO_EXEC_ERR;
 	}
  
-	attr.stack_addr = (void*)(usr_stack_top - PTHREAD_STACK_SIZE);
-	attr.stack_size = PTHREAD_STACK_SIZE;
+	attr.stack_addr = (void*)(usr_stack_top - CONFIG_PTHREAD_STACK_SIZE);
+	attr.stack_size = CONFIG_PTHREAD_STACK_SIZE;
 
 	err = (error_t) vmm_mmap(task, NULL, 
 				 attr.stack_addr, 

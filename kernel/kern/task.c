@@ -188,7 +188,7 @@ static error_t task_bootstrap_dup(struct task_s *dst, struct task_s *src)
 	dst->bin           = NULL;
 	dst->threads_count = 0;
 	dst->threads_nr    = 0;
-	dst->threads_limit = PTHREAD_THREADS_MAX;
+	dst->threads_limit = CONFIG_PTHREAD_THREADS_MAX;
 	dst->pid           = 0;
 	atomic_init(&dst->childs_nr, 0);
 	dst->childs_limit  = CONFIG_TASK_CHILDS_MAX_NR;
@@ -301,6 +301,9 @@ error_t task_replicate_do_next_stage(struct task_s *task, struct task_s *src)
 	start_ppn = info.ppn;
 	assert((info.attr & PMM_HUGE) == 0);
   
+	if(info.attr & PMM_HUGE)
+		return EINVAL;
+
 	info.attr    = PMM_HUGE | PMM_CLEAR;
 	info.cluster = NULL;
 
@@ -423,23 +426,22 @@ REPLICATE_ERR:
 error_t task_bootstrap_init(struct boot_info_s *info)
 {
 	task_ctor(NULL, &task0);
-	memset(&task0.vmm, 0, sizeof(&task0.vmm));
+	memset(&task0.vmm, 0, sizeof(task0.vmm));
 	task0.vmm.text_start  = CONFIG_KERNEL_OFFSET;
 	task0.vmm.limit_addr  = CONFIG_KERNEL_OFFSET;
 	task0.vmm.devreg_addr = CONFIG_DEVREGION_OFFSET;
 	pmm_bootstrap_init(&task0.vmm.pmm, info->boot_pgdir);
 	/* Nota: vmm is not intialized */
-  
-	task0.vfs_root = NULL;
-	task0.vfs_cwd = NULL;
-	task0.fd_info = NULL;
-	task0.bin = NULL;
-	task0.threads_count = 0;
-	task0.threads_nr = 0;
-	task0.threads_limit = PTHREAD_THREADS_MAX;
-	task0.pid = 0;
+	task0.vfs_root        = NULL;
+	task0.vfs_cwd         = NULL;
+	task0.fd_info         = NULL;
+	task0.bin             = NULL;
+	task0.threads_count   = 0;
+	task0.threads_nr      = 0;
+	task0.threads_limit   = CONFIG_PTHREAD_THREADS_MAX;
+	task0.pid             = 0;
 	atomic_init(&task0.childs_nr, 0);
-	task0.childs_limit = CONFIG_TASK_CHILDS_MAX_NR;
+	task0.childs_limit    = CONFIG_TASK_CHILDS_MAX_NR;
 	return 0;
 }
 
@@ -492,7 +494,7 @@ error_t task_create(struct task_s **new_task, struct dqdt_attr_s *attr, uint_t m
 		goto fail_signal_mgr;
 
 	req.type = KMEM_PAGE;
-	req.size = (PTHREAD_THREADS_MAX * sizeof(struct thread_s*)) / PMM_PAGE_SIZE;
+	req.size = (CONFIG_PTHREAD_THREADS_MAX * sizeof(struct thread_s*)) / PMM_PAGE_SIZE;
 	req.size = (req.size == 0) ? 0 : bits_log2(req.size);
   
 	task->th_tbl_pg = kmem_alloc(&req);
@@ -522,8 +524,8 @@ error_t task_create(struct task_s **new_task, struct dqdt_attr_s *attr, uint_t m
 	task->bin             = NULL;
 	task->threads_count   = 0;
 	task->threads_nr      = 0;
-	task->threads_limit   = PTHREAD_THREADS_MAX;
-	bitmap_set_range(task->bitmap, 0, PTHREAD_THREADS_MAX);
+	task->threads_limit   = CONFIG_PTHREAD_THREADS_MAX;
+	bitmap_set_range(task->bitmap, 0, CONFIG_PTHREAD_THREADS_MAX);
 	task->pid             = pid;
 	task->state           = TASK_CREATE;
 	atomic_init(&task->childs_nr, 0);

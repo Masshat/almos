@@ -35,6 +35,8 @@
 #include <system.h>
 #include <barrier.h>
 
+#define PTHREAD_BARRIER_SERIAL_THREAD 1
+
 typedef struct wqdb_record_s
 {
 	uint_t event;

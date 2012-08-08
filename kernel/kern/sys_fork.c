@@ -43,6 +43,7 @@ typedef struct
 	struct event_s    event;
 	struct thread_s  *child_thread;
 	struct task_s    *child_task;
+	bool_t isPinned;
 }fork_info_t;
 
 static error_t do_fork(fork_info_t *info);
@@ -73,6 +74,7 @@ EVENT_HANDLER(fork_event_handler)
 	linfo.cpu          = rinfo->cpu;
 	linfo.child_thread = NULL;
 	linfo.child_task   = NULL;
+	linfo.isPinned     = rinfo->isPinned;
 
 	tm_bFork = cpu_time_stamp();
 	err = do_fork(&linfo);
@@ -146,7 +148,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	info.isDone      = false;
 	info.this_thread = this_thread;
 	info.this_task   = this_task;
-  
+	
 	cpu_disable_all_irq(&irq_state);
 	cpu_restore_irq(irq_state);
   
@@ -158,21 +160,22 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 
 	if(flags & TASK_TARGET_CPU)
 	{
-		cpu_gid      = cpu_gid % arch_onln_cpu_nr();
-		cpu_lid      = arch_cpu_lid(cpu_gid, current_cluster->cpu_nr);
-		cid          = arch_cpu_cid(cpu_gid, current_cluster->cpu_nr);
-		attr.cluster = clusters_tbl[cid].cluster;
-		attr.cpu     = &attr.cluster->cpu_tbl[cpu_lid];
-		err          = -100;
+		cpu_gid       = cpu_gid % arch_onln_cpu_nr();
+		cpu_lid       = arch_cpu_lid(cpu_gid, current_cluster->cpu_nr);
+		cid           = arch_cpu_cid(cpu_gid, current_cluster->cpu_nr);
+		attr.cluster  = clusters_tbl[cid].cluster;
+		attr.cpu      = &attr.cluster->cpu_tbl[cpu_lid];
+		err           = -100;
+		info.isPinned = false; 
 	}
 	else
 	{
+		info.isPinned = true;
 #if 1
 		err = dqdt_task_placement(dqdt_logical_lookup(3), &attr);
 #else
 		err = -101;
 #endif
-
 		if(err)
 			task_default_placement(&attr);
 	}
@@ -340,7 +343,12 @@ error_t do_fork(fork_info_t *info)
 		  __FUNCTION__, 
 		  child_thread, 
 		  cpu_time_stamp());
-
+	
+	if(info->isPinned)
+		thread_migration_disabled(child_thread);
+	else
+		thread_migration_enabled(child_thread);
+	
 	list_add_last(&child_task->th_root, &child_thread->rope);
 	child_task->threads_count = 1;
 	child_task->threads_nr ++;

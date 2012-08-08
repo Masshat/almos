@@ -30,6 +30,8 @@
 #include <kmagics.h>
 #include <semaphore.h>
 
+#define SEM_VALUE_MAX  CONFIG_PTHREAD_THREADS_MAX
+
 error_t sem_init(struct semaphore_s *sem, uint_t value, uint_t scope)
 {
 	if((value > SEM_VALUE_MAX) || (sem == NULL))

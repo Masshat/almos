@@ -64,6 +64,8 @@ error_t thread_dup(struct task_s *task,
 	dst->task                            = task;
 	dst->type                            = PTHREAD;
 	dst->info.sched_nr                   = 0;
+	dst->info.migration_cntr             = 0;
+	dst->info.migration_fail_cntr        = 0;
 	dst->info.tm_exec                    = 0;
 	dst->info.tm_tmp                     = 0;
 	dst->info.tm_usr                     = 0;

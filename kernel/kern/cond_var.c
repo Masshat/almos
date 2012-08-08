@@ -50,7 +50,7 @@ error_t cv_wait(struct cv_s *cv, struct semaphore_s *sem)
 
 	if((sem->owner != this) || (value > 0))
 	{
-		if(sem->scope == SCOPE_SYS)
+		if(sem->scope == SEM_SCOPE_SYS)
 		{
 			printk(ERROR,"ERROR: cv_wait: TID %x, sem %x is not owned or not locked [ value %d ]\n",
 			       this, 

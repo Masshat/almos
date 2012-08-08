@@ -75,7 +75,7 @@ int sys_sem(struct semaphore_s **sem, uint_t operation, uint_t pshared, int *val
 			break;
 		}
     
-		if((err = sem_init(isem, val, SCOPE_USR)))
+		if((err = sem_init(isem, val, SEM_SCOPE_USR)))
 			break;
     
 		if((err = cpu_uspace_copy(sem,&isem,sizeof(struct semaphore_s*))))
