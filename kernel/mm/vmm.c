@@ -969,8 +969,6 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 		       this->task->pid, 
 		       this, bad_vaddr);
 #endif
-		goto FAULT_SEND_SIGBUS;
-
 		if(pmm_except_isInKernelMode(flags))
 		{
 			err = VMM_ECHECKUSPACE;
