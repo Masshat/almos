@@ -173,7 +173,7 @@ void* thread_idle(void *arg)
 
 	cpu_set_state(cpu,CPU_IDLE);
 
-	while (TRUE)
+	while (true)
 	{
 		cpu_disable_all_irq(NULL);
      
