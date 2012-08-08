@@ -120,7 +120,7 @@ int pthread_create (pthread_t *thread, pthread_attr_t *attr, void *(*start_routi
 		if(shared == NULL)
 			return ENOMEM;
 
-		fprintf(stderr, "%s: shared @%x\n", __FUNCTION__, (unsigned) shared);
+		//fprintf(stderr, "%s: shared @%x\n", __FUNCTION__, (unsigned) shared);
 	}
   
 	shared->arg          = arg;
