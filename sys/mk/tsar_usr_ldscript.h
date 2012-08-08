@@ -34,7 +34,9 @@ SECTIONS
     . = ALIGN(16*4096); 
     __text_end = .;
   }
-  
+ 
+ . = ALIGN(2*1024*1024);
+ 
  .data : { 
     *(.rodata*) 
       *(.eh_frame) 
