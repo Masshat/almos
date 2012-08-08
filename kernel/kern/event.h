@@ -161,6 +161,7 @@ struct event_db_s
 	{
 		struct event_list_s list;
 		struct lffb_s lffb;
+		cacheline_t padding;
 	};
 };
 
@@ -169,9 +170,9 @@ struct event_db_s
 struct event_listner_s
 {
 	uint_t type;
-	volatile uint_t flags;
-	volatile uint_t prio;
 	uint_t count;
+	volatile uint_t flags;
+	volatile uint_t prio CACHELINE;
 	struct event_db_s tbl[E_PRIO_NR];
 };
 

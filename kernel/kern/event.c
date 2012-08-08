@@ -24,6 +24,7 @@
 #include <cpu.h>
 #include <cluster.h>
 #include <device.h>
+#include <pmm.h>
 #include <event.h>
 #include <cpu-trace.h>
 #include <thread.h>
@@ -170,6 +171,7 @@ static void remote_event_send(struct event_s *event, struct event_listner_s *el)
 	error_t retry;
 	uint_t tm_stamp;
 	uint_t prio;
+	bool_t isPending;
 	struct cpu_s *cpu;
 
 	tm_stamp = cpu_time_stamp();
@@ -183,10 +185,12 @@ static void remote_event_send(struct event_s *event, struct event_listner_s *el)
 			break;
 	}
 
+	isPending  = (el->flags & EVENT_PENDING) ? true : false;
 	el->flags |= EVENT_PENDING;
 	cpu_wbflush();
-  
-	if(prio < E_FUNC)
+	pmm_cache_flush_vaddr((vma_t)&el->flags, PMM_DATA);
+
+	if((prio < E_FUNC) && (isPending == false))
 	{
 		cpu = event_listner_get_cpu(el,re_listner);
 		(void)arch_cpu_send_ipi(cpu);
@@ -212,7 +216,6 @@ void event_send(struct event_s *event, struct event_listner_s *el)
 	}
 }
 
-
 static void local_event_listner_notify(struct event_listner_s *el)
 {
 	register struct event_s *event;
@@ -227,6 +230,7 @@ static void local_event_listner_notify(struct event_listner_s *el)
 	count = 0;
 	assert((el->flags & EVENT_PENDING) && "event_notify is called but no event is pending");
 
+	el->flags   &= ~EVENT_PENDING;
 	start_prio   = el->prio ++;
 	current_prio = start_prio;
 
@@ -274,7 +278,7 @@ static void local_event_listner_notify(struct event_listner_s *el)
     
 		current_prio ++;
 	}
-	el->flags &= ~EVENT_PENDING;
+
 	el->count += count;
 }
 
@@ -293,6 +297,9 @@ static void remote_event_listner_notify(struct event_listner_s *el)
 	do
 	{
 		el->flags &= ~EVENT_PENDING;
+		cpu_wbflush();
+		pmm_cache_flush_vaddr((vma_t)&el->flags, PMM_DATA);
+
 		cpu_disable_all_irq(&irq_state);
 
 		for(current_prio = E_CLK; current_prio < E_PRIO_NR; current_prio++, count++)
