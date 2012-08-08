@@ -25,10 +25,11 @@
 #include <errno.h>
 #include <thread.h>
 #include <cluster.h>
+#include <pmm.h>
 #include <cpu.h>
 #include <bits.h>
+
 #include <dqdt.h>
-#include <ppm.h>
 
 #define DQDT_MGR_PERIOD      CONFIG_DQDT_MGR_PERIOD
 
@@ -146,7 +147,11 @@ error_t dqdt_update(void)
 
 	usage /= cluster->onln_cpu_nr;
   
-	update_dmsg(1, "%s: cluster %d, usage %d\n", __FUNCTION__, cluster->id, usage);
+	update_dmsg(1, "%s: cluster %d, usage %d, T %d\n", 
+		    __FUNCTION__, 
+		    cluster->id, 
+		    usage, 
+		    threads);
  
 	logical = cluster->levels_tbl[0];
 
@@ -193,14 +198,16 @@ error_t dqdt_update(void)
 			}
 		}
     
-		update_dmsg(1, "%s: cluster %d, level %d, usage %d\n", 
+		update_dmsg(1, "%s: cluster %d, level %d, usage %d, T %d\n", 
 			    __FUNCTION__,
 			    cluster->id,
-			    i, usage/4);
+			    i, 
+			    usage/logical->childs_nr, 
+			    threads);
 
 		logical->info.summary.M = free_pages;
 		logical->info.summary.T = threads;
-		logical->info.summary.U = (logical->childs_nr == 1) ? usage : usage / 4;
+		logical->info.summary.U = usage / logical->childs_nr;
 		memcpy(&logical->info.summary.pages_tbl[0], &pages_tbl[0], sizeof(pages_tbl));
 
 #if CONFIG_DQDT_DEBUG == 2
@@ -246,11 +253,17 @@ bool_t dqdt_down_traversal(struct dqdt_cluster_s *logical,
 	register bool_t found, done;
 	uint_t distance_tbl[4] = {100,100,100,100};
  
-	down_dmsg(1, "%s: current level %d\n", __FUNCTION__, logical->level);
+	down_dmsg(1, "%s: cpu %d, current level %d, tid [0x%x - 0x%x] SP 0x%x\n", 
+		  __FUNCTION__, 
+		  cpu_get_id(),
+		  logical->level,
+		  current_thread,
+		  &current_thread->signature,
+		  cpu_get_stack());
 
 	if(logical->level == 0)
 		return request(logical,attr,-1);
-
+	
 	for(i = 0; i < 4; i++)
 	{
 		if((logical->children[i] == NULL) || (i == index))
@@ -371,9 +384,16 @@ DQDT_SELECT_HELPER(dqdt_placement_clstr_select)
 	return (logical->info.summary.U <= 90) ? true : false;
 }
 
+DQDT_SELECT_HELPER(dqdt_migrate_clstr_select)
+{
+	//return (logical->info.summary.U <= attr->u_threshold) ? true : false;
+	return (logical->info.summary.U < 100) ? true : false;
+}
+
 DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 {
 	register struct cluster_s *cluster;
+	register struct cpu_s *cpu;
 	register uint_t i;
 	register uint_t min;
 	register uint_t usage;
@@ -402,12 +422,15 @@ DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 		}
 	}
 
-	if(usage <= attr->u_threshold)
+	cpu = &cluster->cpu_tbl[min];
+	
+	if((usage <= attr->u_threshold) && (cpu->scheduler.u_runnable <= attr->t_threshold))
 	{
-		attr->cluster = cluster;
-		attr->cpu = &cluster->cpu_tbl[min];
 		cluster->cpu_tbl[min].usage = 100;
-		//sched_wakeup(cluster->manager);
+		cpu_wbflush();
+		pmm_cache_flush_vaddr((vma_t)&cluster->cpu_tbl[min].usage, PMM_DATA);
+		attr->cluster               = cluster;
+		attr->cpu                   = cpu;
 		return true;
 	}
 
@@ -453,6 +476,8 @@ DQDT_SELECT_HELPER(dqdt_cpu_free_select)
 			attr->cluster = cluster;
 			attr->cpu = &cluster->cpu_tbl[i];
 			cluster->cpu_tbl[i].usage = 100; /* fake weight */
+			cpu_wbflush();
+			pmm_cache_flush_vaddr((vma_t)&cluster->cpu_tbl[i].usage, PMM_DATA);
 			//sched_wakeup(cluster->manager);
 			return true;
 		}
@@ -471,16 +496,17 @@ error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s
 
 	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
   
-	attr->origin  = current_cluster->levels_tbl[0];
-
-	for(threshold = 20; threshold <= 100; threshold += 20)
+	attr->origin      = current_cluster->levels_tbl[0];
+	attr->t_threshold = 10;
+ 
+	for(threshold = 10; threshold < 100; threshold += 20)
 	{
 		attr->u_threshold = threshold;
 		
 		switch(threshold)
 		{
-		case 20:
-		case 60:
+		case 10:
+		case 50:
 			err = dqdt_up_traversal(logical,
 						attr,
 						dqdt_placement_child_select,
@@ -509,42 +535,66 @@ error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s
 error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
 	register uint_t threshold;
+	struct thread_s *this;
 	error_t err;
+	bool_t isFailThreshold;
+	bool_t isSuccessThreshold;
 
 	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
   
-	attr->origin = current_cluster->levels_tbl[0];
+	attr->origin      = current_cluster->levels_tbl[0];
+	attr->t_threshold = current_cluster->onln_cpu_nr;
 
-	for(threshold = 10; threshold <= 80; threshold += 10)
+	for(threshold = 20; threshold < 100; threshold += 20)
 	{
 		attr->u_threshold = threshold;
 
 		switch(threshold)
 		{
-		case 10:
 		case 20:
-		case 30:
+		case 70:
 			err = dqdt_up_traversal(logical,
 						attr,
 						dqdt_placement_child_select,
-						dqdt_placement_clstr_select,
+						dqdt_migrate_clstr_select,
 						dqdt_cpu_free_select,
 						3,
 						logical->index);
 			break;
+
 		default:
 			err = dqdt_up_traversal(logical,
 						attr,
 						dqdt_placement_child_select,
-						dqdt_placement_clstr_select,
+						dqdt_migrate_clstr_select,
 						dqdt_cpu_min_usage_select,
 						3,
 						logical->index);
 		}
-
+		
 		if(err == 0) break;
 	}
 
+#if 1
+	/* TODO: move these thresholds to per-task variables */
+	this               = current_thread;
+       	isFailThreshold    = (this->info.migration_fail_cntr > 5) ? true : false;
+	isSuccessThreshold = (this->info.migration_cntr > 3) ? true : false; 
+	
+	if(isFailThreshold || isSuccessThreshold)
+	{
+		err = dqdt_up_traversal(dqdt_root,
+					attr,
+					dqdt_placement_child_select,
+					dqdt_migrate_clstr_select,
+					dqdt_cpu_min_usage_select,
+					10,
+					10);
+
+		if(err == 0)
+			this->info.migration_fail_cntr = (isFailThreshold) ? 0 : this->info.migration_fail_cntr;
+	}
+#endif
 	select_dmsg(1, "%s: ended, found %s\n", __FUNCTION__, (err == 0) ? "(Yes)" : "(No)");
 	return err;
 }
@@ -601,6 +651,7 @@ error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 
 	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
 	attr->m_threshold = 1024;
+	attr->t_threshold = 10;
 	attr->origin = current_cluster->levels_tbl[0];
 
 	for(threshold = 10; threshold <= 110; threshold += 20)
