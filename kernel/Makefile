@@ -23,7 +23,7 @@ LFLAGS = -T$(OBJDIR)/kldscript $(CPULFLAGS)
 
 INCLUDES=	$(foreach DIR,$(DIRS),-I$(DIR)) -I$(OBJDIR)/kern/
 
-CFLAGS= 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD
+CFLAGS= 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD -Wundef
 CFLAGS+=	$(CPUCFLAGS)
 
 CFILES=	$(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
