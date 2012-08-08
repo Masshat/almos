@@ -57,7 +57,6 @@ typedef struct
 /* Pthread related constants */
 #define PTHREAD_THREADS_MAX           1024
 #define PTHREAD_STACK_MIN             2*4096
-#define PTHREAD_STACK_SIZE            2*PTHREAD_STACK_MIN
 #define PTHREAD_CREATE_DETACHED       1
 #define PTHREAD_CREATE_JOINABLE       0 
 #define PTHREAD_EXPLICIT_SCHED        0

@@ -33,7 +33,7 @@ int pthread_attr_init (pthread_attr_t *attr)
 	attr->sched_policy               = SCHED_RR;
 	attr->inheritsched               = PTHREAD_EXPLICIT_SCHED;
 	attr->stack_addr                 = NULL;
-	attr->stack_size                 = PTHREAD_STACK_SIZE;
+	attr->stack_size                 = 0;//PTHREAD_STACK_SIZE;
 	attr->sched_param.sched_priority = -1;
 	attr->cpu_gid                    = -1;
 	return 0;
