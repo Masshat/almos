@@ -30,7 +30,8 @@
 //////////////////////////////////////////////
 //       CPU RELATED CONFIGURATIONS         //
 //////////////////////////////////////////////
-#define CONFIG_CPU_TYPE                MIPS32
+#define CONFIG_CPU_BYTE_ORDER              __LITTLE_ENDIAN
+#define CONFIG_CPU_TYPE                    MIPS32
 #define CONFIG_CPU_IRQ_NR                  6
 #define CONFIG_CACHE_LINE_LENGTH           16
 #define CONFIG_CACHE_LINE_SIZE             64

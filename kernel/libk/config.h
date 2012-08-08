@@ -37,6 +37,10 @@
 //////////////////////////////////////////////
 //       CPU RELATED CONFIGURATIONS         //
 //////////////////////////////////////////////
+#define  MIPS32              0x0001
+#define  I386                0x0002
+#define  __LITTLE_ENDIAN     0x0001
+#define  __BIG_ENDIAN        0x0002
 #include <cpu-config.h>
 
 
