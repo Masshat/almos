@@ -101,7 +101,7 @@ static inline uint_t cpu_get_id(void)
 {
 	register uint_t proc_id;
 
-	asm volatile ("mfc0    %0,  $0" : "=r" (proc_id));
+	__asm__ volatile ("mfc0    %0,  $0" : "=r" (proc_id));
   
 	return proc_id;
 }
@@ -112,7 +112,7 @@ static inline uint_t cpu_get_stack(void)
 {
 	register uint_t sp;
   
-	asm volatile
+	__asm__ volatile
 		("or    %0,   $0,      $29            \n" : "=r" (sp));
   
 	return sp;
@@ -124,7 +124,7 @@ static inline uint_t cpu_set_stack(void* new_val)
 {
 	register uint_t sp;
   
-	asm volatile
+	__asm__ volatile
 		("or    %0,   $0,      $29            \n"
 		 "or    $29,  $0,      %1             \n"
 		 : "=r" (sp) : "r" (new_val));
@@ -138,7 +138,7 @@ static inline uint_t cpu_time_stamp(void)
 {
 	register uint_t cycles;
   
-	asm volatile 
+	__asm__ volatile 
 		(".set noreorder                      \n"
 		 "mfc0   %0,  $9                      \n"
 		 "nop                                 \n"
@@ -153,7 +153,7 @@ static inline struct thread_s* cpu_current_thread (void)
 {
 	register void * thread_ptr;
  
-	asm volatile ("mfc0    %0,  $4,  2"   : "=r" (thread_ptr));
+	__asm__ volatile ("mfc0    %0,  $4,  2"   : "=r" (thread_ptr));
 
 	return thread_ptr;
 }
@@ -161,7 +161,7 @@ static inline struct thread_s* cpu_current_thread (void)
 /* Set current thread pointer */
 static inline void cpu_set_current_thread (struct thread_s *thread)
 { 
-	asm volatile ("mtc0    %0,  $4,  2" : : "r" (thread));
+	__asm__ volatile ("mtc0    %0,  $4,  2" : : "r" (thread));
 }
 
 static inline bool_t cpu_isBad_addr(void *addr)
@@ -239,10 +239,11 @@ static inline void cpu_enable_single_irq(uint_t irq_num, uint_t *old)
 }
 
 /* Disable all IRQs and save old SR state */
+/* TODO: this function discard the CU3 access bit */
 static inline void cpu_disable_all_irq (uint_t *old)
 {
 	register unsigned int sr;
-
+	
 	__asm__ volatile 
 		(".set noat                          \n"
 		 ".set noreorder                     \n"
@@ -269,10 +270,11 @@ static inline void cpu_enable_all_irq (uint_t *old)
 		 ".set noreorder                     \n"
 		 "mfc0   $1,     $12                 \n"
 		 "nop                                \n"
-		 ".set reorder                       \n"
 		 "or     %0,     $0,     $1          \n"
-		 "or     $1,     $1,     0x1         \n"
+		 "ori    $1,     $1,     0x1         \n"
 		 "mtc0   $1,     $12                 \n"
+		 "nop                                \n"
+		 ".set reorder                       \n"
 		 ".set at                            \n"
 		 : "=r" (sr));
   
@@ -282,7 +284,17 @@ static inline void cpu_enable_all_irq (uint_t *old)
 /* Restore old SR state, saved by precedents functions */
 static inline void cpu_restore_irq(uint_t old)
 {
-	asm volatile ("mtc0    %0,  $12" : : "r" (old));
+	__asm__ volatile 
+		(".set noat                          \n"
+		 ".set noreorder                     \n"
+		 "mfc0    $1,    $12                 \n"
+		 "ori     $2,    $0,      0xFF       \n"
+		 "and     $2,    $2,      %0         \n"
+		 "or      $1,    $1,      $2         \n"
+		 "mtc0    $1,    $12                 \n"
+		 ".set reorder                       \n" 
+		 ".set at                            \n"
+		 : : "r" (old) : "$2");
 }
 
 
