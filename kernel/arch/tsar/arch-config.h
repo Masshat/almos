@@ -30,6 +30,7 @@
 //////////////////////////////////////////////
 //      ARCH RELATED CONFIGURATIONS         //
 //////////////////////////////////////////////
+#define CONFIG_ARCH_NAME         "tsar"
 #define CONFIG_USR_OFFSET        0x00004000
 #define CONFIG_USR_LIMIT         0x70000000
 #define CONFIG_KERNEL_OFFSET     0x80000000

@@ -31,7 +31,9 @@
 ////////////////////////////////////////////////////
 //             KERNEL REVISION INFO               //
 ////////////////////////////////////////////////////
-#define CONFIG_ALMOS_VERSION  "AlmOS-v2-2011"
+#define CONFIG_ALMOS_VERSION  \
+"Almos almix-v1.2 2011 "CONFIG_ARCH_NAME" "CONFIG_CPU_NAME" "CONFIG_CPU_ABI_NAME
+
 ////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////
@@ -95,6 +97,7 @@
 #define CONFIG_SHOW_SYSCALL_NR           no
 #define CONFIG_SHOW_PAGEFAULT            no
 #define CONFIG_SHOW_CPU_USAGE            no
+#define CONFIG_SHOW_FPU_MSG              yes
 #define CONFIG_SHOW_THREAD_DESTROY_MSG   yes
 #define CONFIG_SHOW_PPM_PGALLOC_MSG      no
 #define CONFIG_SHOW_VMM_LOOKUP_TM        no
