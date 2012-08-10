@@ -84,22 +84,25 @@ static error_t CpU_exception_handler(struct thread_s *this, reg_t cpu_id, reg_t 
 	{
 		cpu_fpu_context_save(&cpu->owner->uzone);
 
-		isr_dmsg(INFO, "FPU %d: ctx saved for pid %d, tid %d [%u]\n",
+#if CONFIG_SHOW_FPU_MSG
+		isr_dmsg(INFO, "[FPU] core %d, ctx saved for pid %d, tid %d [%u]\n",
 			 cpu->gid,
 			 cpu->owner->task->pid,
 			 cpu->owner->info.order,
 			 cpu_time_stamp());
 	}
-	
+#endif
+
 	cpu_fpu_context_restore(&this->uzone);
 	cpu->owner = this;
-	
-	isr_dmsg(INFO, "FPU %d: ctx restored for pid %d, tid %d [%u]\n",
+
+#if CONFIG_SHOW_FPU_MSG
+	isr_dmsg(INFO, "[FPU] core %d, ctx restored for pid %d, tid %d [%u]\n",
 		 cpu->gid,
 		 this->task->pid,
 		 this->info.order,
 		 cpu_time_stamp());
-       
+#endif
 	return VMM_ERESOLVED;
 }
 
