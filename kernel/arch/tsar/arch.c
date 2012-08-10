@@ -29,7 +29,7 @@
 #include <cluster.h>
 #include <soclib_xicu.h>
 #include <kdmsg.h>
-
+#include <arch.h>
 static void cpu_default_irq_handler(struct irq_action_s *action)
 {
 	unsigned int irq_num = (unsigned int) action->data;

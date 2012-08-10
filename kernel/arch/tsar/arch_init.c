@@ -428,6 +428,7 @@ void arch_xicu_set_mask(struct cluster_s *cluster, struct device_s *icu)
 	icu->op.icu.set_mask(icu, 0, XICU_HWI_TYPE, 2);
 	icu->op.icu.set_mask(icu, 0, XICU_HWI_TYPE, 3);
 
+#if ARCH_HAS_BARRIERS
 	if(cluster->cpu_nr > 1)
 	{
 		icu->op.icu.set_mask(icu, XICU_CNTR_MASK, XICU_CNTR_TYPE, 1);
@@ -441,6 +442,7 @@ void arch_xicu_set_mask(struct cluster_s *cluster, struct device_s *icu)
   
 	icu->op.icu.set_mask(icu, 0, XICU_CNTR_TYPE, 2);
 	icu->op.icu.set_mask(icu, 0, XICU_CNTR_TYPE, 3);
+#endif	/* ARCH_HAS_BARRIERS */
 
 	icu->op.icu.set_mask(icu, 1, XICU_PTI_TYPE, 0);
 	icu->op.icu.set_mask(icu, 2, XICU_PTI_TYPE, 1);
