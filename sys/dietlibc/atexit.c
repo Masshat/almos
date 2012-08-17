@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <dietstdio.h>
+#include "dietstdio.h"
 
 typedef void (*function)(void);
 

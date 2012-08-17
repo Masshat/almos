@@ -1,4 +1,3 @@
-#include <types.h>
 #include <string.h>
 
 /* gcc is broken and has a non-SUSv2 compliant internal prototype.

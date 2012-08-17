@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 
 static FILE __stderr = {
   .fd=2,

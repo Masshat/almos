@@ -12,7 +12,7 @@
  *
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 #include <errno.h>
 
 #ifndef _USE_WRITE

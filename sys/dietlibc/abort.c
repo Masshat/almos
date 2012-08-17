@@ -1,7 +1,6 @@
-#include <types.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <dietstdio.h>
+#include "dietstdio.h"
 //#include <pthread.h>
 
 void abort(void) {

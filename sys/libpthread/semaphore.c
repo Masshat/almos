@@ -21,9 +21,9 @@
  */
 
 #include <errno.h>
-#include <types.h>
+#include <sys/types.h>
 #include <semaphore.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 
 typedef enum

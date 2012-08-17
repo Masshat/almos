@@ -57,11 +57,11 @@
  */
 
 #include <stdio.h>
-#include "cryptlib.h"
-#include "lhash.h"
-#include "crypto.h"
-#include "buffer.h"
-#include "err.h"
+#include <openssl/cryptlib.h>
+#include <openssl/lhash.h>
+#include <openssl/crypto.h>
+#include <openssl/buffer.h>
+#include <openssl/err.h>
 
 static int print_bio(const char *str, size_t len, void *bp)
 	{

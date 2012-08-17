@@ -1,4 +1,3 @@
-#include <types.h>
 #include <string.h>
 
 size_t strspn(const char *s, const char *accept)

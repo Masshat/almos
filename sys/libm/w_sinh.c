@@ -15,7 +15,7 @@
  * wrapper sinh(x)
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 	double sinh(double x)		/* wrapper sinh */

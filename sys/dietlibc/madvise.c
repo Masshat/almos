@@ -20,10 +20,10 @@
 */
 
 #include <errno.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 #include <unistd.h>
-#include <mman.h>
+#include <sys/mman.h>
 
 int madvise(void *start, size_t length, int advice)
 {

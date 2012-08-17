@@ -72,12 +72,12 @@
 #include <ctype.h>
 #include <assert.h>
 #include <limits.h>
-#include "cryptlib.h"
+#include <openssl/cryptlib.h>
 #ifndef NO_SYS_TYPES_H
-#include "types.h"
+#include <sys/types.h>
 #endif
 //#include "bn.h"         /* To get BN_LLONG properly defined */
-#include "bio.h"
+#include <openssl/bio.h>
 
 #define BN_LONG		long
 

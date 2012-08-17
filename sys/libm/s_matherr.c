@@ -11,7 +11,7 @@
  * ====================================================
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 	int matherr(struct exception *x)

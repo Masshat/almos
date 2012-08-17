@@ -1,23 +1,14 @@
-# KERNEL REVESION
-#export ALMOS_KERNEL_REVISION=923
-
 # Target CPU
 export ALMOS_CPU=mipsel
 
-# Target Architecture Class
-export ALMOS_ARCH_CLASS=soclib
-
-# Target Architecture Subclass
-export ALMOS_ARCH="$ALMOS_ARCH_CLASS"-tsar
-
-# Generated Kernel Link Name (Simulator Required One)
-export ALMOS_KERNEL_NAME=kernel-soclib.bin
+# Target ARCH
+export ALMOS_ARCH=tsar
 
 # Project Top Directory
-export ALMOS_TOP=$HOME/almOS-v2/AlmOS-sys
+export ALMOS_TOP=$HOME/dev-land/almos/distrib/almos-$ALMOS_ARCH-$ALMOS_CPU/almos
 
 # Binutils Directory
-export CCTOOLS=/home/almaless/x-tools/dev/$ALMOS_CPU-unknown-elf
+export CCTOOLS=$HOME/dev-land/x-tools/dev/$ALMOS_CPU-unknown-elf
 
 # Plateform Simulators & Executabls 
 export PATH=$PATH:$CCTOOLS/bin

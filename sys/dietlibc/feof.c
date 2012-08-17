@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 
 int feof_unlocked(FILE*stream) {
   /* yuck!!! */

@@ -1,6 +1,5 @@
-#include <types.h>
 #include <unistd.h>
-#include <dietstdio.h>
+#include "dietstdio.h"
 #include <fcntl.h>
 
 extern int __stdio_atexit;

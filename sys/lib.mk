@@ -1,26 +1,41 @@
 #
 # lib.mk - Common rules to build libraries
 #
+
+TGTDIR=almos-$(ARCH)-$(CPU)/almos
+
+LIBDIR=$(DISTRIB)/$(TGTDIR)/lib
+INCDIR=$(DISTRIB)/$(TGTDIR)/include
+
 include $(SRCDIR)../../common.mk
+
 ifneq ($(SRCDIR), )
 
+CFLAGS = -W -Wall -Wextra -Wchar-subscripts -Werror \
+	 -Wno-switch -Wno-unused -Wredundant-decls  \
+	 -fno-strict-aliasing -fno-pic -static -O3  \
+	 -DUSR_LIB_COMPILER -D_ALMOS_ -DZ_PREFIX -DHAVE_GOMP \
+	 $(CPUCFLAGS) $(INCFLAGS) 
 
-CFLAGS=	-W -Wall -Wextra -Wchar-subscripts -Werror \
-	-Wno-switch -Wno-unused -Wredundant-decls \
-	-fno-strict-aliasing -fno-pic -static \
-	-DUSR_LIB_COMPILER -D_ALMOS_ -DZ_PREFIX \
-	$(CPUCFLAGS) $(INCFLAGS) 
-
-VPATH?=	$(SRCDIR)
-OBJS=	$(filter %.o, $(SRCS:.c=.o) $(SRCS:.S=.o))
-
+VPATH ?=$(SRCDIR)
+OBJS   =$(filter %.o, $(SRCS:.c=.o) $(SRCS:.S=.o))
 
 
-all: lib$(LIB).a
+all: checktgt lib$(LIB).a install
 
 lib$(LIB).a:: $(OBJS)
 	@rm -f $@
 	@$(AR) -r $@ $^
+
+install:lib$(LIB).a
+	@[ -d $(LIBDIR) ] || mkdir -p $(LIBDIR)
+	@[ -d $(INCDIR) ] || mkdir -p $(INCDIR)
+	cp -r $(SRCDIR)/include/* $(INCDIR)/.
+	cp $^ $(LIBDIR)/.
+
+checktgt:
+	@if [ -z $$DISTRIB ]; then echo "ERROR: Missing DISTRIB macro, no target directory has been specified"; \
+	exit 1; else exit 0; fi
 
 clean:
 	rm -f lib$(LIB).a $(OBJS)

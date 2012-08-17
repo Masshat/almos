@@ -17,7 +17,7 @@
  * ilogb(inf/NaN) = 0x7fffffff (no signal is raised)
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 static const double one  = 1.0;

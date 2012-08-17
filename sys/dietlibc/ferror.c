@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 
 int ferror_unlocked(FILE*stream) {
   return (stream->flags&ERRORINDICATOR);

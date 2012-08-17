@@ -15,7 +15,7 @@
  * wrapper of j1,y1 
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 	double j1(double x)		/* wrapper j1 */

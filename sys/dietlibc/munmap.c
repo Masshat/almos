@@ -20,8 +20,8 @@
 */
 
 #include <errno.h>
-#include <syscall.h>
-#include <mman.h>
+#include <sys/syscall.h>
+#include <sys/mman.h>
 #include <cpu-syscall.h>
 
 int munmap (void *__addr, size_t __len)

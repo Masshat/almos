@@ -16,7 +16,7 @@
  * wrapper pow(x,y) return x**y
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 
 #ifdef __STDC__

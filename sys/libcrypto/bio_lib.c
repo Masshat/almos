@@ -58,9 +58,9 @@
 
 #include <stdio.h>
 #include <errno.h>
-#include "crypto.h"
-#include "cryptlib.h"
-#include "bio.h"
+#include <openssl/crypto.h>
+#include <openssl/cryptlib.h>
+#include <openssl/bio.h>
 //#include <openssl/stack.h>
 
 BIO *BIO_new(BIO_METHOD *method)

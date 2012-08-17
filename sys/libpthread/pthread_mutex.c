@@ -21,11 +21,11 @@
  */
 
 #include <errno.h>
-#include <types.h>
+#include <sys/types.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 #include <assert.h>
 

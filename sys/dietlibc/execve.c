@@ -20,7 +20,7 @@
 */
 
 #include <errno.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 #include <pthread.h>
 #include <unistd.h>

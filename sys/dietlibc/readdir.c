@@ -20,8 +20,8 @@
 */
 
 #include <errno.h>
-#include <types.h>
-#include <syscall.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 #include <dirent.h>
 #include <string.h>

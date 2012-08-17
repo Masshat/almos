@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 
 static char __stdout_buf[BUFSIZE];
 static FILE __stdout = {

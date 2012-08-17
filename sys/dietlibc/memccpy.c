@@ -1,6 +1,6 @@
 #define _POSIX_SOURCE
 #define _XOPEN_SOURCE
-#include <types.h>
+#include <sys/types.h>
 #include <string.h>
 
 void *memccpy(void *dst, const void *src, int c, size_t count)

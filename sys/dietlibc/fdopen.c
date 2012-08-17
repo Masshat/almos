@@ -1,7 +1,6 @@
 #include <errno.h>
 #include "dietfeatures.h"
-#include <types.h>
-#include <dietstdio.h>
+#include "dietstdio.h"
 #include <unistd.h>
 
 FILE *fdopen_unlocked(int filedes, const char *mode) {

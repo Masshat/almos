@@ -15,7 +15,7 @@
  * wrapper hypot(x,y)
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 
 #ifdef __STDC__

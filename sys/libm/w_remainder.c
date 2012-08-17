@@ -15,7 +15,7 @@
  * wrapper remainder(x,p)
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 	double remainder(double x, double y)	/* wrapper remainder */

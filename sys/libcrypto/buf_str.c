@@ -54,8 +54,8 @@
  */
 
 #include <stdio.h>
-#include "cryptlib.h"
-#include "buffer.h"
+#include <openssl/cryptlib.h>
+#include <openssl/buffer.h>
 
 char *BUF_strdup(const char *str)
 	{

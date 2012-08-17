@@ -59,9 +59,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "cryptlib.h"
-#include "bio.h"
-#include "err.h"
+#include <openssl/cryptlib.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
 
 #define MS_CALLBACK
 #define MS_STATIC

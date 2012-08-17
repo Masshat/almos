@@ -1,6 +1,6 @@
 #define _POSIX_SOURCE
 #define _XOPEN_SOURCE
-#include <types.h>
+
 #include <string.h>
 #include "dietfeatures.h"
 

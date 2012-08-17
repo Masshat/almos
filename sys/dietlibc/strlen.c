@@ -1,5 +1,5 @@
 #include <endian.h>
-#include <dietfeatures.h>
+#include "dietfeatures.h"
 #include <string.h>
 #include <stdint.h>
 

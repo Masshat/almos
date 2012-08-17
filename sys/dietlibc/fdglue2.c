@@ -1,6 +1,6 @@
 #include <unistd.h>
 #include <fcntl.h>
-#include <stat.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include "dietstdio.h"
 #include <stdlib.h>

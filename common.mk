@@ -1,9 +1,9 @@
 
-ARCH?=	tsar
-OBJDIR=	obj.$(ARCH)
+ARCH ?= tsar
+OBJDIR=obj.$(ARCH)
 
-ifeq ($(ARCH), tsar)
-CPU= 	mipsel
+ifeq ($(ARCH),tsar)
+CPU=mipsel
 
 CPUCFLAGS=	-mips32 -EL -G0
 CPUCFLAGS+=	-mhard-float -fomit-frame-pointer
@@ -16,7 +16,7 @@ CCPREFIX= $(CPU)-unknown-elf-
 endif
 
 
-ifeq ($(ARCH), ibmpc)
+ifeq ($(ARCH),ibmpc)
 CPU=		i386
 CPUCFLAGS= 	-march=i386
 #CPUCFLAGS+=	-msoft-float -fomit-frame-pointer -Os

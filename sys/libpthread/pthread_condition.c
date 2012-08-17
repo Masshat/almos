@@ -20,11 +20,11 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include <types.h>
+#include <sys/types.h>
 #include <errno.h>
 #include <semaphore.h>
 #include <pthread.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 
 typedef enum

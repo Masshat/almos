@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include <dietwarning.h>
+#include "dietwarning.h"
 link_warning("setenv","setenv calls malloc.  Avoid it in small programs.");
 
 int setenv(const char *name, const char *value, int overwrite) {

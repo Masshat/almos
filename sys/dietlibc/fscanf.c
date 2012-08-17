@@ -1,5 +1,4 @@
 #include <stdarg.h>
-#include <types.h>
 #include <stdlib.h>
 #include "dietstdio.h"
 #include <unistd.h>

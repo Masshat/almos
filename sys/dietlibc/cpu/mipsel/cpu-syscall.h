@@ -22,7 +22,7 @@
 #ifndef _CPU_SYSCALL_H_
 #define _CPU_SYSCALL_H_
 
-#include <types.h>
+#include <sys/types.h>
 
 
 static inline void cpu_set_tls(void *ptr)

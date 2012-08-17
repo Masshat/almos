@@ -17,7 +17,7 @@
  */
 
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 
 #ifdef __STDC__

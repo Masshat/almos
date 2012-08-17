@@ -1,5 +1,4 @@
-#include <types.h>
-#include <dietstdio.h>
+#include "dietstdio.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>

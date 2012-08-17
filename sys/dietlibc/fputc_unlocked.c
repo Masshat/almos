@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 #include <unistd.h>
 #include <endian.h>
 

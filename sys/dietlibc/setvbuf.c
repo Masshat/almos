@@ -1,4 +1,3 @@
-#include <types.h>
 #include "dietstdio.h"
 #include <unistd.h>
 #include <stdlib.h>

@@ -19,7 +19,7 @@
   Copyright Ghassan Almaless <ghassan.almaless@gmail.com>
 */
 
-#include <types.h>
+#include <sys/types.h>
 #include <pthread.h>
 #include <assert.h>
 #include <unistd.h>

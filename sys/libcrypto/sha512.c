@@ -48,11 +48,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "crypto.h"
-#include "sha.h"
-#include "opensslv.h"
+#include <openssl/crypto.h>
+#include <openssl/sha.h>
+#include <openssl/opensslv.h>
 
-#include "cryptlib.h"
+#include <openssl/cryptlib.h>
 
 const char SHA512_version[]="SHA-512" OPENSSL_VERSION_PTEXT;
 

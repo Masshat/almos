@@ -34,13 +34,15 @@ SRCS=	abort.c abs.c assert.c atexit.c atoi.c atol.c atoll.c bsearch.c \
 	__v_printf.c vprintf.c __v_scanf.c vscanf.c vsnprintf.c vsprintf.c \
 	vsscanf.c wcrtomb.c wcscat.c wcschr.c wcscmp.c wcscpy.c wcslen.c \
 	wcsncat.c wcsncpy.c wcsrchr.c wcsstr.c wctomb.c wctype.c wcwidth.c \
-	wmemcmp.c wmemcpy.c wmemset.c write.c
+	wmemcmp.c wmemcpy.c wmemset.c write.c crt0.c
 
 SRCS+=	__cpu_jmp.S  cpu_syscall.c
 
-CRT0=	crt0.c
-
-INCFLAGS= 	-I$(SRCDIR) -I$(SRCDIR)cpu/$(CPU) -I$(SRCDIR)../libpthread \
-		-I$(SRCDIR)../libgomp -I$(SRCDIR)../libm
+INCFLAGS= 	-I$(SRCDIR)/include -I$(SRCDIR)cpu/$(CPU) \
+		-I$(SRCDIR)../libpthread/include -I$(SRCDIR)../libgomp/include \
+		-I$(SRCDIR)../libm/include
 
 include $(SRCDIR)../lib.mk
+
+all:
+	cp crt0.o $(LIBDIR)/.

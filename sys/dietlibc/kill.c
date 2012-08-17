@@ -22,7 +22,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 
 int kill(pid_t pid, int sig)

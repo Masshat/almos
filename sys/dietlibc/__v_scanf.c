@@ -1,6 +1,5 @@
 #include "dietfeatures.h"
 #include <stdarg.h>
-#include <types.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>

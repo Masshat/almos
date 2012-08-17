@@ -19,12 +19,16 @@ DIRS=	cpu/$(CPU)           	  \
 	libk                      \
 	ksh
 
+ifndef CPU
+$(error CPU variable is not defined)
+endif
+
 LFLAGS = -T$(OBJDIR)/kldscript $(CPULFLAGS)
 
 INCLUDES=	$(foreach DIR,$(DIRS),-I$(DIR)) -I$(OBJDIR)/kern/
 
-CFLAGS= 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD -Wundef
-CFLAGS+=	$(CPUCFLAGS)
+CFLAGS  = 	$(INCLUDES) -O2 -fno-builtin -static -Wall -Werror -MMD -Wundef
+CFLAGS +=	$(CPUCFLAGS)
 
 CFILES=	$(foreach DIR,$(DIRS),$(wildcard $(DIR)/*.c))
 SFILES=	$(wildcard cpu/$(CPU)/*.S)

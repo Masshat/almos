@@ -20,9 +20,9 @@
 */
 
 #include <errno.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
-#include <stat.h>
+#include <sys/stat.h>
 
 int __attribute__ ((noinline)) mkdir(const char *pathname, mode_t mode)
 {

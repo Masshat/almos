@@ -112,12 +112,12 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include "cryptlib.h"
-#include "lhash.h"
-#include "crypto.h"
-#include "buffer.h"
-#include "bio.h"
-#include "err.h"
+#include <openssl/cryptlib.h>
+#include <openssl/lhash.h>
+#include <openssl/crypto.h>
+#include <openssl/buffer.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
 
 static unsigned long get_error_values(int inc,int top,
 					const char **file,int *line,

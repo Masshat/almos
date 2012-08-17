@@ -62,7 +62,7 @@
 #undef  SHA_0
 #define SHA_1
 
-#include "opensslv.h"
+#include <openssl/opensslv.h>
 #ifdef OPENSSL_FIPS
 #include <openssl/fips.h>
 #endif
@@ -72,7 +72,7 @@ const char SHA1_version[]="SHA1" OPENSSL_VERSION_PTEXT;
 
 /* The implementation is in ../md32_common.h */
 
-#include "sha_locl.h"
+#include <openssl/sha_locl.h>
 
 #endif
 

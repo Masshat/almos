@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 
 int fileno_unlocked(FILE*stream) {
   return stream->fd;

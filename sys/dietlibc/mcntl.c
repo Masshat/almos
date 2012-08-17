@@ -20,9 +20,9 @@
 */
 
 #include <errno.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
-#include <mman.h>
+#include <sys/mman.h>
 
 int mcntl(int op, void *vaddr, size_t len, minfo_t *info)
 {

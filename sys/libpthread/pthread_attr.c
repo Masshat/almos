@@ -21,7 +21,6 @@
  */
 
 #include <errno.h>
-#include <types.h>
 #include <sched.h>
 #include <cpu-syscall.h>
 

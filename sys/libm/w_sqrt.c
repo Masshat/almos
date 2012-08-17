@@ -15,7 +15,7 @@
  * wrapper sqrt(x)
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 	double sqrt(double x)		/* wrapper sqrt */

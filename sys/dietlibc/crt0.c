@@ -20,10 +20,10 @@
 */
 
 #include <stdlib.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 #include <pthread.h>
-#include <omp-pv.h>
+#include <gomp/omp-pv.h>
 
 char **environ;
 
@@ -48,11 +48,6 @@ void __attribute__ ((section (".init"))) _start(char **argv, char **envp)
   unsigned int *bss_start = &__bss_start;
  
   CPU_SET_GP(bss_start);
-
-#if 0 
-  for(; bss_start < bss_end; bss_start ++)
-    *bss_start = 0;
-#endif
 
   environ = envp;
 

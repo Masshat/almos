@@ -1,5 +1,5 @@
 #include <wchar.h>
-#include <dietlocale.h>
+#include "dietlocale.h"
 
 wint_t btowc(int c) {
   if (c==EOF) return WEOF;

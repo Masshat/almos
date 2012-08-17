@@ -12,7 +12,7 @@
  *
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 /* cbrt(x)
  * Return cube root of x

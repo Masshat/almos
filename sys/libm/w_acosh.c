@@ -16,7 +16,7 @@
  * wrapper acosh(x)
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 	double acosh(double x)		/* wrapper acosh */

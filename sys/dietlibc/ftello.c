@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 #include <unistd.h>
 
 off_t ftello_unlocked(FILE *stream) {

@@ -115,8 +115,8 @@
  */
 
 #include <unistd.h>
-#include "cryptlib.h"
-#include "safestack.h"
+#include <openssl/cryptlib.h>
+#include <openssl/safestack.h>
 
 #define MS_FAR
 

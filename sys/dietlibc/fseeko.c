@@ -1,4 +1,4 @@
-#include <dietstdio.h>
+#include "dietstdio.h"
 #include <unistd.h>
 
 int fseeko_unlocked(FILE *stream, off_t offset, int whence) {

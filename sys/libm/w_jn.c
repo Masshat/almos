@@ -37,7 +37,7 @@
  *	
  */
 
-#include "fdlibm.h"
+#include <libm/fdlibm.h>
 
 #ifdef __STDC__
 	double jn(int n, double x)	/* wrapper jn */

@@ -1,11 +1,12 @@
-#include <dietfeatures.h>
+#include "dietfeatures.h"
+#include "dietstdio.h"
+#include "dietwarning.h"
+
 #include <stdarg.h>
-#include <types.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <dietstdio.h>
-#include <dietwarning.h>
+
 
 #define MAX_WIDTH 10*1024
 

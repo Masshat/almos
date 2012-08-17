@@ -1,5 +1,5 @@
 #define _GNU_SOURCE 23
-#include <types.h>
+#include <sys/types.h>
 #include <string.h>
 
 void *memmem(const void* haystack, size_t hl, const void* needle, size_t nl) {

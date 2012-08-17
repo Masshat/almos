@@ -16,6 +16,6 @@ SRCS+=	nglx.c
 endif
 
 INCFLAGS= -I$(SRCDIR)/include -I$(SRCDIR)../dietlibc -I$(SRCDIR)../libm
-	
+
 
 include $(SRCDIR)../lib.mk

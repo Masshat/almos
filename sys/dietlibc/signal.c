@@ -21,7 +21,7 @@
 
 #include <errno.h>
 #include <signal.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <cpu-syscall.h>
 
 void* signal(int sig, void (*func)(int))
