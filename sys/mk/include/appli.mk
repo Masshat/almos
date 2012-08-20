@@ -37,7 +37,7 @@ endif
 
 CFLAGS = -c -fomit-frame-pointer $(ADD-CFLAGS)
 LIBS =  -L$(DIR_LIB) -L$(GCC_LIB) $(CPU-LFLAGS) -T$(LDSCRIPT) $(OBJ) $(ADD-LIBS) \
-	-lc -lpthread -lgomp $(ADD-LIBS) -lc -lgcc --hash-style=sysv
+	-lc -lpthread -lgomp $(ADD-LIBS) -lpthread -lc -lgcc --hash-style=sysv
 
 #-------------------------------------------------------------------------------
 # Sources and targets files name
