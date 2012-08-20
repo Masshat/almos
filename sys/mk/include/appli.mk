@@ -37,7 +37,7 @@ endif
 
 CFLAGS = -c -fomit-frame-pointer $(ADD-CFLAGS)
 LIBS =  -L$(DIR_LIB) -L$(GCC_LIB) $(CPU-LFLAGS) -T$(LDSCRIPT) $(OBJ) $(ADD-LIBS) \
-	-lc -lpthread $(ADD-LIBS) -lc -lgcc --hash-style=sysv
+	-lc -lpthread -lgomp $(ADD-LIBS) -lc -lgcc --hash-style=sysv
 
 #-------------------------------------------------------------------------------
 # Sources and targets files name
@@ -52,7 +52,7 @@ endif
 
 ifeq ($(TARGET), tsar)
 RULE=almos
-CFLAGS += $(CPU-CFLAGS) -I$(DIR_INC) -O3 -D_ALMOS_
+CFLAGS += $(CPU-CFLAGS) -I$(DIR_INC) -D_ALMOS_
 endif
 
 ifeq ($(TARGET), linux)
@@ -63,7 +63,7 @@ endif
 
 ifeq ($(TARGET), ibmpc)
 RULE=almos
-CFLAGS += $(CPU-CFLAGS) -I$(DIR_INC) -O3 -D_ALMOS_
+CFLAGS += $(CPU-CFLAGS) -I$(DIR_INC) -D_ALMOS_
 endif
 
 ifndef RULE
