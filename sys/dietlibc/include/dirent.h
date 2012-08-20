@@ -23,6 +23,7 @@
 #define _DIRENT_H_
 
 #include <limits.h>
+#include <sys/types.h>
 
 #define _DIRENT_HAVE_D_TYPE
 //#define _DIRENT_HAVE_D_SIZE
@@ -33,12 +34,12 @@
 
 #define  DT_REG      0x000
 #define  DT_DIR      0x001
-#define  DT_FIFO     0x020
-#define  DT_SOCK     0x100
-#define  DT_LNK      0x200
-#define  DT_CHR      0x040
-#define  DT_BLK      0x080
-#define  DT_UNKNOWN  0x400
+#define  DT_FIFO     0x002
+#define  DT_CHR      0x004
+#define  DT_BLK      0x008
+#define  DT_SOCK     0x010
+#define  DT_LNK      0x020
+#define  DT_UNKNOWN  0x040
 
 struct dirent {
   ino_t          d_ino;       /* inode number if any */
