@@ -37,7 +37,7 @@ endif
 
 CFLAGS = -c -fomit-frame-pointer $(ADD-CFLAGS)
 LIBS =  -L$(DIR_LIB) -L$(GCC_LIB) $(CPU-LFLAGS) -T$(LDSCRIPT) $(OBJ) $(ADD-LIBS) \
-	-lc -lpthread -lgomp $(ADD-LIBS) -lpthread -lc -lgcc --hash-style=sysv
+	-lpthread -lgomp -lc $(ADD-LIBS) -lgomp -lpthread -lc -lgcc --hash-style=sysv
 
 #-------------------------------------------------------------------------------
 # Sources and targets files name
@@ -99,8 +99,8 @@ $(BIN) : $(OBJ)
 	@$(CC) $(CFLAGS) $< -o $@
 
 clean :
-	@echo '   [  RM  ]        *~ *.dump *.nm '"$(BOJ)"
-	@$(RM) $(OBJ) *~ *.dump *.nm 2> /dev/null||true 
+	@echo '   [  RM  ]        *.o *~ *.dump *.nm '"$(BOJ)"
+	@$(RM) $(OBJ) *.o *~ *.dump *.nm 2> /dev/null||true 
 
 realclean : clean
 	@echo '   [  RM  ]        '$(BIN) tty* vcitty* 
