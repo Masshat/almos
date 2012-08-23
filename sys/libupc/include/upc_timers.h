@@ -1,3 +1,5 @@
+/* http://threads.hpcl.gwu.edu/sites/npb-upc/wiki */
+
 #ifndef UPC_TIMERS_H
 #define UPC_TIMERS_H
 
@@ -24,6 +26,11 @@ int upc_timers_status[NB_TIMERS] = {0};
 #define TIMER_STOP(n) timer_stop(n)
 #endif
 
+#ifdef _ALMOS_
+static double UPC_Wtime(){
+	return (double) clock();
+}
+#else  /* _ALMOS_ */
 #ifdef USE_MONOTONIC_CLOCK
 #include <time.h>
 static double UPC_Wtime(){
@@ -38,17 +45,18 @@ static double UPC_Wtime(){
 
     return time;
 }
-#else
+#else  /* USE_MONOTONIC_CLOCK */
 static double UPC_Wtime(){
-  //struct timeval sampletime;
+    struct timeval sampletime;
     double time;
 
-    //gettimeofday( &sampletime, NULL);
-    time = clock(); //sampletime.tv_sec + (sampletime.tv_usec / 1000000.);
+    gettimeofday( &sampletime, NULL);
+    time = sampletime.tv_sec + (sampletime.tv_usec / 1000000.);
 
     return time;
 }
-#endif
+#endif /* USE_MONOTONIC_CLOCK */
+#endif /* _ALMOS_ */
 
 double elapsed_time(){
     return UPC_Wtime();
