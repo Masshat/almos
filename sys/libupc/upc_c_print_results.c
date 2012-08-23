@@ -1,3 +1,4 @@
+/* http://threads.hpcl.gwu.edu/sites/npb-upc/wiki */
 #include <stdlib.h>
 #include <stdio.h>
 
