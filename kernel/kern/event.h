@@ -25,7 +25,7 @@
 
 #include <types.h>
 #include <list.h>
-#include <lffb.h>
+#include <kfifo.h>
 
 struct cpu_s;
 
@@ -160,8 +160,7 @@ struct event_db_s
 	union
 	{
 		struct event_list_s list;
-		struct lffb_s lffb;
-		cacheline_t padding;
+		struct kfifo_s kfifo;
 	};
 };
 

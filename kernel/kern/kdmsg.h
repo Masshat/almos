@@ -208,9 +208,9 @@ int __arch_boot_dmsg (const char *fmt, ...);
 #define dqdt_dmsg(args...)
 #endif
 
-#if CONFIG_LFFB_DEBUG
+#if CONFIG_KFIFO_DEBUG
 #define lffb_dmsg(level, args...)		\
-	dmsg(level, CONFIG_LFFB_DEBUG, args)
+	dmsg(level, CONFIG_KFIFO_DEBUG, args)
 #else
 #define lffb_dmsg(args...)
 #endif

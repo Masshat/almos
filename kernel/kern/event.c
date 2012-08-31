@@ -52,7 +52,7 @@ void event_listner_destroy(struct event_listner_s *el)
 error_t event_listner_init(struct event_listner_s *el, uint_t type)
 {
 	error_t err;
-	register uint_t i;
+	register uint_t i,j;
   
 	el->type = type;
 	el->flags = 0;
@@ -70,18 +70,18 @@ error_t event_listner_init(struct event_listner_s *el, uint_t type)
 		return 0;
 	}
 
-	for(i=0; i < E_PRIO_NR; i++)
+	for(i = 0; i < E_PRIO_NR; i++)
 	{
-		err = lffb_init(&el->tbl[i].lffb, CONFIG_REL_LFFB_SIZE, LFFB_MW);
+		err = kfifo_init(&el->tbl[i].kfifo, CONFIG_REL_KFIFO_SIZE, KFIFO_MW);
     
-		if(err) goto eli_lffb_err;
+		if(err) goto fail_kfifo;
 	}
 
 	return 0;
 
-eli_lffb_err:
-	if(i != 0)
-		lffb_destroy(&el->tbl[i].lffb);
+fail_kfifo:
+	for(j = 0; j < i; j++)
+		kfifo_destroy(&el->tbl[j].kfifo);
 
 	return err;
 }
@@ -177,7 +177,7 @@ static void remote_event_send(struct event_s *event, struct event_listner_s *el)
 	tm_stamp = cpu_time_stamp();
 	prio     = event_get_priority(event);
 
-	while((retry = lffb_put(&el->tbl[prio].lffb, event)) != 0)
+	while((retry = kfifo_put(&el->tbl[prio].kfifo, event)) != 0)
 	{
 		retry = re_send_backoff(event, el, tm_stamp);
     
@@ -288,6 +288,7 @@ static void remote_event_listner_notify(struct event_listner_s *el)
 	struct event_listner_s *local_el;
 	struct event_s *event;
 	event_prio_t current_prio;
+	error_t err;
 	uint_t irq_state;
 	uint_t count;
   
@@ -304,7 +305,7 @@ static void remote_event_listner_notify(struct event_listner_s *el)
 
 		for(current_prio = E_CLK; current_prio < E_PRIO_NR; current_prio++, count++)
 		{
-			while((event = lffb_get(&el->tbl[current_prio].lffb)) != NULL)
+			while((err = kfifo_get(&el->tbl[current_prio].kfifo, (void**)&event)) == 0)
 				local_event_send(event, local_el, false);
 		}
 

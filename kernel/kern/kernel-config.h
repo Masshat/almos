@@ -39,7 +39,6 @@
 ////////////////////////////////////////////////////
 //        KERNEL SUBSYSTEMS CONFIGURATIONS        //
 ////////////////////////////////////////////////////
-#define CONFIG_BOOT_USE_DMA              yes
 #define CONFIG_FIFO_SUBSYSTEM            no
 #define CONFIG_ROOTFS_IS_EXT2            no
 #define CONFIG_ROOTFS_IS_VFAT            yes
@@ -72,7 +71,7 @@
 #define CONFIG_DQDT_ROOTMGR_PERIOD       3
 #define CONFIG_CPU_BALANCING_PERIOD      4
 #define CONFIG_CLUSTER_KEYS_NR           8
-#define CONFIG_REL_LFFB_SIZE             32
+#define CONFIG_REL_KFIFO_SIZE            32
 #define CONFIG_VFS_NODES_PER_CLUSTER     40
 #define CONFIG_SCHED_THREADS_NR          32
 #define CONFIG_BARRIER_WQDB_NR           4
@@ -109,7 +108,7 @@
 #define CONFIG_SHOW_EPC_CPU0             no
 #define CONFIG_CPU_TRACE                 no
 #define CONFIG_DQDT_DEBUG                no
-#define CONFIG_LFFB_DEBUG                no
+#define CONFIG_KFIFO_DEBUG               no
 #define CONFIG_KHM_DEBUG                 no
 #define CONFIG_KCM_DEBUG                 no
 #define CONFIG_KMEM_DEBUG                no
