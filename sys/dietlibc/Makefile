@@ -34,7 +34,7 @@ SRCS=	abort.c abs.c assert.c atexit.c atoi.c atol.c atoll.c bsearch.c \
 	__v_printf.c vprintf.c __v_scanf.c vscanf.c vsnprintf.c vsprintf.c \
 	vsscanf.c wcrtomb.c wcscat.c wcschr.c wcscmp.c wcscpy.c wcslen.c \
 	wcsncat.c wcsncpy.c wcsrchr.c wcsstr.c wctomb.c wctype.c wcwidth.c \
-	wmemcmp.c wmemcpy.c wmemset.c write.c crt0.c
+	wmemcmp.c wmemcpy.c wmemset.c write.c crt0.c rewind.c snprintf.c
 
 SRCS+=	__cpu_jmp.S  cpu_syscall.c
 
