@@ -211,7 +211,9 @@ static error_t cpu_sysfs_read_op(sysfs_entry_t *entry, sysfs_request_t *rq, uint
 	k_runnable = cpu->scheduler.k_runnable;
 	th_nr      = cpu->scheduler.total_nr;
   
-	sprintk((char*)rq->buffer, "%s\n\tUsage %d %%\n\tTimer-IRQs %d\n\tDev-IRQs %d\n\tScheduler\n\t\tRunnable %d [k:%d u:%d]\n\t\tTotal %d [k:%d u:%d]\n",
+	sprintk((char*)rq->buffer, 
+		"%s\n\tUsage %d %%\n\tTimer-IRQs %d\n\tDev-IRQs %d\n"
+		"\tScheduler\n\t\tRunnable %d [k:%d u:%d]\n\t\tTotal %d [k:%d u:%d]\n",
 		cpu->name,
 		(cpu->usage >= 100) ? 100 : cpu->usage,
 		cpu_get_ticks(cpu),
