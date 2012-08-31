@@ -15,7 +15,8 @@ ifdef TINYGL_USE_NANOX
 SRCS+=	nglx.c
 endif
 
-INCFLAGS= -I$(SRCDIR)/include -I$(SRCDIR)../dietlibc -I$(SRCDIR)../libm
+INCFLAGS= -I$(SRCDIR)/include -I$(SRCDIR)../dietlibc \
+	  -I$(SRCDIR)../dietlibc/include -I$(SRCDIR)../libm/include
 
 
 include $(SRCDIR)../lib.mk
