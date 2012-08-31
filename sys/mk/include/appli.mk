@@ -28,7 +28,7 @@ LDSCRIPT=uldscript
 endif
 
 ifeq ($(CPU), mipsel)
-CPU-CFLAGS = -G0
+CPU-CFLAGS = -mips32 -EL -G0
 endif
 
 ifeq ($(CPU), i386)
