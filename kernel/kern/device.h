@@ -64,7 +64,7 @@ struct device_s
 	char name[DEV_MAX_NAME];	  /*! device name */
 };
 
-/* TODO: put this devices into a dedicated device tabels */
+/* TODO: put this devices into a dedicated device tables */
 extern struct device_s *__sys_blk;
 extern struct device_s *__sys_dma;
 extern struct device_s *ttys_tbl[];
