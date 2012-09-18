@@ -52,6 +52,7 @@
 #define CONFIG_TASK_FILE_MAX_NR          128
 #define CONFIG_TASK_CHILDS_MAX_NR        32
 #define CONFIG_TASK_ARGS_PAGES_MAX_NR    32
+#define CONFIG_TASK_HEAP_MIN_SIZE        0x00010000
 #define CONFIG_TASK_HEAP_MAX_SIZE        0x10000000
 
 ////////////////////////////////////////////////////
@@ -59,6 +60,7 @@
 ////////////////////////////////////////////////////
 #define CONFIG_DEV_VERSION               yes
 #define CONFIG_KERNEL_REPLICATE          yes
+#define CONFIG_FORK_LOCAL_ALLOC          no
 #define CONFIG_REMOTE_FORK               yes
 #define CONFIG_REMOTE_THREAD_CREATE      yes
 #define CONFIG_SHOW_BOOT_BANNER          yes
@@ -93,7 +95,8 @@
 #define CONFIG_XICU_USR_ACCESS           no
 #define CONFIG_SPINLOCK_CHECK            no
 #define CONFIG_SPINLOCK_TIMEOUT          100
-#define CONFIG_SHOW_SYSCALL_NR           no
+#define CONFIG_ENABEL_TASK_TRACE         no
+#define CONFIG_ENABEL_THREAD_TRACE       no
 #define CONFIG_SHOW_PAGEFAULT            no
 #define CONFIG_SHOW_CPU_USAGE            no
 #define CONFIG_SHOW_FPU_MSG              yes
@@ -105,6 +108,7 @@
 #define CONFIG_SHOW_MIGRATE_MSG          no
 #define CONFIG_SHOW_REMOTE_PGALLOC       no
 #define CONFIG_SHOW_LOCAL_EVENTS         no
+#define CONFIG_SCHED_SHOW_NOTIFICATIONS  no
 #define CONFIG_SHOW_EPC_CPU0             no
 #define CONFIG_CPU_TRACE                 no
 #define CONFIG_DQDT_DEBUG                no

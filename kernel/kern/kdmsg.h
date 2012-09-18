@@ -101,7 +101,7 @@ int __arch_boot_dmsg (const char *fmt, ...);
 	} while(0)
 
 #if (ASSERT <= LEVEL)
-#define assert(expr) (void) ((expr) ? 0 : __perror(0,"Assert "#expr" faild, line %d, file %s [%u]\n", __LINE__,__FILE__, cpu_time_stamp()))
+#define assert(expr) (void) ((expr) ? 0 : __perror(0,"cpu %d: Assert "#expr" faild, line %d, file %s [%u]\n", cpu_get_id(),__LINE__,__FILE__, cpu_time_stamp()))
 #define bassert(expr) (void) ((expr) ? 0 : __arch_boot_dmsg("Assert "#expr" faild, line %d, file %s [%u]\n", __LINE__,__FILE__, cpu_time_stamp()))
 #define assert2(_th,expr) (void) ((expr) ? 0 : __perror(0,"[ %x ] Assert "#expr" faild, line %d, file %s, Thread [%x] on CPU [%d], Current Thread [%x] on CPU [%d], [%u]\n", cpu_time_stamp(), __LINE__,__FILE__, _th, thread_current_cpu((_th))->gid, current_thread, cpu_get_id(), cpu_time_stamp()))
 #else
@@ -161,12 +161,6 @@ int __arch_boot_dmsg (const char *fmt, ...);
 	dmsg(level, CONFIG_MAPPER_DEBUG, args)
 #else
 #define mapper_dmsg(args...)
-#endif
-
-#if CONFIG_SHOW_SYSCALL_NR
-#define syscall_dmsg(args...) printk(DEBUG, args)
-#else
-#define syscall_dmsg(MSG, ...)
 #endif
 
 #if CONFIG_KMEM_DEBUG

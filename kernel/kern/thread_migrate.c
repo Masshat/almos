@@ -129,10 +129,10 @@ error_t thread_migrate(struct thread_s *this)
 
 	cpu_disable_all_irq(&state);
 
-	if(cpu->owner == this)
+	if(cpu->fpu_owner == this)
 	{
 		cpu_fpu_context_save(&this->uzone);
-		cpu->owner = NULL;
+		cpu->fpu_owner = NULL;
 		cpu_fpu_disable();
 	}
 
@@ -198,7 +198,8 @@ error_t do_migrate(th_migrate_info_t *info)
 	spinlock_lock(&task->th_lock);
 	spinlock_lock(&victim->lock);
 
-	memcpy(new, victim, PMM_PAGE_SIZE);
+	/* TODO: inform low layers about this event */
+	page_copy(page, victim->info.page);
 
 	thread_set_origin_cpu(new,info->ocpu);
 	thread_set_current_cpu(new,cpu);

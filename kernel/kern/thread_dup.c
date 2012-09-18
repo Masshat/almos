@@ -45,13 +45,15 @@ error_t thread_dup(struct task_s *task,
 	register uint_t sched_policy;
 	register uint_t cpu_lid;
 	register uint_t cid;
+	struct page_s *page;
 
 	sched_policy = sched_getpolicy(src);
 	cpu_lid      = dst_cpu->lid;
 	cid          = dst_clstr->id;
+	page         = dst->info.page;
 
 	// Duplicate
-	memcpy(dst, src, PMM_PAGE_SIZE);
+	page_copy(page, src->info.page);
 
 	// Initialize dst thread
 	spinlock_init(&dst->lock, "Thread");
@@ -82,7 +84,8 @@ error_t thread_dup(struct task_s *task,
 	dst->info.attr.tid                   = (uint_t) dst;
 	dst->info.attr.pid                   = task->pid;
 	dst->info.kstack_addr                = (uint_t*)dst;
+	dst->info.page                       = page;
 	dst->signature                       = THREAD_ID;
-
+	
 	return 0;
 }

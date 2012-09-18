@@ -31,6 +31,10 @@
 #error arch.h connot be included directly, use system.h instead
 #endif
 
+/* Thread structure size */
+#undef  ARCH_THREAD_PAGE_ORDER
+#define ARCH_THREAD_PAGE_ORDER CONFIG_THREAD_PAGE_ORDER
+
 /* CPUs/CLUSTERs Numbers */
 #define CACHE_LINE_SIZE      CONFIG_CACHE_LINE_SIZE
 

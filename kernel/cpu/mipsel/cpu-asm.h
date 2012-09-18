@@ -101,7 +101,7 @@ static inline uint_t cpu_get_id(void)
 {
 	register uint_t proc_id;
 
-	__asm__ volatile ("mfc0    %0,  $0" : "=r" (proc_id));
+	__asm__ volatile ("mfc0    %0,  $0" : "=&r" (proc_id));
   
 	return proc_id;
 }
@@ -113,7 +113,7 @@ static inline uint_t cpu_get_stack(void)
 	register uint_t sp;
   
 	__asm__ volatile
-		("or    %0,   $0,      $29            \n" : "=r" (sp));
+		("or    %0,   $0,      $29            \n" : "=&r" (sp));
   
 	return sp;
 }
@@ -127,7 +127,7 @@ static inline uint_t cpu_set_stack(void* new_val)
 	__asm__ volatile
 		("or    %0,   $0,      $29            \n"
 		 "or    $29,  $0,      %1             \n"
-		 : "=r" (sp) : "r" (new_val));
+		 : "=&r" (sp) : "r" (new_val));
   
 	return sp;
 }
@@ -143,7 +143,7 @@ static inline uint_t cpu_time_stamp(void)
 		 "mfc0   %0,  $9                      \n"
 		 "nop                                 \n"
 		 ".set reorder                        \n"
-		 : "=r" (cycles));
+		 : "=&r" (cycles));
   
 	return cycles;
 }
@@ -153,7 +153,7 @@ static inline struct thread_s* cpu_current_thread (void)
 {
 	register void * thread_ptr;
  
-	__asm__ volatile ("mfc0    %0,  $4,  2"   : "=r" (thread_ptr));
+	__asm__ volatile ("mfc0    %0,  $4,  2"   : "=&r" (thread_ptr));
 
 	return thread_ptr;
 }
@@ -212,7 +212,7 @@ static inline void cpu_disable_single_irq (uint_t irq_num, uint_t *old)
 		 "mtc0   $1,     $12                  \n"
 		 "or     %0,     $0,     $2           \n"
 		 ".set at                             \n"
-		 : "=r" (sr) : "r" (irq_num) : "$2", "$3");
+		 : "=&r" (sr) : "r" (irq_num) : "$2", "$3");
 
 	if(old) *old = sr;
 }
@@ -233,7 +233,7 @@ static inline void cpu_enable_single_irq(uint_t irq_num, uint_t *old)
 		 "mtc0   $3,     $12                 \n"
 		 "or     %0,     $0,     $2          \n"
 		 ".set at                            \n"
-		 : "=r" (sr) : "r" (irq_num) : "$2","$3");
+		 : "=&r" (sr) : "r" (irq_num) : "$2","$3");
   
 	if(old) *old = sr;
 }
@@ -255,7 +255,7 @@ static inline void cpu_disable_all_irq (uint_t *old)
 		 "sll    $1,     $1,     1           \n"
 		 "mtc0   $1,     $12                 \n"
 		 ".set at                            \n"
-		 : "=r" (sr));
+		 : "=&r" (sr));
 
 	if(old) *old = sr;
 }
@@ -276,7 +276,7 @@ static inline void cpu_enable_all_irq (uint_t *old)
 		 "nop                                \n"
 		 ".set reorder                       \n"
 		 ".set at                            \n"
-		 : "=r" (sr));
+		 : "=&r" (sr));
   
 	if(old) *old = sr;
 }
@@ -329,7 +329,7 @@ static inline bool_t cpu_spinlock_trylock (void *lock)
 		 "sync                               \n"
 		 "3:                                 \n"
 		 ".set reorder                       \n"
-		 : "=r" (state) : "r" (lock) : "$2","$3");
+		 : "=&r" (state) : "r" (lock) : "$2","$3");
   
 	return state;
 }
@@ -431,7 +431,7 @@ static inline bool_t cpu_atomic_cas(void *ptr, sint_t old, sint_t new)
 		 ".set reorder                       \n"
 		 "1:                                 \n"
 		 "or      %0,      $7,       $0      \n"
-		 : "=r" (isAtomic): "r" (ptr), "r" (old) , "r" (new) : "$3", "$7", "$8");
+		 : "=&r" (isAtomic): "r" (ptr), "r" (old) , "r" (new) : "$3", "$7", "$8");
 
 	return isAtomic;
 }
@@ -456,7 +456,7 @@ static inline uint_t cpu_load_word(void *ptr)
   
 	__asm__ volatile
 		("lw      %0,      0(%1)             \n"
-		 : "=r" (val) : "r"(ptr));
+		 : "=&r" (val) : "r"(ptr));
 
 	return val;
 }
@@ -479,7 +479,7 @@ static inline sint_t cpu_atomic_get(void *ptr)
 		("sync                               \n"
 		 "or      $2,      $0,       %1      \n"
 		 "lw      %0,      0($2)             \n"
-		 :"=r"(val) : "r" (ptr) : "$2");
+		 :"=&r"(val) : "r" (ptr) : "$2");
 
 	return val;
 }
@@ -492,7 +492,7 @@ static inline uint_t cpu_uncached_read(void *ptr)
 
 	__asm__ volatile
 		("ll    %0,     (%1)                \n"
-		 : "=r"(val) : "r" (ptr)
+		 : "=&r"(val) : "r" (ptr)
 			);
 
 	return val;
@@ -527,7 +527,7 @@ static inline void cpu_wbflush(void)
 		register reg_t __val;					\
 		__asm__ volatile					\
 			("mfc2     %0,     $%1,        %2      \n"	\
-			 : "=r"(__val) : "i"(reg), "i"(select));	\
+			 : "=&r"(__val) : "i"(reg), "i"(select));	\
 		__val;							\
 	})
 

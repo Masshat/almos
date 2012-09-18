@@ -94,6 +94,10 @@ struct task_s
 
 	/* Signal management */
 	struct sig_mgr_s sig_mgr;
+
+#if CONFIG_FORK_LOCAL_ALLOC
+	struct cluster_s *current_clstr;
+#endif
 };
 
 /* Task-Management Operations */

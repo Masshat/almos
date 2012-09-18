@@ -37,7 +37,8 @@ struct event_s;
 struct boot_info_s;
 struct dqdt_cluster_s;
 
-/** Provided atructures, functions and macros */
+/** Provided structures, functions and macros */
+#define ARCH_THREAD_PAGE_ORDER	
 struct arch_cpu_s;
 struct arch_cluster_s;
 

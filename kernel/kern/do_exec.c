@@ -50,7 +50,7 @@
 #define STDOUT      1
 #define STDERR      2
 
-#define TASK_DEFAULT_HEAP_SIZE  CONFIG_TASK_HEAP_MAX_SIZE
+#define TASK_DEFAULT_HEAP_SIZE  CONFIG_TASK_HEAP_MIN_SIZE
 
 #define INIT_PATH   "/bin/init"
 
@@ -79,8 +79,8 @@ error_t args_len(char **vect, uint_t pages_max, uint_t *pages_nr, uint_t *entrie
     
 		if((err=cpu_uspace_strlen(vect[cntr], &len)))
 		{
-			printk(INFO, "INFO: %s: EFAULT Has been Catched, strlen &vect[%x] = %x\n",
-			       __FUNCTION__, &vect[cntr], vect[cntr]);
+			printk(INFO, "INFO: %s: EFAULT Has been Catched, cntr %d, strlen &vect[%x] = %x\n",
+			       __FUNCTION__, cntr, &vect[cntr], vect[cntr]);
 			return err;
 		}
     
@@ -124,6 +124,7 @@ error_t compute_args(struct task_s *task,
 	req.size  = 0;
 	req.flags = AF_USER | AF_ZERO | AF_REMOTE;
 	req.ptr   = task->cluster;
+
 	pages_nr  = 0;
 	count     = 0;
 	cntr      = 0;
@@ -339,7 +340,7 @@ error_t do_exec(struct task_s *task,
 	err = (error_t) vmm_mmap(task, NULL, 
 				 (void*)task->vmm.heap_start, 
 				 TASK_DEFAULT_HEAP_SIZE, VM_REG_RD | VM_REG_WR,
-				 VM_REG_PRIVATE | VM_REG_ANON | VM_REG_FIXED, 0);
+				 VM_REG_PRIVATE | VM_REG_ANON | VM_REG_HEAP | VM_REG_FIXED, 0);
 
 	if(err == -1)
 	{
@@ -475,6 +476,10 @@ error_t task_load_init(struct task_s *task)
 		err = sched_register(main_thread);
 		assert(err == 0); 		/* FIXME: ask DQDT for another core */
 		main_thread->state = S_CREATE;
+
+#if CONFIG_ENABEL_TASK_TRACE
+		main_thread->info.isTraced = true;
+#endif
 		tm_create_compute(main_thread);
 		listner = sched_get_listner(main_thread, SCHED_OP_ADD_CREATED);
 		event = sched_event_make(main_thread, SCHED_OP_ADD_CREATED);

@@ -32,6 +32,9 @@
 #include <dqdt.h>
 #include <task.h>
 
+#if (CONFIG_FORK_LOCAL_ALLOC && CONFIG_REMOTE_FORK)
+#error FORK_LOCAL_ALLOC and REMOTE_FORK are mutally exclusive
+#endif
 
 typedef struct 
 {
@@ -44,6 +47,11 @@ typedef struct
 	struct thread_s  *child_thread;
 	struct task_s    *child_task;
 	bool_t isPinned;
+
+#if CONFIG_FORK_LOCAL_ALLOC
+	struct cluster_s *current_clstr;
+#endif
+
 }fork_info_t;
 
 static error_t do_fork(fork_info_t *info);
@@ -132,6 +140,10 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	this_thread = current_thread;
 	this_task   = this_thread->task;
   
+#if CONFIG_FORK_LOCAL_ALLOC
+	info.current_clstr = current_cluster;
+#endif
+
 	err = atomic_add(&this_task->childs_nr, 1);
   
 	if(err >= CONFIG_TASK_CHILDS_MAX_NR)
@@ -152,7 +164,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	cpu_disable_all_irq(&irq_state);
 	cpu_restore_irq(irq_state);
   
-	if(current_cpu->owner == this_thread)
+	if(current_cpu->fpu_owner == this_thread)
 	{
 		fork_dmsg(1, "%s: going to save FPU\n", __FUNCTION__);
 		cpu_fpu_context_save(&this_thread->uzone);
@@ -180,7 +192,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 			task_default_placement(&attr);
 	}
 
-	printk(INFO, "%s: new task will be placed on cluster %d, cpu %d [%d]\n", 
+	printk(INFO, "INFO: %s: new task will be placed on cluster %d, cpu %d [%d]\n", 
 	       __FUNCTION__,
 	       attr.cluster->id,
 	       attr.cpu->lid,
@@ -243,7 +255,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 
 	tm_end = cpu_time_stamp();
     
-	printk(INFO, "%s: cpu %d, pid %d, done [s:%u, bR:%u, aR:%u, e:%u, t:%u]\n", 
+	printk(INFO, "INFO: %s: cpu %d, pid %d, done [s:%u, bR:%u, aR:%u, e:%u, t:%u]\n", 
 	       __FUNCTION__,
 	       cpu_get_id(),
 	       this_task->pid,
@@ -278,10 +290,18 @@ error_t do_fork(fork_info_t *info)
 		  cpu_time_stamp());
   
 	attr.cluster = info->cpu->cluster;
+	
+#if CONFIG_FORK_LOCAL_ALLOC
+	attr.cluster = info->current_clstr;
+#endif
 	attr.cpu = info->cpu;
 
 	err = task_create(&child_task, &attr, CPU_USR_MODE);
   
+#if CONFIG_FORK_LOCAL_ALLOC
+	attr.cluster = info->cpu->cluster;
+#endif
+
 	if(err) goto fail_task;
 
 	fork_dmsg(1, "INFO: %s: cpu %d, ppid %d, task @0x%x, pid %d, task @0x%x [%d]\n", 
@@ -294,10 +314,13 @@ error_t do_fork(fork_info_t *info)
 		  cpu_time_stamp());
   
 	req.type  = KMEM_PAGE;
-	req.size  = 0;
+	req.size  = ARCH_THREAD_PAGE_ORDER;
 	req.flags = AF_KERNEL | AF_REMOTE;
 	req.ptr   = info->cpu->cluster;
 
+#if CONFIG_FORK_LOCAL_ALLOC
+	req.ptr   = info->current_clstr;
+#endif
 	page = kmem_alloc(&req);
 
 	if(page == NULL) 
@@ -321,6 +344,10 @@ error_t do_fork(fork_info_t *info)
 		  __FUNCTION__, 
 		  cpu_time_stamp());
 
+#if CONFIG_FORK_LOCAL_ALLOC
+	child_task->current_clstr = info->current_clstr;
+#endif
+
 	err = vmm_dup(&child_task->vmm, &info->this_task->vmm);
 
 	if(err) goto fail_vmm_dup;
@@ -330,6 +357,9 @@ error_t do_fork(fork_info_t *info)
 		  cpu_time_stamp());
 
 	child_thread = (struct thread_s*) ppm_page2addr(page);
+
+	/* Set the child page before calling thread_dup */
+	child_thread->info.page = page;
 
 	err = thread_dup(child_task, 
 			 child_thread, 
@@ -361,7 +391,6 @@ error_t do_fork(fork_info_t *info)
 	bitmap_clear(child_task->bitmap, order);
 	child_thread->info.attr.key = order;
 	child_thread->info.order = order;
-	child_thread->info.page = page;
 	child_task->next_order = order + 1;
 	child_task->max_order = order;
 	child_task->uid = info->this_task->uid;

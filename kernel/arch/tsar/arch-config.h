@@ -30,12 +30,13 @@
 //////////////////////////////////////////////
 //      ARCH RELATED CONFIGURATIONS         //
 //////////////////////////////////////////////
-#define CONFIG_ARCH_NAME         "tsar"
-#define CONFIG_USR_OFFSET        0x00004000
-#define CONFIG_USR_LIMIT         0x70000000
-#define CONFIG_KERNEL_OFFSET     0x80000000
-#define CONFIG_KERNEL_LIMIT      0xFFFFF000
-#define CONFIG_DEVREGION_OFFSET  0xFF800000
+#define CONFIG_ARCH_NAME             "tsar"
+#define CONFIG_THREAD_PAGE_ORDER     0x0
+#define CONFIG_USR_OFFSET            0x00004000
+#define CONFIG_USR_LIMIT             0x70000000
+#define CONFIG_KERNEL_OFFSET         0x80000000
+#define CONFIG_KERNEL_LIMIT          0xFFFFF000
+#define CONFIG_DEVREGION_OFFSET      0xFF800000
 #define CONFIG_PPN_BITS_NR                20
 #define CONFIG_TTY_ECHO_MODE              yes
 #define CONFIG_TTY_MAX_DEV_NR             32

@@ -93,15 +93,18 @@ inline void cpu_context_dup_finlize(struct cpu_context_s *dst, struct cpu_contex
 {
 	register struct thread_s *thread;
 	register reg_t stack_addr;
+	register uint_t mask;
+
+	mask = PMM_PAGE_MASK | (PMM_PAGE_MASK << ARCH_THREAD_PAGE_ORDER);
 
 	memcpy(dst, src, sizeof(*dst));
 	thread = (struct thread_s*)dst->tid;
 
 	stack_addr  = cpu_context_get_stackaddr(src);
-	stack_addr &= PMM_PAGE_MASK;
-	stack_addr |= ((reg_t)dst->tid & ~(PMM_PAGE_MASK));
+	stack_addr &= mask;
+	stack_addr |= ((reg_t)dst->tid & ~mask);
 	cpu_context_set_stackaddr(dst, stack_addr);
 
-	stack_addr = (dst->tid | PMM_PAGE_MASK) & (~ 0x7);
+	stack_addr = (dst->tid | mask) & (~ 0x7);
 	thread->uzone.regs[KSP] = stack_addr;
 }

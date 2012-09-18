@@ -225,7 +225,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	err = cpu_uspace_copy(tid, &order, sizeof(pthread_t));
   
 	if(err) goto fail_tid;
-  
+
 	sched_event = sched_event_make(info.new_thread, SCHED_OP_ADD_CREATED);
 	sched_event_send(info.sched_listner, sched_event);
 	return 0;
@@ -315,6 +315,10 @@ error_t do_thread_create(thread_info_t *info)
 	// Add the new thread to the set of created threads
 	new_thread->info.order    = info->key;
 	new_thread->info.attr.key = info->key;
+
+#if CONFIG_ENABEL_THREAD_TRACE
+	new_thread->info.isTraced = true;
+#endif
 
 	spinlock_lock(&task->th_lock);
 	list_add_last(&task->th_root, &new_thread->rope);

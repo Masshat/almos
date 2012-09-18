@@ -61,7 +61,7 @@ error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s
 
 	// New Thread Ressources Allocation
 	req.type  = KMEM_PAGE;
-	req.size  = 0;
+	req.size  = ARCH_THREAD_PAGE_ORDER;
 	req.flags = AF_KERNEL | AF_ZERO | AF_REMOTE;
 	req.ptr   = clusters_tbl[attr->cid].cluster;  
 	page      = kmem_alloc(&req);
@@ -90,7 +90,7 @@ error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s
 	attr->pid = task->pid;
 	memcpy(&thread->info.attr, attr, sizeof(*attr));
 	thread->info.kstack_addr = thread;
-	thread->info.kstack_size = PMM_PAGE_SIZE;
+	thread->info.kstack_size = PMM_PAGE_SIZE << ARCH_THREAD_PAGE_ORDER;
 	thread->info.page = page;
 	thread->signature = THREAD_ID;
   

@@ -54,7 +54,7 @@ struct thread_s* kthread_create(struct task_s *task, kthread_t *kfunc, void *arg
 	register struct thread_s *thread;
   
 	req.type  = KMEM_PAGE;
-	req.size  = 0;
+	req.size  = ARCH_THREAD_PAGE_ORDER;
 	req.flags = AF_KERNEL | AF_ZERO | AF_REMOTE;
 	req.ptr   = clusters_tbl[cid].cluster;  
 	page      = kmem_alloc(&req);
@@ -76,7 +76,7 @@ struct thread_s* kthread_create(struct task_s *task, kthread_t *kfunc, void *arg
 	thread->info.attr.tid        = (uint_t) thread;
 	thread->info.attr.pid        = task->pid;
 	thread->info.kstack_addr     = (uint_t*)thread;
-	thread->info.kstack_size     = PMM_PAGE_SIZE;
+	thread->info.kstack_size     = PMM_PAGE_SIZE << ARCH_THREAD_PAGE_ORDER;
 	thread->info.page            = page;
 	thread->signature            = THREAD_ID;
   

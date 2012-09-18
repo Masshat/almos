@@ -118,17 +118,16 @@ int sys_exec(char *filename, char **argv, char **envp)
 		tm_create_compute(main_thread);
 		task->state = TASK_READY;
 
+#if CONFIG_ENABEL_TASK_TRACE
+		main_thread->info.isTraced = true;
+#endif
+
 		listner = sched_get_listner(main_thread, SCHED_OP_ADD_CREATED);
 		event   = sched_event_make(main_thread, SCHED_OP_ADD_CREATED);
 		sched_event_send(listner,event);
 
 		thread_set_no_vmregion(this);
 		sched_exit(this);
-
-		printk(INFO, "INFO: %s: %s done [ %u ]\n", 
-		       __FUNCTION__, 
-		       path, 
-		       cpu_time_stamp());
 	}
   
 	printk(WARNING, "%s: failed to do_exec new task [pid %d, tid %x, cpu %d, err %d]\n",
