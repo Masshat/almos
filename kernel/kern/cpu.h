@@ -94,8 +94,8 @@ struct cpu_s
 	/* CPU Idle Thread */
 	struct thread_s *thread_idle;
 
-	/* CPU Owner Thread */
-	struct thread_s *owner;
+	/* FPU Owner Thread */
+	struct thread_s *fpu_owner;
 
 	/* Cluster in which CPU is located */
 	struct cluster_s *cluster;

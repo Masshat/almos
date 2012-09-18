@@ -45,6 +45,20 @@
 
 #define SCHED_THREADS_NR    CONFIG_SCHED_THREADS_NR
 
+#if CONFIG_SCHED_SHOW_NOTIFICATIONS
+#define sched_notify_dmsg(_thread,_index,_event)			\
+	do{								\
+		isr_dmsg(INFO, "INFO: %s: pid %d, tid %d, cpu %d, index %d, "_event" [%u]\n", \
+			 __FUNCTION__,					\
+			 (_thread)->task->pid,				\
+			 (_thread)->info.order,				\
+			 cpu_get_id(),					\
+			 (_index),					\
+			 cpu_time_stamp());				\
+	}while(0)
+#else
+#define sched_notify_dmsg(_thread,_index,_event)
+#endif
 
 /* Sched Ports Info */
 typedef struct
@@ -104,16 +118,13 @@ error_t sched_register(struct thread_s *thread)
 	sint_t index;
 
 	index = -1;
-
-#if CONFIG_REMOTE_THREAD_CREATE
-	cpu   = current_cpu;
+	cpu   = thread_current_cpu(thread);
 	db    = cpu->scheduler.db;
 
+#if (CONFIG_REMOTE_THREAD_CREATE || CONFIG_REMOTE_FORK)
 	uint_t irq_state;
 	cpu_disable_all_irq(&irq_state);
 #else
-	cpu   = thread_current_cpu(thread);
-	db    = cpu->scheduler.db;
 	spinlock_lock(&db->lock);
 #endif
 
@@ -185,6 +196,8 @@ SCHED_SCOPE void sched_event_notify(struct scheduler_s *scheduler)
 			thread = (struct thread_s*)(event & ~SCHED_OP_MASK);
 			db->tbl[i].ports[SCHED_PORT(SCHED_OP_WAKEUP)] = 0;
 			thread->local_sched->op.wakeup(thread);
+			
+			sched_notify_dmsg(thread,i,"WAKEUP");
 			continue;
 		}
 
@@ -195,6 +208,8 @@ SCHED_SCOPE void sched_event_notify(struct scheduler_s *scheduler)
 			thread = (struct thread_s*)(event & ~SCHED_OP_MASK);
 			db->tbl[i].ports[SCHED_PORT(SCHED_OP_ADD_CREATED)] = 0;
 			thread->local_sched->op.add_created(thread);
+			
+			sched_notify_dmsg(thread,i,"ADD_CREATED");
 			continue;
 		}
 
@@ -206,6 +221,8 @@ SCHED_SCOPE void sched_event_notify(struct scheduler_s *scheduler)
 			thread_clear_wakeable(thread);
 			db->tbl[i].ports[SCHED_PORT(SCHED_OP_UWAKEUP)] = 0;
 			thread->local_sched->op.wakeup(thread);
+
+			sched_notify_dmsg(thread,i,"UWAKEUP");
 			continue;
 		}
 	}
@@ -353,7 +370,7 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 	if(this->type != PTHREAD)
 		return;
 
-	if(this == cpu->owner)
+	if(this == cpu->fpu_owner)
 		cpu_fpu_enable();
 	else
 		cpu_fpu_disable();

@@ -70,7 +70,7 @@ static void print_thread(struct thread_s* ths)
 #endif
 
 
-static error_t CpU_exception_handler(struct thread_s *this, reg_t cpu_id, reg_t *regs_tbl)
+error_t CpU_exception_handler(struct thread_s *this, reg_t cpu_id, reg_t *regs_tbl)
 {
 	register struct cpu_s *cpu;
 
@@ -80,28 +80,30 @@ static error_t CpU_exception_handler(struct thread_s *this, reg_t cpu_id, reg_t 
 	cpu = current_cpu;
 	cpu_fpu_enable();
 
-	if((cpu->owner != NULL) && (cpu->owner != this))
+	if((cpu->fpu_owner != NULL) && (cpu->fpu_owner != this))
 	{
-		cpu_fpu_context_save(&cpu->owner->uzone);
+		cpu_fpu_context_save(&cpu->fpu_owner->uzone);
 
 #if CONFIG_SHOW_FPU_MSG
-		isr_dmsg(INFO, "[FPU] core %d, ctx saved for pid %d, tid %d [%u]\n",
-			 cpu->gid,
-			 cpu->owner->task->pid,
-			 cpu->owner->info.order,
-			 cpu_time_stamp());
+		printk(INFO, "INFO: FPU %d, ctx saved for pid %d, tid %d (%x) [%u]\n",
+		       cpu->gid,
+		       cpu->fpu_owner->task->pid,
+		       cpu->fpu_owner->info.order,
+		       cpu->fpu_owner,
+		       cpu_time_stamp());
 	}
 #endif
 
 	cpu_fpu_context_restore(&this->uzone);
-	cpu->owner = this;
+	cpu->fpu_owner = this;
 
 #if CONFIG_SHOW_FPU_MSG
-	isr_dmsg(INFO, "[FPU] core %d, ctx restored for pid %d, tid %d [%u]\n",
-		 cpu->gid,
-		 this->task->pid,
-		 this->info.order,
-		 cpu_time_stamp());
+	printk(INFO, "INFO: FPU %d, ctx restored for pid %d, tid %d (%x) [%u]\n",
+	       cpu->gid,
+	       this->task->pid,
+	       this->info.order,
+	       this,
+	       cpu_time_stamp());
 #endif
 	return VMM_ERESOLVED;
 }
@@ -109,7 +111,7 @@ static error_t CpU_exception_handler(struct thread_s *this, reg_t cpu_id, reg_t 
 #define _USE_MMU_INFO_H_
 #include <mmu-info.h>
 
-static error_t mmu_exception_handler(reg_t cpu_id, reg_t *regs_tbl, uint_t mmu_err_val, uint_t mmu_bad_vaddr)
+error_t mmu_exception_handler(reg_t cpu_id, reg_t *regs_tbl, uint_t mmu_err_val, uint_t mmu_bad_vaddr)
 {
 	if(mmu_err_val & MMU_EFATAL)
 		return VMM_ESIGBUS;
@@ -142,11 +144,6 @@ void cpu_do_exception(struct thread_s *this, reg_t cpu_id, reg_t *regs_tbl)
 	mmu_ibad_vaddr = mips_get_cp2(MMU_IBVAR, 0);
 	mmu_derr_val   = mips_get_cp2(MMU_DETR, 0);
 	mmu_dbad_vaddr = mips_get_cp2(MMU_DBVAR, 0);
-
-#if 0
-	if(cpu_id == 8)
-		except_dmsg("%s: cpu %d, EPC %x [%d]\n", __FUNCTION__, cpu_id, regs_tbl[EPC], cpu_time_stamp());
-#endif
 
 	switch(excCode)
 	{
@@ -237,6 +234,7 @@ void cpu_do_exception(struct thread_s *this, reg_t cpu_id, reg_t *regs_tbl)
 	except_dmsg("====================================================================\n");
 
 	cpu_spinlock_unlock(&exception_lock.val);
+
 	this->state = S_KERNEL;
 	sched_exit(this);
 	while(entry != NULL);

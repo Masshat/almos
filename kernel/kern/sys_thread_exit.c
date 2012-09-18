@@ -61,11 +61,15 @@ int sys_thread_exit (void *exit_val)
 exit_dead:
 
 	isReleased = false;
+
+	/*
+	 * Remove FPU ownership
+	 */
 	cpu_disable_all_irq(&state);
 
-	if(current_cpu->owner == this)
+	if(current_cpu->fpu_owner == this)
 	{
-		current_cpu->owner = NULL;
+		current_cpu->fpu_owner = NULL;
 		isReleased = true;
 	}
 
