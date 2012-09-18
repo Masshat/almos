@@ -39,7 +39,7 @@ cpu_syscall(void *arg0, void *arg1, void *arg2, void *arg3, int service_nr)
      "syscall                \n"
      "or   %0,   $0,    $2   \n"
      "or   %1,   $0,    $3   \n"
-     :"=r"(val), "=r"(err): "r"(service_nr): "$2","$3","$4","$5","$6","$7");
+     :"=&r"(val), "=&r"(err): "r"(service_nr): "$2","$3","$4","$5","$6","$7");
   /* ----------------------------- */
 
   errno_ptr = __errno_location();

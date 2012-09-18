@@ -68,6 +68,7 @@ enum
    SYS_MCNTL,
    SYS_STAT,
    SYS_MIGRATE,
+   SYS_SBRK,
    __SYS_CALL_SERVICES_NUM,
 };
 

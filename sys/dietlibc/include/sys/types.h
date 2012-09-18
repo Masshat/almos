@@ -82,5 +82,4 @@ struct __cache_line_s
 
 typedef struct __cache_line_s __cacheline_t;
 
-
 #endif	/* _TYPES_H_ */

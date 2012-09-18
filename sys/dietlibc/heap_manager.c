@@ -20,6 +20,9 @@
 */
 
 #include <sys/types.h>
+#include <sys/syscall.h>
+#include <cpu-syscall.h>
+#include <errno.h>
 #include <pthread.h>
 #include <assert.h>
 #include <unistd.h>
@@ -33,10 +36,29 @@
 typedef struct heap_manager_s
 {
 	pthread_spinlock_t lock;
+
+	union{
+		volatile uint_t limit;
+		__cacheline_t pad1;
+	};
+
+	union{
+		uint_t current;
+		__cacheline_t pad2;
+	};
+
+	union{
+		uint_t next;
+		__cacheline_t pad3;
+	};
+
+	union{
+		uint_t last;
+		__cacheline_t pad4;
+	};
+
 	uint_t start;
-	uint_t limit;
-	uint_t current;
-	uint_t next;
+	uint_t sbrk_size;
 }heap_manager_t;
 
 struct block_info_s
@@ -58,14 +80,20 @@ static int page_size;
 void __heap_manager_init(void)
 {
 	block_info_t *info;
+	uint_t initial_size;
+
+	initial_size = (uint_t) cpu_syscall(NULL, NULL, NULL, NULL, SYS_SBRK);
+
+	if(initial_size < 4096)
+		initial_size = 0x10000; /* subject to segfault */
 
 	pthread_spin_init(&heap_mgr.lock, 0);
 	heap_mgr.start = (uint_t)&__bss_end;
-	heap_mgr.limit = heap_mgr.start + sysconf(_SC_HEAP_MAX_SIZE);
+	heap_mgr.limit = heap_mgr.start + initial_size;
 
 	info = (block_info_t*)heap_mgr.start;
 	info->busy = 0;
-	info->size = (char*)heap_mgr.limit - (char*)info;
+	info->size = heap_mgr.limit - heap_mgr.start - sizeof(*info);
 	info->ptr = NULL;
 
 #if CONFIG_LIBC_MALLOC_DEBUG
@@ -78,13 +106,79 @@ void __heap_manager_init(void)
 
 	heap_mgr.current = heap_mgr.start;
 	heap_mgr.next = heap_mgr.start;
+	heap_mgr.last = heap_mgr.start;
 	cacheline_size = sysconf(_SC_CACHE_LINE_SIZE);
 	cacheline_size = (cacheline_size <= 0) ? 64 : cacheline_size;
 	page_size = sysconf(_SC_PAGE_SIZE);
 	page_size = (page_size <= 0) ? 4096 : page_size;
+
+	heap_mgr.sbrk_size = 2 * (initial_size / page_size);
 }
 
+void* do_malloc(size_t, int);
+
 void* malloc(size_t size)
+{
+	block_info_t *info;
+	void *ptr;
+	int  err;
+	int tries_nr;
+	uint_t blksz;
+
+#undef  MALLOC_THRESHOLD
+#define MALLOC_THRESHOLD  5
+
+#undef  MALLOC_LIMIT
+#define MALLOC_LIMIT      20
+
+	tries_nr = 0;
+	ptr      = NULL;
+
+	while((ptr == NULL) && (tries_nr < MALLOC_LIMIT))
+	{
+		ptr = do_malloc(size, tries_nr);
+
+		if(ptr == NULL)
+		{
+			blksz = size / page_size;
+			blksz = (blksz < heap_mgr.sbrk_size) ? heap_mgr.sbrk_size : (blksz + heap_mgr.sbrk_size); 
+
+			err   = (int) cpu_syscall((void*)heap_mgr.limit,
+						  (void*)blksz,
+						  NULL, NULL, SYS_SBRK);
+			if(err != 0)
+				continue;
+
+			blksz = blksz * page_size;
+
+			pthread_spin_lock(&heap_mgr.lock);
+
+			heap_mgr.limit += blksz;
+
+			info = (block_info_t*)heap_mgr.last;
+
+			if(info->busy)
+			{
+				info          = (block_info_t*)(heap_mgr.last + info->size);
+				info->busy    = 0;
+				info->size    = blksz - sizeof(*info);
+				info->ptr     = NULL;
+				heap_mgr.last = (uint_t)info;
+			}
+			else
+				info->size += blksz;
+
+			pthread_spin_unlock(&heap_mgr.lock);
+
+			if(++tries_nr > MALLOC_THRESHOLD)
+				pthread_yield();
+		}
+	}
+
+	return ptr;
+}
+
+void* do_malloc(size_t size, int round)
 {
 	block_info_t *current;
 	block_info_t *next;
@@ -93,8 +187,11 @@ void* malloc(size_t size)
 	effective_size = size + sizeof(*current);
 	effective_size = ARROUND_UP(effective_size, cacheline_size);
 
+	if((round == 0) && (heap_mgr.next > (heap_mgr.limit - effective_size)))
+		return NULL;
+
 	pthread_spin_lock(&heap_mgr.lock);
-  
+
 	if(heap_mgr.next > (heap_mgr.limit - effective_size))
 		current = (block_info_t*)heap_mgr.start;
 	else
@@ -104,37 +201,44 @@ void* malloc(size_t size)
 	int cpu;
 	pthread_attr_getcpuid_np(&cpu);
 
-	fprintf(stderr, "%s: cpu %d Started [sz %d, esz %d, pg %d, cl %d, start %x, next %x, current %x, busy %d, size %d]\n", 
-		__FUNCTION__, 
-		cpu, 
+	fprintf(stderr,
+		"%s: cpu %d Started [sz %d, esz %d, pg %d, cl %d, start %x, next %x,"
+		"last %x, current %x, limit %x, busy %d, size %d]\n",
+		__FUNCTION__,
+		cpu,
 		size, 
-		effective_size, 
+		effective_size,
 		page_size,
 		cacheline_size,
 		(unsigned)heap_mgr.start,
 		(unsigned)heap_mgr.next,
+		(unsigned)heap_mgr.last,
 		(unsigned)current,
+		(unsigned)heap_mgr.limit,
 		current->busy,
 		current->size);
 #endif
-    
+
 	while(current->busy || (current->size < effective_size)) 
 	{
 		if((current->busy) && (current->size == 0))
 			fprintf(stderr, "Corrupted memory block descriptor: @0x%x\n", (unsigned int)current);
 
 		current = (block_info_t*) ((char*)current + current->size);
+
     
-		if((uint_t)current >= heap_mgr.limit)
+		if((uint_t)current >= (heap_mgr.limit - sizeof(*current)))
 		{
 			pthread_spin_unlock(&heap_mgr.lock);
-#if 1//CONFIG_LIBC_MALLOC_DEBUG
+
+#if CONFIG_LIBC_MALLOC_DEBUG
 			int cpu;
 			pthread_attr_getcpuid_np(&cpu);
 
-			fprintf(stderr, "[%s] cpu %d, tid %d, limit 0x%x, ended with ENOMEM\n", 
-				__FUNCTION__, 
+			fprintf(stderr, "[%s] cpu %d, pid %d, tid %d, limit 0x%x, ended with ENOMEM\n",
+				__FUNCTION__,
 				cpu,
+				(unsigned)getpid(),
 				(unsigned)pthread_self(),
 				(unsigned)heap_mgr.limit);
 #endif
@@ -161,6 +265,10 @@ void* malloc(size_t size)
 #if CONFIG_LIBC_MALLOC_DEBUG
 	fprintf(stderr, "%s: cpu %d End [ 0x%x ]\n", __FUNCTION__, cpu, ((unsigned int)current) + sizeof(*current));
 #endif
+	next = (block_info_t*)heap_mgr.next;
+
+	if((next->size + heap_mgr.next) == (heap_mgr.limit - sizeof(*next)))
+		heap_mgr.last = heap_mgr.next;
 
 	pthread_spin_unlock(&heap_mgr.lock);
 	return (char*)current + sizeof(*current);
