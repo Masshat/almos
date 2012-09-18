@@ -53,7 +53,8 @@ int sys_mmap(mmap_attr_t *mattr)
 		return (int)VM_FAILED;
 	}
 
-	if(((attr.flags & VM_REG_PVSH) == VM_REG_PVSH)     || 
+	if((attr.flags  & VM_REG_HEAP)                     ||
+	   ((attr.flags & VM_REG_PVSH) == VM_REG_PVSH)     || 
 	   ((attr.flags & VM_REG_PVSH) == 0)               ||
 	   (attr.length == 0)                              ||
 	   (attr.offset & PMM_PAGE_MASK)                   || 

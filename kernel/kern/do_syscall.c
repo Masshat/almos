@@ -93,7 +93,8 @@ sys_call_tbl[__SYS_CALL_SERVICES_NUM] = {
 	sys_madvise,
 	sys_mcntl,
 	sys_stat,
-	sys_thread_migrate
+	sys_thread_migrate,
+	sys_sbrk
 };
 
 reg_t do_syscall (reg_t arg0,
@@ -139,7 +140,7 @@ reg_t do_syscall (reg_t arg0,
 		cpu  = current_cpu;
 		cpu_wbflush();
 		/* ----------------------------------------------- */
-
+		
 		return_val = this->info.retval;
 		goto END_DO_SYSCALL;
 	}

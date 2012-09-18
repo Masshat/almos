@@ -82,10 +82,15 @@ error_t vmm_dup(struct vmm_s *dst, struct vmm_s *src)
   
 	dst_task  = vmm_get_task(dst);
 	ktask     = dst_task->cluster->task;
+
 	req.type  = KMEM_VM_REGION;
 	req.size  = sizeof(*dst_reg);
 	req.flags = AF_KERNEL | AF_REMOTE;
 	req.ptr   = dst_task->cluster;
+
+#if CONFIG_FORK_LOCAL_ALLOC
+	req.ptr   = dst_task->current_clstr;
+#endif
 
 	memcpy(dst, src, sizeof(*dst));
   
@@ -93,7 +98,11 @@ error_t vmm_dup(struct vmm_s *dst, struct vmm_s *src)
   
 	if(err) return err;
 
+#if CONFIG_FORK_LOCAL_ALLOC
+	err = pmm_init(&dst->pmm, dst_task->current_clstr);
+#else
 	err = pmm_init(&dst->pmm, dst_task->cluster);
+#endif
 
 	if(err) return err;
 
@@ -323,6 +332,9 @@ void *vmm_mmap(struct task_s *task,
 	region->vm_flags &= ~(VM_REG_INIT);
 	cpu_wbflush();
 
+	if(flags & VM_REG_HEAP)
+		task->vmm.heap_region = region;
+
 	return (void*)region->vm_start;
     
 MMAP_ERR2:			
@@ -342,6 +354,35 @@ MMAP_ERR:
 	return VM_FAILED;
 }
 
+error_t vmm_sbrk(struct vmm_s *vmm, uint_t current, uint_t size)
+{	
+	struct vm_region_s *heap;
+	uint_t irq_sate;
+	error_t err;
+
+	if(current < vmm->heap_current)
+		return EAGAIN;
+
+	if((vmm->heap_current + size) > CONFIG_TASK_HEAP_MAX_SIZE)
+		return ENOMEM;
+
+	heap = vmm->heap_region;
+
+	mcs_lock(&heap->vm_lock, &irq_sate);
+
+	if((vmm->heap_current + size) > CONFIG_TASK_HEAP_MAX_SIZE)
+		err = ENOMEM;
+	else
+	{
+		heap->vm_limit += size;
+		err = 0;
+	}
+
+	mcs_unlock(&heap->vm_lock, irq_sate);
+	return err;
+}
+
+
 error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len)
 {
 	register error_t err;
@@ -349,12 +390,12 @@ error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len)
 	register uint_t vaddr;
 	register struct pmm_s *pmm;
 	pmm_page_info_t info;
-  
+
 	count   = ARROUND_UP(len, PMM_PAGE_SIZE);
 	count >>= PMM_PAGE_SHIFT;
 	vaddr   = start;
 	pmm     = &vmm->pmm;
-  
+
 	while(count)
 	{
 		if((err = pmm_get_page(pmm, vaddr, &info)))

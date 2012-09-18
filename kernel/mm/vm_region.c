@@ -72,7 +72,6 @@ error_t vm_region_init(struct vm_region_s *region,
 	atomic_init(&region->vm_refcount, 1);
 	regsize           = 1 << CONFIG_VM_REGION_KEYWIDTH;
 	region->vm_begin  = ARROUND_DOWN(vma_start, regsize);
-	region->vm_end    = ARROUND_UP(vma_end, regsize);
 	region->vm_start  = vma_start;
 	region->vm_limit  = vma_end;
 	region->vm_flags  = flags;
@@ -80,6 +79,11 @@ error_t vm_region_init(struct vm_region_s *region,
 	region->vm_op     = NULL;
 	region->vm_mapper = NULL;
 	region->vm_file   = NULL;
+
+	if(flags & VM_REG_HEAP)
+		region->vm_end = ARROUND_UP(CONFIG_TASK_HEAP_MAX_SIZE, regsize);
+	else
+		region->vm_end = ARROUND_UP(vma_end, regsize);
 
 	pgprot = PMM_USER | PMM_CACHED | PMM_ACCESSED | PMM_DIRTY;
 

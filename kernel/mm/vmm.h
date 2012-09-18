@@ -62,7 +62,7 @@ struct vmm_s
 	struct keysdb_s regions_db;
 	uint_t limit_addr;
 	uint_t devreg_addr;
-
+	
 	/* Accuonting & Limits */
 	uint_t pgfault_nr;
 	uint_t spurious_pgfault_nr;
@@ -82,6 +82,7 @@ struct vmm_s
 	uint_t heap_start;
 	uint_t heap_current;
 	uint_t entry_point;
+	struct vm_region_s *heap_region;
 };
 
 #define MADV_NORMAL        0x0
@@ -113,6 +114,9 @@ inline error_t vmm_check_address(char *objname, struct task_s *task, void *addr,
 
 int sys_mmap(mmap_attr_t *mattr);
 int sys_madvise(void *start, size_t length, uint_t advice);
+int sys_sbrk(uint_t current_heap_ptr, uint_t size);
+
+error_t vmm_sbrk(struct vmm_s *vmm, uint_t current, uint_t size);
 
 void *vmm_mmap(struct task_s *task,
 	       struct vfs_file_s *file, 

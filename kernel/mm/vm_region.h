@@ -43,6 +43,7 @@ struct vm_region_s;
 #define VM_REG_FILE     0x100
 #define VM_REG_LAZY     0x200
 #define VM_REG_INIT     0x400
+#define VM_REG_HEAP     0x800
 
 #define VM_REG_NON      0x00
 #define VM_REG_RD       0x01
@@ -66,7 +67,7 @@ struct vm_region_s
 	uint_t vm_begin;
 	uint_t vm_end;
 	uint_t vm_start;
-	uint_t vm_limit;
+	volatile uint_t vm_limit;
 	uint_t vm_prot;
 	uint_t vm_pgprot;
 	uint_t vm_flags;
@@ -84,7 +85,6 @@ struct vm_region_s
  * - page_lookup     : when a specific page descriptor is needed
  * - page_fault      : when a memory access generate a page fault
  **/
-
 #define VM_REGION_PAGE_IN(n)     error_t (n) (struct vm_region_s *region, struct page_s *pgptr)
 #define VM_REGION_PAGE_OUT(n)    error_t (n) (struct vm_region_s *region, struct page_s *pgptr)
 #define VM_REGION_PAGE_LOOKUP(n) error_t (n) (struct vm_region_s *region, uint_t vaddr, struct page_s **pgptr)
