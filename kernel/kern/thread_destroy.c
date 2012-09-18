@@ -29,6 +29,8 @@
 #include <cluster.h>
 #include <ppm.h>
 
+#include <page.h>
+
 void kthread_destroy(struct thread_s *thread);
 void pthread_destroy(struct thread_s *thread);
 
@@ -94,6 +96,7 @@ void pthread_destroy(struct thread_s *thread)
 	uint_t stack_addr;
 	uint_t pid;
 	uint_t tid;
+	uint_t state;
 	uint_t ticks_nr;
 	uint_t tm_start;
 	uint_t tm_end;
@@ -125,6 +128,18 @@ void pthread_destroy(struct thread_s *thread)
 
 	thread->signature = 0;
 	
+	assert(cpu->gid == cpu_get_id());
+
+	cpu_disable_all_irq(&state);
+
+	if(cpu->fpu_owner == thread)
+	{
+		cpu->fpu_owner = NULL;
+		cpu_fpu_disable();
+	}
+
+	cpu_restore_irq(state);
+
 	spinlock_lock(&task->th_lock);
 
 	task->th_tbl[thread->info.order] = NULL;
@@ -158,7 +173,8 @@ void pthread_destroy(struct thread_s *thread)
 	
 	spinlock_destroy(&thread->lock);
 	cpu_context_destroy(&thread->pws);
-	
+
+
 	thread->task = NULL;
 	req.type     = KMEM_PAGE; 
 	req.ptr      = thread->info.page;
