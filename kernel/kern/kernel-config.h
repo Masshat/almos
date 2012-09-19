@@ -50,7 +50,7 @@
 ////////////////////////////////////////////////////
 #define CONFIG_TASK_MAX_NR               1024
 #define CONFIG_TASK_FILE_MAX_NR          128
-#define CONFIG_TASK_CHILDS_MAX_NR        32
+#define CONFIG_TASK_CHILDS_MAX_NR        512
 #define CONFIG_TASK_ARGS_PAGES_MAX_NR    32
 #define CONFIG_TASK_HEAP_MIN_SIZE        0x00010000
 #define CONFIG_TASK_HEAP_MAX_SIZE        0x10000000
