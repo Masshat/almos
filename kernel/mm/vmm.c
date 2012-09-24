@@ -652,7 +652,8 @@ error_t vmm_do_cow(struct vm_region_s *region, struct page_s *page, pmm_page_inf
     
 		if(count == 1)
 		{
-			if((info.attr & PMM_MIGRATE) && (page->cid != current_cluster->id))
+			//if((info.attr & PMM_MIGRATE) && (page->cid != current_cluster->id))
+			if(page->cid != current_cluster->id)
 				isFreeable = true;
 			else
 			{
