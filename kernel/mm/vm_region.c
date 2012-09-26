@@ -330,6 +330,7 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	register uint_t count;
 	struct page_s *page;
 	struct ppm_s *ppm;
+	struct task_s *task;
 	pmm_page_info_t info;
 	error_t err;
 
@@ -360,6 +361,7 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	src_pmm = &src->vmm->pmm;
 	dst_pmm = &dst->vmm->pmm;
 	count   = (src->vm_limit - src->vm_start) >> PMM_PAGE_SHIFT;
+	task    = vmm_get_task(dst->vmm);
 
 	while(count)
 	{
@@ -375,7 +377,11 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
       
 			info.attr |= PMM_COW;
 			info.attr &= ~(PMM_WRITE);
+			info.cluster = task->cluster;
+
+#if CONFIG_FORK_LOCAL_ALLOC
 			info.cluster = NULL;
+#endif
 
 			if((err = pmm_set_page(dst_pmm, vaddr, &info)))
 				goto REG_DUP_ERR1;
