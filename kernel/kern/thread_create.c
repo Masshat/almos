@@ -63,7 +63,12 @@ error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s
 	req.type  = KMEM_PAGE;
 	req.size  = ARCH_THREAD_PAGE_ORDER;
 	req.flags = AF_KERNEL | AF_ZERO | AF_REMOTE;
-	req.ptr   = clusters_tbl[attr->cid].cluster;  
+	req.ptr   = clusters_tbl[attr->cid].cluster;
+
+#if CONFIG_THREAD_LOCAL_ALLOC
+	req.ptr   = current_cluster;
+#endif
+
 	page      = kmem_alloc(&req);
 
 	if(page == NULL) return EAGAIN;
