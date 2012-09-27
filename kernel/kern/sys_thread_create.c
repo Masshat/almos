@@ -88,6 +88,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	pthread_t new_key; 
 	uint_t sched_event;
 	uint_t tm_start;
+	uint_t tm_end;
 	uint_t tm_bRemote;
 	uint_t tm_aRemote;
   
@@ -228,6 +229,21 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 
 	sched_event = sched_event_make(info.new_thread, SCHED_OP_ADD_CREATED);
 	sched_event_send(info.sched_listner, sched_event);
+	tm_end = cpu_time_stamp();
+	
+	printk(INFO, "INFO: %s: cpu %d, pid %d, done [tid:%d, gid:%d, cid:%d, s:%u, bR:%u, aR:%u, e:%u, t:%u]\n", 
+	       __FUNCTION__,
+	       cpu_get_id(),
+	       task->pid,
+	       order,
+	       attr.cpu_gid,
+	       attr.cid,
+	       tm_start,
+	       tm_bRemote,
+	       tm_aRemote,
+	       tm_end,
+	       tm_end - tm_start);
+
 	return 0;
   
 fail_tid:
@@ -338,6 +354,7 @@ error_t do_thread_create(thread_info_t *info)
 	info->new_thread    = new_thread;
 	tm_end              = cpu_time_stamp();
   
+#if CONFIG_SHOW_THREAD_CREATE_MSG
 	// m: mmap, 
 	// c: create, 
 	// a: autoNextTouch, 
@@ -361,7 +378,7 @@ error_t do_thread_create(thread_info_t *info)
 	       tm_end - tm_astep4,
 	       tm_end - tm_start,
 	       tm_end);
-  
+ #endif 
 	return 0;
 
 fail_create:
