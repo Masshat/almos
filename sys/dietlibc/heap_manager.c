@@ -278,19 +278,21 @@ void free(void *ptr)
 {
 	block_info_t *current;
 	block_info_t *next;
-  
+	size_t limit;
+
 	if(ptr == NULL)
 		return;
-  
+	
 	current = (block_info_t*) ((char*)ptr - sizeof(*current));
 	current = (current->ptr != NULL) ? current->ptr : current;
 
 	pthread_spin_lock(&heap_mgr.lock);
+	limit = heap_mgr.limit - sizeof(*current);
 	current->busy = 0;
 
 	while ((next = (block_info_t*) ((char*) current + current->size)))
 	{ 
-		if (((uint_t)next >= heap_mgr.limit) || (next->busy == 1))
+		if (((uint_t)next >= limit) || (next->busy == 1))
 			break;
 
 		current->size += next->size;
