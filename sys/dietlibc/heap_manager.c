@@ -85,7 +85,7 @@ void __heap_manager_init(void)
 	initial_size = (uint_t) cpu_syscall(NULL, NULL, NULL, NULL, SYS_SBRK);
 
 	if(initial_size < 4096)
-		initial_size = 0x10000; /* subject to segfault */
+		initial_size = 0x100000; /* subject to segfault */
 
 	pthread_spin_init(&heap_mgr.lock, 0);
 	heap_mgr.start = (uint_t)&__bss_end;
