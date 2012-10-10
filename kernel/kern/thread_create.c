@@ -97,6 +97,11 @@ error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s
 	thread->info.kstack_addr = thread;
 	thread->info.kstack_size = PMM_PAGE_SIZE << ARCH_THREAD_PAGE_ORDER;
 	thread->info.page = page;
+
+#if CONFIG_PPM_USE_INTERLEAVE
+	thread->info.ppm_last_cid = attr->cid;
+#endif
+
 	thread->signature = THREAD_ID;
   
 	wait_queue_init(&thread->info.wait_queue, "Join/Exit Sync");

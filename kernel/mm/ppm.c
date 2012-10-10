@@ -163,6 +163,15 @@ static uint_t ppm_compute_prio(uint_t order, uint_t flags)
 	return flags;
 }
 
+#if (CONFIG_PPM_USE_PRIO && CONFIG_PPM_USE_INTERLEAVE)
+#perror you cannot use PRIO and INTERLEAVE strategies togother
+#endif
+
+/** 
+ * TODO: make the ppm target choice to be dynamic upon 
+ * a per-thread policy: First-Touch, Interleave, 
+ * SEQ-Cluster, Rand-Cluster
+ **/
 struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
 {
 	register struct page_s *ptr;
@@ -174,6 +183,22 @@ struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
 	ptr  = NULL;
 	cid  = ppm_get_cluster(ppm)->id;
 	cntr = AF_GETHINT(flags);
+
+#if CONFIG_PPM_USE_INTERLEAVE
+	struct thread_s *this;
+	uint_t online_clusters;
+	bool_t isSeq;
+
+	this            = current_thread;
+	online_clusters = arch_onln_cluster_nr();
+	isSeq = ((online_clusters != 1) && (this->task->threads_count == 1)) ? true : false;
+
+#if CONFIG_PPM_USE_INTERLEAVE_ALL
+	isSeq = true;
+#endif
+
+#endif	/* CONFIG_PPM_USE_INTERLEAVE */
+
 
 	if(cntr == 0) cntr ++;
 
@@ -194,6 +219,16 @@ struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
 		if(flags & AF_USR)
 		{
 			threshold = ppm->kprio_pages_min;
+			
+#if CONFIG_PPM_USE_INTERLEAVE
+
+			if(isSeq)
+			{
+				cid = this->info.ppm_last_cid % arch_onln_cluster_nr();
+				this->info.ppm_last_cid ++;
+				ppm = &clusters_tbl[cid].cluster->ppm;
+			}
+#endif
 			goto do_alloc;
 		}
 

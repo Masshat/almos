@@ -127,6 +127,10 @@ struct thread_info
 	uint_t kstack_size;
 	struct event_s *e_info;
 	struct page_s *page;
+
+#if CONFIG_PPM_USE_INTERLEAVE
+	uint_t ppm_last_cid;
+#endif
 };
 
 
