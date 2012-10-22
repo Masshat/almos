@@ -27,12 +27,14 @@
 
 #include <segmentation.h>
 #include <boot-info.h>
-#include <arch-bib.h>
 #include <config.h>
 #include <string.h>
 #include <mmu.h>
 #include <dmsg.h>
 #include <bits.h>
+
+#define _ARCH_BIB_SIGNATURE_
+#include <arch-bib.h>
 
 #define ARCH_BIB_BASE    (BOOT_INFO_BLOCK)
 #define KERNEL_HEADER    (KERNEL_BIN_IMG)
