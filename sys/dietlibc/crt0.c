@@ -53,8 +53,9 @@ void __attribute__ ((section (".init"))) _start(char **argv, char **envp)
 
   /* First of all, init tls */
   __pthread_tls_init(&tls);
-  tls.shared = &__default;
-  tls.shared->tid = tls.attr.key;
+  __pthread_tls_set(&tls,__PT_TLS_SHARED,&__default);
+  __default.mailbox = 0;
+  __default.tid = tls.attr.key;
   /* ---------------------- */
   __heap_manager_init();
   __pthread_init();

@@ -28,34 +28,27 @@
 #include <sys/syscall.h>
 #include <cpu-syscall.h>
 #include <assert.h>
+#include <unistd.h>
 
 #define USE_PTSPINLOCK       1
 #define USE_HEURISTIC_LOCK   0
-#define CONFIG_MUTEX_DEBUG
+//#define CONFIG_MUTEX_DEBUG
 
 #ifdef CONFIG_MUTEX_DEBUG
-#define dmsg(...)
-static pthread_spinlock_t __lock = {{__PTHREAD_OBJECT_FREE}};
-#define dmsg2(...)				\
-	do{					\
-		pthread_spin_lock(&__lock);	\
-		fprintf(stderr, __VA_ARGS__);	\
-		pthread_spin_unlock(&__lock);	\
-	}while(0)
+#define mdmsg(...) fprintf(stderr, __VA_ARGS__)
 #else
-#define dmsg(...)
-#define dmsg2(...)
+#define mdmsg(...)
 #endif
 
 #define print_mutex(x)							\
-	do{dmsg("%s: mtx @%x, [v %u, w %d, t %d, s %d, c %d]\n",	\
-		__FUNCTION__,						\
-		(unsigned)(x),						\
-		(unsigned)(x)->value,					\
-		(unsigned)(x)->waiting,					\
-		(x)->attr.type,						\
-		(x)->attr.scope,					\
-		(x)->attr.cntr);}while(0)
+	do{mdmsg("%s: mtx @%x, [v %u, w %d, t %d, s %d, c %d]\n",	\
+		 __FUNCTION__,						\
+		 (unsigned)(x),						\
+		 (unsigned)(x)->value,					\
+		 (unsigned)(x)->waiting,				\
+		 (x)->attr.type,					\
+		 (x)->attr.scope,					\
+		 (x)->attr.cntr);}while(0)
 
 int pthread_mutexattr_init(pthread_mutexattr_t *attr)
 {
@@ -156,13 +149,14 @@ int pthread_mutex_lock (pthread_mutex_t *mutex)
 
 	cntr = 0;
 	this = (uint_t)pthread_self();
+	int pid = getpid();
 
 	if(mutex->value == __PTHREAD_OBJECT_DESTROYED)
 		return EINVAL;
 
 	if((mutex->attr.type == PTHREAD_MUTEX_RECURSIVE) && (mutex->value == this))
 	{
-		mutex->attr.cntr += 1;
+		mutex->attr.cntr += 1;	
 		return 0;
 	}
 
@@ -200,7 +194,7 @@ int pthread_mutex_lock (pthread_mutex_t *mutex)
 	mutex->waiting += 1;
 	tls = cpu_get_tls();
       
-	struct __shared_s *shared = tls->shared;
+	struct __shared_s *shared = (struct __shared_s*)__pthread_tls_get(tls,__PT_TLS_SHARED);
       
 	list_add_last(&mutex->queue, &shared->list);
   
@@ -213,6 +207,7 @@ int pthread_mutex_lock (pthread_mutex_t *mutex)
 	(void)cpu_syscall(NULL, NULL, NULL, NULL, SYS_SLEEP);
 
 	cpu_wbflush();
+	
 	return 0;
 }
 
@@ -221,6 +216,8 @@ int pthread_mutex_unlock (pthread_mutex_t *mutex)
 	int err;
 	struct __shared_s *next;
 	uint_t this;
+
+	int pid = getpid();
 
 	if(mutex == NULL)
 		return EINVAL;
@@ -257,7 +254,6 @@ int pthread_mutex_unlock (pthread_mutex_t *mutex)
 #else
 		cpu_spinlock_unlock(&mutex->lock);
 #endif
-
 		return 0;
 	}
 
@@ -280,7 +276,6 @@ int pthread_mutex_unlock (pthread_mutex_t *mutex)
 #else
 	cpu_spinlock_unlock(&mutex->lock);
 #endif
-  
 	return 0;
 }
 

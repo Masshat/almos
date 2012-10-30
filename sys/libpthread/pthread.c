@@ -33,6 +33,10 @@
 
 #include <pthread.h>
 
+pthread_mutex_t __printf_lock = PTHREAD_MUTEX_INITIALIZER;
+uint_t ___dmsg_lock = 0;
+uint_t ___dmsg_ok = 0;
+
 void __pthread_init(void)
 {
 	__pthread_keys_init();
@@ -61,9 +65,11 @@ static void* __pthread_start(void* (*entry_func)(void*), void *arg)
   
 	__pthread_tls_init(&tls);
 
-	shared = arg;
-	tls.shared = shared;
-	shared->tid = tls.attr.key;
+	shared          = arg;
+	shared->tid     = tls.attr.key;
+	shared->mailbox = 0;
+
+	__pthread_tls_set(&tls,__PT_TLS_SHARED, shared);
 
 #if 0
 	fprintf(stderr, "%s: tid %d, shared %x\n", 
@@ -98,6 +104,8 @@ int pthread_create (pthread_t *thread, pthread_attr_t *attr, void *(*start_routi
 	register int retval;
 	pthread_attr_t _attr;
 	struct __shared_s *shared;
+
+	//___dmsg_ok = 1;
 
 	if(attr == NULL)
 	{

@@ -29,39 +29,7 @@
 #include <assert.h>
 #include "synch.h"
 
-#define CONFIG_PHOENIX_LOCK_DEBUG
-
-#ifdef CONFIG_PHOENIX_LOCK_DEBUG
-static pthread_spinlock_t __lock = {{__PTHREAD_OBJECT_FREE}};
-#define dmsg(...)							\
-  do{									\
-    fprintf(stderr, __VA_ARGS__);					\
-  }while(0)
-#else
-#define dmsg(...)
-#endif
-
-#if 0
-#define print_mutex(x)							\
-  do{dmsg("\tmtx @%x, [v %x, w %x, t %d, s %d, c %d]\n",		\
-	  (unsigned)(x),						\
-	  (unsigned)(x)->value,						\
-	  (unsigned)(x)->waiting,					\
-	  (x)->attr.type,						\
-	  (x)->attr.scope,						\
-	  (x)->attr.cntr);}while(0)
-#else
-#define print_mutex(x)
-#endif
-
-#define print_error(m,...)			\
-  do{						\
-    pthread_spin_lock(&__lock);			\
-    dmsg(__VA_ARGS__);				\
-    print_mutex(m);				\
-    pthread_spin_unlock(&__lock);		\
-    while(1);					\
-  }while(0)
+#define print_error(...)
 
 static mr_lock_t ptmutex_alloc(void)
 {
