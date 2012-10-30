@@ -69,6 +69,7 @@ typedef struct
 
 struct __shared_s
 {
+	volatile uint_t mailbox __CACHELINE;
 	struct list_entry list;
 	int tid;
 	void *arg;
@@ -77,15 +78,26 @@ struct __shared_s
 #define PTHREAD_KEYS_MAX              64
 #define PTHREAD_DESTRUCTOR_ITERATIONS 32
 
+enum{
+	__PT_TLS_SHARED = 0,
+	__PT_TLS_ERRNO,
+	__PT_TLS_COND_WAIT,
+	__PT_TLS_LOCAL_HEAP,
+	__PT_TLS_FORK_FLAGS,
+	__PT_TLS_FORK_CPUID,
+	__PT_TLS_VALUES_NR
+};
+
+#define __pthread_tls_set(tls,index,val)
+#define __pthread_tls_get(tls,index)
+#define __pthread_tls_getlocation(tls,index)
+
 typedef struct __pthread_tls_s
 {
 	int signature;
-	int errval;
-	struct __shared_s *shared;
 	pthread_attr_t attr;
 	void *values_tbl[PTHREAD_KEYS_MAX];
-	uint_t fork_flags;
-	uint_t fork_cpu_gid;
+	uint_t tls_tbl[__PT_TLS_VALUES_NR];
 }__pthread_tls_t;
 
 void __pthread_init(void);
@@ -104,10 +116,7 @@ void __pthread_barrier_init(void);
 
 typedef struct
 { 
-	union {
-		uint_t val;
-		__cacheline_t pad;
-	};
+	uint_t val __CACHELINE;
 }pthread_spinlock_t;
 
 #define PTHREAD_MUTEX_NORMAL          0
@@ -126,31 +135,20 @@ typedef struct
 typedef struct 
 {
 	pthread_spinlock_t lock;
-
-	union {
-		volatile uint_t value;
-		__cacheline_t pad1;
-	};
-
-	union {
-		uint_t waiting;
-		__cacheline_t pad2;
-	};
-
-	union {
-		struct list_entry queue;
-		__cacheline_t pad3;
-	};
-
-	union {
-		pthread_mutexattr_t attr;
-		__cacheline_t pad4;
-	};
-
+	volatile uint_t value    __CACHELINE;
+	uint_t waiting           __CACHELINE;
+	struct list_entry queue  __CACHELINE;
+	pthread_mutexattr_t attr __CACHELINE;
 }pthread_mutex_t;
 
 #define __MUTEX_INITIALIZER(_t)						\
-	{{__PTHREAD_OBJECT_FREE}, {__PTHREAD_OBJECT_FREE}, {0}, {0,0},{_t,PTHREAD_PROCESS_PRIVATE,0}}
+	{								\
+		.lock    = {.val = __PTHREAD_OBJECT_FREE},		\
+		.value   = __PTHREAD_OBJECT_FREE,		        \
+		.waiting = 0,				                \
+		.queue   = {.next = 0, .pred = 0},		        \
+		.attr    = {.type = (_t), .scope = PTHREAD_PROCESS_PRIVATE, .cntr = 0}\
+	}
 
 #define PTHREAD_MUTEX_INITIALIZER               __MUTEX_INITIALIZER(PTHREAD_MUTEX_DEFAULT)
 #define PTHREAD_RECURSIVE_MUTEX_INITIALIZER     __MUTEX_INITIALIZER(PTHREAD_MUTEX_RECURSIVE)
@@ -165,18 +163,11 @@ typedef struct
 typedef struct
 {
 	pthread_spinlock_t lock;
-	union {
-		uint_t count;
-		__cacheline_t pad1;
-	};
-
-	union {
-		struct list_entry queue;
-		__cacheline_t pad2;
-	};
+	uint_t count             __CACHELINE;
+	struct list_entry queue  __CACHELINE;
 }pthread_cond_t;
 
-#define PTHREAD_COND_INITIALIZER  {{__PTHREAD_OBJECT_FREE}, 0, {0,0}}
+#define PTHREAD_COND_INITIALIZER  {.lock = {.val = __PTHREAD_OBJECT_FREE}, .count = 0, .queue = {.next = 0, .pred = 0}}
 
 typedef struct
 {
@@ -294,7 +285,7 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier);
 #define PT_FORK_WILL_EXEC  1
 #define PT_FORK_TARGET_CPU 2
 
-int  pthread_migrate_np(void);
+int pthread_migrate_np(void);
 int pthread_profiling_np(int cmd, pid_t pid, pthread_t tid);
 int pthread_attr_setcpuid_np(pthread_attr_t *attr, int cpu_id, int *old_cpu_id);
 int pthread_attr_getcpuid_np(int *cpu_id);
@@ -302,10 +293,52 @@ int pthread_attr_setforkinfo_np(int flags);
 int pthread_attr_setforkcpuid_np(int cpu_id);
 int pthread_attr_getforkcpuid_np(int *cpu_id);
 
+
+extern pthread_mutex_t __printf_lock;
+extern uint_t ___dmsg_lock;
+extern uint_t ___dmsg_ok;
+
+#define printf_r(...)					\
+	do{						\
+		pthread_mutex_lock(&__printf_lock);	\
+		printf(__VA_ARGS__);			\
+		pthread_mutex_unlock(&__printf_lock);	\
+	}while(0)
+
+#define fprintf_r(x,...)				\
+	do{						\
+		pthread_mutex_lock(&__printf_lock);	\
+		fprintf((x), __VA_ARGS__);		\
+		pthread_mutex_unlock(&__printf_lock);	\
+	}while(0)
+
+#define dmsg_r(x,...)						\
+	do{							\
+		if(___dmsg_ok){					\
+			cpu_spinlock_lock(&___dmsg_lock);	\
+			fprintf((x), __VA_ARGS__);		\
+			cpu_spinlock_unlock(&___dmsg_lock);	\
+		}						\
+	}while(0)
+
+#define dmsg(x,...)						\
+	do{							\
+		if(___dmsg_ok){					\
+			fprintf((x), __VA_ARGS__);		\
+		}						\
+	}while(0)
+
+
 ////////////////////////////////////////////////////////////////////
 //                       Private Section                          //
 ////////////////////////////////////////////////////////////////////
-#undef __pthread_tls_seterrno
-#define __pthread_tls_seterrno(_tls,_errno) do{(_tls)->errval = (_errno)}while(0)
+#undef __pthread_tls_set
+#define __pthread_tls_set(_tls,_indx,_val) do{(_tls)->tls_tbl[(_indx)] = (uint_t)(_val);}while(0)
 
-#endif
+#undef __pthread_tls_get
+#define __pthread_tls_get(_tls,_indx) ((_tls)->tls_tbl[(_indx)])
+
+#undef __pthread_tls_getlocation
+#define __pthread_tls_getlocation(_tls,_indx) (&(_tls)->tls_tbl[(_indx)])
+
+#endif	/* _PTHREAD_H_ */

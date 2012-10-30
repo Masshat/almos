@@ -24,14 +24,23 @@
 #include <cpu-syscall.h>
 #include <pthread.h>
 
+#include <stdio.h>
+
+#undef dmsg_r
+#define dmsg_r(...)
+
+
 int pthread_spin_init (pthread_spinlock_t *lock, int pshared)
 {
 	if (lock == NULL)
 		return EINVAL;
   
 	lock->val = __PTHREAD_OBJECT_FREE;
+
 	return 0;
 }
+
+#include <unistd.h>
 
 int pthread_spin_lock (pthread_spinlock_t *lock)
 {
@@ -40,14 +49,25 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 	register uint_t this;
 	register uint_t limit;
 
-	if (lock == NULL) 
+	if (lock == NULL)
+	{
+		dmsg_r(stderr, "%s: pid %d, tid %d, EINVAL\n",
+		       __FUNCTION__, (int)getpid(), (unsigned)pthread_self);
+
 		return EINVAL;
+	}
 
 	this = (uint_t)pthread_self();
 
+	cpu_invalid_dcache_line(lock);
+
 	// Check if lock is not owned by the caller thread.
 	if (lock->val == this)
+	{
+		dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x EDEADLK\n",
+		       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
 		return EDEADLK;
+	}
 
 	cntr = 0;
 	limit = 10000;
@@ -59,11 +79,16 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 		if(cntr > limit)
 		{
 			pthread_yield();
+			dmsg_r(stderr, "%s: pid %d, tid %d, val %d, 0x%x, yielded\n",
+			       __FUNCTION__, (int)getpid(), (unsigned)this, (unsigned)lock->val, (unsigned)lock);
+			cpu_invalid_dcache_line(lock);
 			limit = 2000;
 			cntr  = 0;
 		}
 	}
-   
+
+	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x locked\n",
+	       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
 	return 0;
 }
 
@@ -76,6 +101,7 @@ int pthread_spin_trylock(pthread_spinlock_t *lock)
 		return EINVAL;
 
 	this = (uint_t)pthread_self();
+	cpu_invalid_dcache_line(lock);
 
 	// Check if lock is not owned by the caller thread.
 	if (lock->val == this)
@@ -84,7 +110,10 @@ int pthread_spin_trylock(pthread_spinlock_t *lock)
 	isAtomic = cpu_atomic_cas(&lock->val, __PTHREAD_OBJECT_FREE, (sint_t)this);
    
 	if(isAtomic == false)
+	{
+		cpu_invalid_dcache_line(lock);
 		return EBUSY;
+	}
 
 	return 0;
 }
@@ -92,15 +121,26 @@ int pthread_spin_trylock(pthread_spinlock_t *lock)
 int pthread_spin_unlock (pthread_spinlock_t *lock)
 {
 	if (lock == NULL)
+	{
+		dmsg_r(stderr, "%s: pid %d, tid %d EINVAL\n",
+		       __FUNCTION__, (int)getpid(), (unsigned)pthread_self());
 		return EINVAL;
-  
-	// Check if lock is busy and owned by the caller thread.
-	if ((lock->val != pthread_self()))
-		return EPERM;
+	}
 
+	// Check if lock is busy and owned by the caller thread.
+	if (lock->val != pthread_self())
+	{
+		dmsg_r(stderr, "libpthread: %s: pid %d, tid %d, val %d, EPERM\n",
+		       __FUNCTION__, (int)getpid(), (int)pthread_self(), (int)lock->val);
+
+		return EPERM;
+	}
 	// Update lock's control informations  
 	lock->val = __PTHREAD_OBJECT_FREE;
 	cpu_wbflush();
+	cpu_invalid_dcache_line(lock);
+	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x unlocked\n",
+	       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
 	return 0;
 }
 
@@ -116,6 +156,7 @@ int pthread_spin_destroy (pthread_spinlock_t *lock)
 
 	// Update lock's control informations.
 	lock->val = __PTHREAD_OBJECT_DESTROYED;
+	cpu_invalid_dcache_line(lock);
 	cpu_wbflush();
 	return 0;
 }

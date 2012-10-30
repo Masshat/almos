@@ -62,10 +62,12 @@ int pthread_cond_init(pthread_cond_t *cond, pthread_condattr_t *cond_attr)
 int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
 {
 	register __pthread_tls_t *tls;
+	register struct __shared_s *shared;
 	int err;
 
 	if(cond == NULL) return EINVAL;
 
+#if 0
 	err = pthread_spin_lock(&cond->lock);
   
 	if(err) return err;
@@ -77,15 +79,21 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
 		(void)pthread_spin_unlock(&cond->lock);
 		return err;
 	}
-
+#endif
 	if(cond->count == 0)
 		list_root_init(&cond->queue);
   
 	cond->count ++;
 
 	tls = cpu_get_tls();
-	list_add_last(&cond->queue, &tls->shared->list);
+	shared = (struct __shared_s*)__pthread_tls_get(tls, __PT_TLS_SHARED);
+
+	list_add_last(&cond->queue, &shared->list);
+#if 0
 	(void)pthread_spin_unlock(&cond->lock);
+#else
+	(void)pthread_mutex_unlock(mutex);
+#endif
 
 	/* TODO: compute syscall return value (signals treatment) */
 	(void)cpu_syscall(NULL, NULL, NULL, NULL, SYS_SLEEP);
@@ -101,22 +109,22 @@ int pthread_cond_signal(pthread_cond_t *cond)
 
 	if(cond == NULL) return EINVAL;
 
+#if 0
 	err = pthread_spin_lock(&cond->lock);
 
 	if(err) return err;
-  
+#endif
+
 	if(cond->count == 0)
-	{
-		return pthread_spin_unlock(&cond->lock);
-	}
+		return 0;//pthread_spin_unlock(&cond->lock);
 
 	next = list_first(&cond->queue, struct __shared_s, list);
 	list_unlink(&next->list);
 	cond->count --;
 
-	err = pthread_spin_unlock(&cond->lock);
+	//err = pthread_spin_unlock(&cond->lock);
 	(void)cpu_syscall((void*)next->tid, NULL, NULL, NULL, SYS_WAKEUP);
-	return err;
+	return 0;//err;
 }
 
 int pthread_cond_broadcast(pthread_cond_t *cond)
@@ -126,23 +134,23 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
 	struct __shared_s *next;
 	uint_t count;
 	uint_t i;
-	int err;
+	int err = 0;
   
 	if(cond == NULL) return EINVAL;
 
-	err = pthread_spin_lock(&cond->lock);
+	//err = pthread_spin_lock(&cond->lock);
 
-	if(err) return err;
+	//if(err) return err;
   
 	if(cond->count == 0)
 	{
-		return pthread_spin_unlock(&cond->lock);
+		return 0;//pthread_spin_unlock(&cond->lock);
 	}
 
 	count       = cond->count;
 	cond->count = 0;
 	list_replace(&cond->queue, &root);
-	err         = pthread_spin_unlock(&cond->lock);
+	//err         = pthread_spin_unlock(&cond->lock);
 
 	uint_t tbl[100];
 
@@ -175,17 +183,17 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
 
 int pthread_cond_destroy(pthread_cond_t *cond)
 {
-	int err;
+	int err = 0;
   
 	if(cond == NULL)
 		return EINVAL;
 
-	err = pthread_spin_lock(&cond->lock);
-	if(err) return err;
+	//err = pthread_spin_lock(&cond->lock);
+	//if(err) return err;
 
 	if(cond->count != 0)
 		err = EBUSY;
 
-	(void)pthread_spin_unlock(&cond->lock);
+	//(void)pthread_spin_unlock(&cond->lock);
 	return err;
 }

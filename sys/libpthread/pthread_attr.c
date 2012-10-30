@@ -195,34 +195,40 @@ int pthread_attr_getcpuid_np(int *cpu_id)
 
 int pthread_attr_setforkinfo_np(int flags)
 {
-	__pthread_tls_t *tls;
+	register __pthread_tls_t *tls;
 
 	tls = cpu_get_tls();
-	tls->fork_flags = flags;
+	__pthread_tls_set(tls,__PT_TLS_FORK_FLAGS,flags);
 	return 0;
 }
 
 int pthread_attr_setforkcpuid_np(int cpu_id)
 {
-	__pthread_tls_t *tls;
+	register __pthread_tls_t *tls;
+	register uint_t flags;
 
-	tls = cpu_get_tls();
-	tls->fork_flags  |= PT_FORK_TARGET_CPU;
-	tls->fork_cpu_gid = cpu_id;
+	tls    = cpu_get_tls();
+	flags  = __pthread_tls_get(tls,__PT_TLS_FORK_FLAGS);
+	flags |= PT_FORK_TARGET_CPU;
+
+	__pthread_tls_set(tls,__PT_TLS_FORK_FLAGS,flags);
+	__pthread_tls_set(tls,__PT_TLS_FORK_CPUID,cpu_id);
 	return 0;
 }
 
 int pthread_attr_getforkcpuid_np(int *cpu_id)
 {
-	__pthread_tls_t *tls;
+	register __pthread_tls_t *tls;
+	register uint_t flags;
 
 	if(cpu_id == NULL) 
 		return EINVAL;
 
-	tls = cpu_get_tls();
-  
-	if(tls->fork_flags & PT_FORK_TARGET_CPU)
-		*cpu_id = tls->fork_cpu_gid;
+	tls   = cpu_get_tls();
+	flags = __pthread_tls_get(tls,__PT_TLS_FORK_FLAGS);
+
+	if(flags & PT_FORK_TARGET_CPU)
+		*cpu_id = (int)__pthread_tls_get(tls,__PT_TLS_FORK_CPUID);
 	else
 		*cpu_id = -1;
 

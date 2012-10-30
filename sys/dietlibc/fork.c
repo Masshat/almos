@@ -32,12 +32,12 @@ pid_t fork(void)
 
   tls = cpu_get_tls();
 
-  pid = (pid_t) cpu_syscall((void*)tls->fork_flags,
-			    (void*)tls->fork_cpu_gid,
+  pid = (pid_t) cpu_syscall((void*)__pthread_tls_get(tls,__PT_TLS_FORK_FLAGS),
+			    (void*)__pthread_tls_get(tls,__PT_TLS_FORK_CPUID),
 			    NULL,NULL,SYS_FORK);
 
   if(pid == 0)
-    __pthread_tls_init(tls);
+	  __pthread_tls_init(tls);
  
   return pid;
 }

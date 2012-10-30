@@ -33,29 +33,18 @@
 #define CONFIG_LIBC_MALLOC_DEBUG  0
 #endif
 
+#undef dmsg_r
+#define dmsg_r(...)
+
+
 typedef struct heap_manager_s
 {
 	pthread_spinlock_t lock;
 
-	union{
-		volatile uint_t limit;
-		__cacheline_t pad1;
-	};
-
-	union{
-		uint_t current;
-		__cacheline_t pad2;
-	};
-
-	union{
-		uint_t next;
-		__cacheline_t pad3;
-	};
-
-	union{
-		uint_t last;
-		__cacheline_t pad4;
-	};
+	volatile uint_t limit   __CACHELINE;
+	volatile uint_t current __CACHELINE;
+	volatile uint_t next    __CACHELINE;
+	volatile uint_t last    __CACHELINE;
 
 	uint_t start;
 	uint_t sbrk_size;
@@ -85,7 +74,7 @@ void __heap_manager_init(void)
 	initial_size = (uint_t) cpu_syscall(NULL, NULL, NULL, NULL, SYS_SBRK);
 
 	if(initial_size < 4096)
-		initial_size = 0x10000; /* subject to segfault */
+		initial_size = 0x100000; /* subject to segfault */
 
 	pthread_spin_init(&heap_mgr.lock, 0);
 	heap_mgr.start = (uint_t)&__bss_end;
@@ -93,7 +82,7 @@ void __heap_manager_init(void)
 
 	info = (block_info_t*)heap_mgr.start;
 	info->busy = 0;
-	info->size = heap_mgr.limit - heap_mgr.start - sizeof(*info);
+	info->size = heap_mgr.limit - heap_mgr.start;
 	info->ptr = NULL;
 
 #if CONFIG_LIBC_MALLOC_DEBUG
@@ -125,6 +114,13 @@ void* malloc(size_t size)
 	int tries_nr;
 	uint_t blksz;
 
+	int pid = getpid();
+
+#if 1
+	dmsg_r(stderr, "libc: %s: pid %d, tid %d, 0x%x started\n",
+	       __FUNCTION__, pid, (int)pthread_self(), (unsigned)&heap_mgr.lock);
+#endif
+
 #undef  MALLOC_THRESHOLD
 #define MALLOC_THRESHOLD  5
 
@@ -133,8 +129,9 @@ void* malloc(size_t size)
 
 	tries_nr = 0;
 	ptr      = NULL;
+	err      = 0;
 
-	while((ptr == NULL) && (tries_nr < MALLOC_LIMIT))
+	while((ptr == NULL) && (tries_nr < MALLOC_LIMIT) && (err != ENOMEM))
 	{
 		ptr = do_malloc(size, tries_nr);
 
@@ -161,7 +158,7 @@ void* malloc(size_t size)
 			{
 				info          = (block_info_t*)(heap_mgr.last + info->size);
 				info->busy    = 0;
-				info->size    = blksz - sizeof(*info);
+				info->size    = blksz;
 				info->ptr     = NULL;
 				heap_mgr.last = (uint_t)info;
 			}
@@ -174,6 +171,11 @@ void* malloc(size_t size)
 				pthread_yield();
 		}
 	}
+
+#if 1
+	dmsg_r(stderr, "libc: %s: pid %d, tid %d, 0x%x return 0x%x\n",
+	       __FUNCTION__, pid, (unsigned)pthread_self(), (unsigned)&heap_mgr.lock, (unsigned)ptr);
+#endif	
 
 	return ptr;
 }
@@ -227,7 +229,7 @@ void* do_malloc(size_t size, int round)
 		current = (block_info_t*) ((char*)current + current->size);
 
     
-		if((uint_t)current >= (heap_mgr.limit - sizeof(*current)))
+		if((uint_t)current >= heap_mgr.limit)
 		{
 			pthread_spin_unlock(&heap_mgr.lock);
 
@@ -244,31 +246,39 @@ void* do_malloc(size_t size, int round)
 #endif
 			return NULL;
 		}
+		
+		dmsg_r(stderr, "%s: current 0x%x, current->busy %d, current->size %d, limit %d [%d]\n",
+		     __FUNCTION__,
+		     (unsigned)current,
+		     (unsigned)current->busy,
+		     (unsigned)current->size,
+		     (unsigned)(heap_mgr.limit - sizeof(*current)),
+		     (unsigned)heap_mgr.limit);
 	}
 
 	if((current->size - effective_size) >= (uint_t)cacheline_size)
 	{
-		next          = (block_info_t*) ((char*)current + effective_size);
+		next          = (block_info_t*) ((uint_t)current + effective_size);
 		next->size    = current->size - effective_size;
 		next->busy    = 0;    
-		heap_mgr.next = (uint_t) next;
 		current->size = effective_size;
 		current->busy = 1;
 	}
 	else
 	{
 		current->busy = 1;
+		next          = (block_info_t*)((uint_t)current + current->size);
 	}
 
-	current->ptr = NULL;
+	heap_mgr.next = (uint_t)next;
+	current->ptr  = NULL;
 
 #if CONFIG_LIBC_MALLOC_DEBUG
 	fprintf(stderr, "%s: cpu %d End [ 0x%x ]\n", __FUNCTION__, cpu, ((unsigned int)current) + sizeof(*current));
 #endif
-	next = (block_info_t*)heap_mgr.next;
 
-	if((next->size + heap_mgr.next) == (heap_mgr.limit - sizeof(*next)))
-		heap_mgr.last = heap_mgr.next;
+	if(((uint_t)next + next->size) >= heap_mgr.limit)
+		heap_mgr.last = (uint_t)next;
 
 	pthread_spin_unlock(&heap_mgr.lock);
 	return (char*)current + sizeof(*current);
@@ -278,19 +288,23 @@ void free(void *ptr)
 {
 	block_info_t *current;
 	block_info_t *next;
-  
+	size_t limit;
+
 	if(ptr == NULL)
 		return;
-  
+	
 	current = (block_info_t*) ((char*)ptr - sizeof(*current));
 	current = (current->ptr != NULL) ? current->ptr : current;
 
 	pthread_spin_lock(&heap_mgr.lock);
+	limit = heap_mgr.limit;
 	current->busy = 0;
 
-	while ((next = (block_info_t*) ((char*) current + current->size)))
+	while (1)
 	{ 
-		if (((uint_t)next >= heap_mgr.limit) || (next->busy == 1))
+		next = (block_info_t*) ((char*) current + current->size);
+
+		if (((uint_t)next >= limit) || (next->busy == 1))
 			break;
 
 		current->size += next->size;

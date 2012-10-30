@@ -82,4 +82,6 @@ struct __cache_line_s
 
 typedef struct __cache_line_s __cacheline_t;
 
+#define __CACHELINE __attribute__((aligned(__CONFIG_CACHE_LINE_LENGTH)))
+
 #endif	/* _TYPES_H_ */

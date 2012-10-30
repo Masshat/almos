@@ -575,10 +575,4 @@ extern int gomp_test_nest_lock_25 (omp_nest_lock_25_t *) __GOMP_NOTHROW;
 # define ialias(fn)
 #endif
 
-#if HAVE_DEBUG
-#define dmsg(x,...) printf(x,__VA_ARGS__)
-#else
-#define dmsg(x,...) 
-#endif
-
 #endif /* LIBGOMP_H */
