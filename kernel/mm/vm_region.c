@@ -125,6 +125,7 @@ struct vm_region_s* vm_region_find(struct vmm_s *vmm, uint_t vaddr)
 	list_foreach_forward(&vmm->regions_root, iter)
 	{
 		region = list_element(iter, struct vm_region_s, vm_list);
+
 		if(vaddr < region->vm_end)
 		{
 			vmm->last_region = region;
@@ -174,7 +175,7 @@ error_t vm_region_add(struct vmm_s *vmm, struct vm_region_s *region)
 	list_add_last(&vmm->regions_root, &region->vm_list);
 	region->vm_start  = current_reg->vm_end;
 	region->vm_limit += region->vm_start;
-  
+
 	return 0;
 }
 
