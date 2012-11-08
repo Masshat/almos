@@ -35,7 +35,8 @@
  * and reconstruct each wait_queue name */
 error_t rwlock_init(struct rwlock_s *rwlock)
 {
-	spinlock_init(&rwlock->lock,"RWLOCK");
+	//spinlock_init(&rwlock->lock,"RWLOCK");
+	mcs_lock_init(&rwlock->lock, "RWLOCK");
 	rwlock->signature = RWLOCK_ID;
 	rwlock->count     = 0;
 	wait_queue_init(&rwlock->rd_wait_queue, "RWLOCK: Rreaders");
@@ -46,36 +47,46 @@ error_t rwlock_init(struct rwlock_s *rwlock)
 
 error_t rwlock_wrlock(struct rwlock_s *rwlock)
 {
-	spinlock_lock(&rwlock->lock);
+	uint_t irq_state;
+
+	mcs_lock(&rwlock->lock, &irq_state);
+	//spinlock_lock(&rwlock->lock);
 
 	if(rwlock->count == 0)
 	{
 		rwlock->count --;
-		spinlock_unlock(&rwlock->lock);
+		//spinlock_unlock(&rwlock->lock);
+		mcs_unlock(&rwlock->lock, irq_state);
 		return 0;
 	}
 
 	wait_on(&rwlock->wr_wait_queue, WAIT_LAST);
-	spinlock_unlock_nosched(&rwlock->lock);
+	//spinlock_unlock_nosched(&rwlock->lock);
+	mcs_unlock(&rwlock->lock, irq_state);
 	sched_sleep(current_thread);
 	return 0;
 }
 
 error_t rwlock_rdlock(struct rwlock_s *rwlock)
 {
-	spinlock_lock(&rwlock->lock);
-  
+	uint_t irq_state;
+
+	//spinlock_lock(&rwlock->lock);
+	mcs_lock(&rwlock->lock, &irq_state);
+
 	/* priority is given to writers */
 	if((rwlock->count >= 0) && (wait_queue_isEmpty(&rwlock->wr_wait_queue)))
 	{
 		rwlock->count ++;
-		spinlock_unlock(&rwlock->lock);
+		//spinlock_unlock(&rwlock->lock);
+		mcs_unlock(&rwlock->lock, irq_state);
 		return 0;
 	}
   
 	wait_on(&rwlock->rd_wait_queue, WAIT_LAST);
   
-	spinlock_unlock_nosched(&rwlock->lock);
+	//spinlock_unlock_nosched(&rwlock->lock);
+	mcs_unlock(&rwlock->lock, irq_state);
 	sched_sleep(current_thread);
 	return 0;
 }
@@ -83,50 +94,58 @@ error_t rwlock_rdlock(struct rwlock_s *rwlock)
 error_t rwlock_trywrlock(struct rwlock_s *rwlock)
 {
 	register error_t err = 0;
+	uint_t irq_state;
 
-	spinlock_lock(&rwlock->lock);
+	//spinlock_lock(&rwlock->lock);
+	mcs_lock(&rwlock->lock, &irq_state);
 
 	if(rwlock->count != 0)
 		err = EBUSY;
 	else
 		rwlock->count --;
   
-	spinlock_unlock(&rwlock->lock);
+	//spinlock_unlock(&rwlock->lock);
+	mcs_unlock(&rwlock->lock, irq_state);
 	return err;
 }
 
 error_t rwlock_tryrdlock(struct rwlock_s *rwlock)
 {
 	register error_t err = 0;
+	uint_t irq_state;
 
-	spinlock_lock(&rwlock->lock);
-  
+	//spinlock_lock(&rwlock->lock);
+	mcs_lock(&rwlock->lock, &irq_state);
+
 	if((rwlock->count >= 0) && (wait_queue_isEmpty(&rwlock->wr_wait_queue)))
 		rwlock->count ++;
 	else
 		err = EBUSY;
 
-	spinlock_unlock(&rwlock->lock);
+	//spinlock_unlock(&rwlock->lock);
+	mcs_unlock(&rwlock->lock, irq_state);
 	return err;
 }
 
 error_t rwlock_unlock(struct rwlock_s *rwlock)
 {
 	register error_t err = 0;
+	uint_t irq_state;
 
-	spinlock_lock(&rwlock->lock);
-  
+	//spinlock_lock(&rwlock->lock);
+	mcs_lock(&rwlock->lock, &irq_state);
+
 	if(rwlock->count == 0)
 	{
 		printk(ERROR, "ERROR: Unexpected rwlock_unlock\n");
 		err = EPERM;
-		goto RWLOCK_UNLOCK_END;
+		goto fail_eperm;
 	}
   
 	if(rwlock->count > 1)  /* caller is a reader and no waiting writers */
 	{
 		rwlock->count --; 
-		goto RWLOCK_UNLOCK_END;
+		goto unlock_end;
 	}
 
 	/* We are the last reader or a writer */
@@ -135,26 +154,31 @@ error_t rwlock_unlock(struct rwlock_s *rwlock)
 	if((wakeup_one(&rwlock->wr_wait_queue, WAIT_FIRST)))
 	{
 		rwlock->count --;
-		goto RWLOCK_UNLOCK_END;
+		goto unlock_end;
 	}
 
 	/* No pending writer was found */
 	rwlock->count += wakeup_all(&rwlock->rd_wait_queue);
   
-RWLOCK_UNLOCK_END:
-	spinlock_unlock(&rwlock->lock);
+fail_eperm:
+unlock_end:
+	//spinlock_unlock(&rwlock->lock);
+	mcs_unlock(&rwlock->lock, irq_state);
 	return err;
 }
 
 error_t rwlock_destroy(struct rwlock_s *rwlock)
 {
 	register error_t err = 0;
+	uint_t irq_state;
 
-	spinlock_lock(&rwlock->lock);
+	//spinlock_lock(&rwlock->lock);
+	mcs_lock(&rwlock->lock, &irq_state);
 
 	if(rwlock->count != 0)
 		err = EBUSY;
 
-	spinlock_unlock(&rwlock->lock);
+	//spinlock_unlock(&rwlock->lock);
+	mcs_unlock(&rwlock->lock, irq_state);
 	return err;
 }
