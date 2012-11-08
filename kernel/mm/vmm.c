@@ -261,7 +261,10 @@ void *vmm_mmap(struct task_s *task,
 	kmem_req_t req;
 	struct vm_region_s *region;
 	struct thread_s *this;
+	struct vmm_s *vmm;
 	uint_t asked_addr;
+	uint_t keys_nr;
+	uint_t key_start;
 	error_t err;
 
 	req.type  = KMEM_VM_REGION;
@@ -270,7 +273,8 @@ void *vmm_mmap(struct task_s *task,
   
 	this       = current_thread;
 	asked_addr = (uint_t)addr;
-  
+	vmm        = &task->vmm;
+
 	vmm_dmsg(1, "%s: Cycle: %x, cpu %d, pid %d, tid %x, addr %x, len %d, proto %x, flags %x, file %x, offset %d\n",
 		 __FUNCTION__, 
 		 cpu_time_stamp(),
@@ -295,11 +299,11 @@ void *vmm_mmap(struct task_s *task,
 	if((err = vm_region_init(region, asked_addr, asked_addr + length, proto, offset, flags)))
 		goto MMAP_ERR1;
 
-	rwlock_wrlock(&task->vmm.rwlock);
+	rwlock_wrlock(&vmm->rwlock);
 
-	err = vm_region_attach(&task->vmm, region);
+	err = vm_region_attach(vmm, region);
 
-	rwlock_unlock(&task->vmm.rwlock);
+	rwlock_unlock(&vmm->rwlock);
 
 	if(err) goto MMAP_ERR1;
 
@@ -333,7 +337,11 @@ void *vmm_mmap(struct task_s *task,
 	cpu_wbflush();
 
 	if(flags & VM_REG_HEAP)
-		task->vmm.heap_region = region;
+		vmm->heap_region = region;
+
+	keys_nr   = (region->vm_end - region->vm_begin) >> CONFIG_VM_REGION_KEYWIDTH;
+	key_start = region->vm_begin >> CONFIG_VM_REGION_KEYWIDTH;
+	(void)keysdb_bind(&vmm->regions_db, key_start, keys_nr, region);
 
 	return (void*)region->vm_start;
     
@@ -952,20 +960,13 @@ struct vm_region_op_s vm_region_default_op =
 
 void vmm_keysdb_update(struct vmm_s *vmm, struct vm_region_s *region, uint_t vaddr)
 {
-	//uint_t isBusy;
-	uint_t irq_state;
 	uint_t key;
+	uint_t count;
 
-	key    = vaddr >> CONFIG_VM_REGION_KEYWIDTH;
-	//isBusy = spinlock_trylock(&region->vm_lock);
-	mcs_lock(&region->vm_lock, &irq_state);
-  
-	//if(isBusy) return;
+	key   = region->vm_begin >> CONFIG_VM_REGION_KEYWIDTH;
+	count = (region->vm_end - region->vm_begin) >> CONFIG_VM_REGION_KEYWIDTH;
 
-	keysdb_bind(&vmm->regions_db, key, 1, region);
-  
-	//spinlock_unlock(&region->vm_lock);
-	mcs_unlock(&region->vm_lock, irq_state);
+	(void)keysdb_bind(&vmm->regions_db, key, count, region);
 }
 
 error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
@@ -1050,18 +1051,21 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 		tm_start = cpu_time_stamp();
 #endif
 
-		rwlock_rdlock(&task->vmm.rwlock);
+		//rwlock_rdlock(&task->vmm.rwlock);
 		region = keysdb_lookup(&vmm->regions_db, bad_vaddr >> CONFIG_VM_REGION_KEYWIDTH);
   
 		if(region == NULL)
 		{
+			rwlock_rdlock(&task->vmm.rwlock);
 			region = vm_region_find(vmm, bad_vaddr);
+			rwlock_unlock(&task->vmm.rwlock);
+
 			isMiss = true;
 		}
 
 		if((region == NULL) || (bad_vaddr > region->vm_limit) || (bad_vaddr < region->vm_start))
 		{
-			rwlock_unlock(&task->vmm.rwlock);
+			//rwlock_unlock(&task->vmm.rwlock);
 
 			/* vmm_region_per_thread_find() */
 
@@ -1079,12 +1083,13 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 				goto FAULT_END;
 			}
 
-			printk(INFO, "%s: cpu %d, pid %d, tid %d, region not found for vaddr 0x%x\n", 
+			printk(INFO, "%s: cpu %d, pid %d, tid %d, region not found for vaddr 0x%x [%x]\n", 
 			       __FUNCTION__, 
 			       cpu_get_id(),
 			       this->task->pid, 
 			       this->info.order, 
-			       bad_vaddr);
+			       bad_vaddr,
+				region);
       
 			goto FAULT_SEND_SIGBUS;
 		}
@@ -1100,7 +1105,7 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 		vmm_keysdb_update(vmm, region, bad_vaddr);
     
 	atomic_add(&region->vm_refcount, 1);
-	rwlock_unlock(&task->vmm.rwlock);
+	//rwlock_unlock(&task->vmm.rwlock);
 
 #if CONFIG_SHOW_VMM_LOOKUP_TM
 	printk(INFO, "%s: lookup time %d\n", __FUNCTION__, cpu_time_stamp() - tm_start);
