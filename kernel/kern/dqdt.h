@@ -37,6 +37,9 @@ struct cpu_s;
 /** Opaque structure */
 struct dqdt_attr_s;
 
+/** Initialize DQDT internal logics */
+void dqdt_init(void);
+
 /** Initialize DQDT attribut, data is a service-specific info */
 #define dqdt_attr_init(attr,data)
 
@@ -83,6 +86,7 @@ struct dqdt_attr_s
 	uint_t u_threshold;
 	uint_t m_threshold;
 	uint_t t_threshold;
+	uint_t d_type;
 	struct dqdt_cluster_s *origin;
 	void *data;
 };

@@ -163,6 +163,7 @@ error_t cluster_init(struct boot_info_s *info,
 	{
 		entry->flags = CLUSTER_UP | CLUSTER_IO;
 		cluster->task = NULL;
+		dqdt_init();
 	}
 	else
 	{
@@ -222,7 +223,7 @@ void* cluster_manager_thread(void *arg)
 	register uint_t period;
 
 	cpu_enable_all_irq(NULL);
-  
+
 	cluster   = arg;
 	this      = current_thread;
 	cpu_id    = cpu_get_id();
@@ -233,7 +234,7 @@ void* cluster_manager_thread(void *arg)
 	period    = (isRootMgr) ? 
 		CONFIG_DQDT_ROOTMGR_PERIOD * MSEC_PER_TICK : 
 		CONFIG_DQDT_MGR_PERIOD * MSEC_PER_TICK;
-  
+
 	event_set_senderId(&event, this);
 	event_set_priority(&event, E_CHR);
 	event_set_handler(&event, &manager_alarm_event_handler);
