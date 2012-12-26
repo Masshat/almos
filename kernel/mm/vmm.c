@@ -307,7 +307,7 @@ void *vmm_mmap(struct task_s *task,
 
 	if(err) goto MMAP_ERR1;
 
-	region->vm_op = &vm_region_default_op;
+	region->vm_op = (struct vm_region_op_s*)&vm_region_default_op;
 
 	if((flags & VM_REG_SHARED) && (flags & VM_REG_ANON))
 	{
@@ -820,23 +820,23 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 	register error_t err;
 	register struct page_s *page;
 	register struct cluster_s *cluster;
+	struct thread_s *this;
 	pmm_page_info_t old;
 	pmm_page_info_t new;
 	kmem_req_t req;
-	uint_t irq_state;
 
 	page      = NULL;
 	old.attr  = 0;
+	this      = current_thread;
+  
+	err = pmm_lock_page(&region->vmm->pmm, vaddr, &old);
 
-	//spinlock_lock(&region->vm_lock);
-  
-	err = pmm_get_page(&region->vmm->pmm, vaddr, &old);
-  
 	if(err) return err;
 
-	if(old.attr != 0)
+	if(old.isAtomic == false)
 	{
-		current_thread->info.spurious_pgfault_cntr ++;
+		this->info.spurious_pgfault_cntr ++;
+		pmm_tlb_flush_vaddr(vaddr, PMM_DATA);
 		return 0;
 	}
 
@@ -845,7 +845,10 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 	req.flags = AF_USER | AF_ZERO;
 
 	if((page = kmem_alloc(&req)) == NULL)
+	{
+		(void)pmm_unlock_page(&region->vmm->pmm, vaddr, &old);
 		return ENOMEM;
+	}
 
 	page->mapper = NULL;
 
@@ -853,35 +856,22 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 	new.ppn     = ppm_page2ppn(page);
 	new.cluster = NULL;
 
-	mcs_lock(&region->vm_lock, &irq_state);
-
-	err = pmm_get_page(&region->vmm->pmm, vaddr, &old);
-  
-	if(err) goto fail_get_pg;
-	
-	if(old.attr != 0) goto speculation_failed;
-
 	err = pmm_set_page(&region->vmm->pmm, vaddr, &new);
 	
 	if(err) goto fail_set_pg;
 
-	mcs_unlock(&region->vm_lock, irq_state);
-
 	cluster = current_cluster;
 
 	if(page->cid != cluster->id)
-		current_thread->info.remote_pages_cntr ++;
+		this->info.remote_pages_cntr ++;
 
 	return 0;
-	
-speculation_failed:
-	current_thread->info.spurious_pgfault_cntr ++;
 
 fail_set_pg:
-fail_get_pg:
-	mcs_unlock(&region->vm_lock, irq_state);
+	(void)pmm_unlock_page(&region->vmm->pmm, vaddr, &old);
 	req.ptr = page;
 	kmem_free(&req);
+
 	vmm_dmsg(3, "%s: ended [ err %d ]\n", __FUNCTION__, err);
 	return err;
 }
@@ -949,7 +939,7 @@ VM_REGION_PAGE_FAULT(vmm_default_pagefault)
 	return vmm_do_aod(region, vaddr);
 }
 
-struct vm_region_op_s vm_region_default_op =
+const struct vm_region_op_s vm_region_default_op =
 {
 	.page_in     = NULL,
 	.page_out    = NULL,
@@ -1104,7 +1094,7 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 	if(isMiss)
 		vmm_keysdb_update(vmm, region, bad_vaddr);
     
-	atomic_add(&region->vm_refcount, 1);
+	//atomic_add(&region->vm_refcount, 1);
 	//rwlock_unlock(&task->vmm.rwlock);
 
 #if CONFIG_SHOW_VMM_LOOKUP_TM
@@ -1121,7 +1111,7 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 		 region->vm_end);
 
 	err = vm_region_update(region, bad_vaddr, flags);
-	atomic_add(&region->vm_refcount, -1);
+	//atomic_add(&region->vm_refcount, -1);
   
 	vmm_dmsg(1,"%s: cpu %d, pid %d, tid %x, vaddr 0x%x region updated with err %d\n",
 		 __FUNCTION__,
