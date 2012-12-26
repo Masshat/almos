@@ -38,6 +38,7 @@
 #include <page.h>
 #include <ext2-private.h>
 #include <event.h>
+#include <dqdt.h>
 
 #define USR_START (CONFIG_USR_START)
 
@@ -54,7 +55,7 @@ static EVENT_HANDLER(kvfsd_alarm_event_handler)
 
 void* kvfsd(void *arg)
 {
-	uint_t tm_now;
+	uint_t tm_now, cntr;
 	struct task_s *task;
 	struct thread_s *this;
 	struct cpu_s *cpu;
@@ -62,7 +63,7 @@ void* kvfsd(void *arg)
 	struct event_s event;
 	uint_t fs_type;
 	error_t err;
-
+	
 	cpu_enable_all_irq(NULL);
 
 	printk(INFO, "INFO: Starting KVFSD on CPU %d [ %d ]\n", cpu_get_id(), cpu_time_stamp());
@@ -139,6 +140,7 @@ void* kvfsd(void *arg)
 	event_set_handler(&event, &kvfsd_alarm_event_handler);
   
 	info.event = &event;
+	cntr       = 0;
 
 	while(1)
 	{
@@ -147,6 +149,11 @@ void* kvfsd(void *arg)
 		tm_now = cpu_time_stamp();
 		printk(INFO, "INFO: System Current TimeStamp %u\n", tm_now);
 		sync_all_pages();
+
+		if((cntr % 4) == 0)
+			dqdt_print_summary(dqdt_root);
+
+		cntr += 1;
 	}
 	return NULL;
 }

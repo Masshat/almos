@@ -53,7 +53,7 @@
 #define CONFIG_TASK_CHILDS_MAX_NR        512
 #define CONFIG_TASK_ARGS_PAGES_MAX_NR    32
 #define CONFIG_TASK_HEAP_MIN_SIZE        0x00010000
-#define CONFIG_TASK_HEAP_MAX_SIZE        0x10000000
+#define CONFIG_TASK_HEAP_MAX_SIZE        0x30000000
 
 ////////////////////////////////////////////////////
 //          KERNEL GENERAL CONFIGURATIONS         //
@@ -70,8 +70,8 @@
 #define CONFIG_MAX_CPU_PER_CLUSTER_NR    4
 #define CONFIG_MAX_DQDT_DEPTH            4
 #define CONFIG_DQDT_LEVELS_NR            5
-#define CONFIG_DQDT_MGR_PERIOD           3
-#define CONFIG_DQDT_ROOTMGR_PERIOD       3
+#define CONFIG_DQDT_MGR_PERIOD           4
+#define CONFIG_DQDT_ROOTMGR_PERIOD       4
 #define CONFIG_CPU_BALANCING_PERIOD      4
 #define CONFIG_CLUSTER_KEYS_NR           8
 #define CONFIG_REL_KFIFO_SIZE            32
@@ -102,7 +102,7 @@
 #define CONFIG_ENABEL_THREAD_TRACE       no
 #define CONFIG_SHOW_PAGEFAULT            no
 #define CONFIG_SHOW_CPU_USAGE            no
-#define CONFIG_SHOW_FPU_MSG              yes
+#define CONFIG_SHOW_FPU_MSG              no
 #define CONFIG_SHOW_THREAD_DESTROY_MSG   yes
 #define CONFIG_SHOW_THREAD_CREATE_MSG    no
 #define CONFIG_SHOW_PPM_PGALLOC_MSG      no

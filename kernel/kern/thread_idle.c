@@ -116,7 +116,7 @@ void* thread_idle(void *arg)
 	if(cpu == cpu->cluster->bscpu)
 	{    
 		dqdt_update();
-
+#if 0
 		thread = kthread_create(this->task, 
 					&cluster_manager_thread,
 					cpu->cluster, 
@@ -141,6 +141,7 @@ void* thread_idle(void *arg)
 		listner       = sched_get_listner(thread, SCHED_OP_ADD_CREATED);
 		event         = sched_event_make(thread, SCHED_OP_ADD_CREATED);
 		sched_event_send(listner,event);
+#endif
 
 		if(clusters_tbl[cpu->cluster->id].flags & CLUSTER_IO)
 		{

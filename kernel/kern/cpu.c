@@ -31,7 +31,7 @@
 #include <kmem.h>
 #include <cpu-trace.h>
 #include <sysfs.h>
-
+#include <dqdt.h>
 
 static void cpu_sysfs_op_init(sysfs_op_t *op);
 
@@ -174,9 +174,16 @@ void cpu_time_reset(struct cpu_s *cpu)
 
 void cpu_clock(struct cpu_s *cpu)
 {
+	register uint_t ticks;
+
 	cpu_time_update(cpu);
-	alarm_clock(&cpu->alarm_mgr, cpu_get_ticks(cpu));
-	sched_clock(current_thread, cpu_get_ticks(cpu));
+
+	ticks = cpu_get_ticks(cpu);
+	alarm_clock(&cpu->alarm_mgr, ticks);
+	sched_clock(current_thread, ticks);
+	
+	if(((ticks % CONFIG_DQDT_MGR_PERIOD) == 0) && (cpu == cpu->cluster->bscpu))
+		dqdt_update();
 }
 
 void cpu_ipi_notify(struct cpu_s *cpu)
