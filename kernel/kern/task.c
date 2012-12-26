@@ -517,7 +517,7 @@ error_t task_create(struct task_s **new_task, struct dqdt_attr_s *attr, uint_t m
 		goto fail_fd_info;
 	}
 
-	memset(&task->vmm, 0, sizeof(&task->vmm));
+	memset(&task->vmm, 0, sizeof(task->vmm));
 	memset(&task->fd_info->tbl[0], 0, sizeof(task->fd_info->tbl));
 	task->cluster         = attr->cluster;
 	task->cpu             = attr->cpu;
