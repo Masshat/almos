@@ -24,6 +24,7 @@
 #include <types.h>
 #include <errno.h>
 #include <thread.h>
+#include <task.h>
 #include <cluster.h>
 #include <pmm.h>
 #include <cpu.h>
@@ -32,6 +33,8 @@
 #include <dqdt.h>
 
 #define DQDT_MGR_PERIOD      CONFIG_DQDT_MGR_PERIOD
+#define DQDT_DIST_MANHATTAN  1
+#define DQDT_DIST_RANDOM     2
 
 #if 0
 #define down_dmsg(x,...)    printk(INFO, __VA_ARGS__)
@@ -45,20 +48,93 @@
 #define update_dmsg(x,...)  dqdt_dmsg(x,__VA_ARGS__)
 #endif
 
-static inline uint_t dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluster_s *c2)
+struct dqdt_cluster_s *dqdt_root;
+static spinlock_t dqdt_lock;
+static struct wait_queue_s dqdt_task_queue;
+static uint_t dqdt_count;
+static uint_t dqdt_threshold;
+static uint_t dqdt_last_pid;
+
+void dqdt_init()
+{
+	spinlock_init(&dqdt_lock, "dqdt lock");
+	wait_queue_init(&dqdt_task_queue, "dqdt task");
+	dqdt_count     = 0;
+	dqdt_threshold = 100;
+	dqdt_last_pid  = 0;
+	cpu_wbflush();
+}
+
+void dqdt_wait_for_update()
+{
+	bool_t dontWait = false;
+	struct thread_s *this;
+
+	this = current_thread;
+
+	spinlock_lock(&dqdt_lock);
+
+	if(((dqdt_last_pid == this->task->pid) && (dqdt_count < dqdt_threshold)) || 
+	   ((dqdt_count == 0) && (dqdt_last_pid == 0)))
+	{
+		dontWait      = true;
+		dqdt_last_pid = this->task->pid;
+		dqdt_count   += 1;
+	}
+	else
+	{
+		wait_on(&dqdt_task_queue, WAIT_LAST);
+		dqdt_count += 3;
+	}
+
+	spinlock_unlock(&dqdt_lock);
+	
+	if(dontWait)
+		return;
+
+	sched_sleep(current_thread);
+}
+
+void dqdt_update_done()
+{
+	struct thread_s *thread;
+
+	spinlock_lock(&dqdt_lock);
+
+	thread         = wakeup_one(&dqdt_task_queue, WAIT_FIRST);
+	dqdt_count     = 0;
+	dqdt_last_pid  = (thread == NULL) ? 0 : thread->task->pid;
+	dqdt_threshold = (dqdt_root->info.summary.U < 60) ?  100 : 10;
+
+	spinlock_unlock(&dqdt_lock);
+}
+
+static inline uint_t dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluster_s *c2, struct dqdt_attr_s *attr)
 {
 	register sint_t x1,y1,x2,y2,d;
   
-	x1 = c1->home->x_coord;
-	y1 = c1->home->y_coord;
-	x2 = c2->home->x_coord;
-	y2 = c2->home->y_coord;
-  
-	d = ABS((x1 - x2)) + ABS((y1 - y2));
+	switch(attr->d_type)
+	{
+	case DQDT_DIST_MANHATTAN:
+		x1 = c1->home->x_coord;
+		y1 = c1->home->y_coord;
+		x2 = c2->home->x_coord;
+		y2 = c2->home->y_coord;
+		d = ABS((x1 - x2)) + ABS((y1 - y2));
+		break;
+
+	case DQDT_DIST_RANDOM:
+		//srand(cpu_time_stamp());
+		d = rand();
+		break;
+
+	default:
+		d = 1;
+		break;
+	}
+
 	return d;
 }
-
-struct dqdt_cluster_s *dqdt_root;
 
 void dqdt_print_summary(struct dqdt_cluster_s *cluster)
 {
@@ -234,10 +310,14 @@ error_t dqdt_update(void)
 				    cluster->id, 
 				    i, i+1);
 		}
-#if CONFIG_DQDT_DEBUG == 2
 		else
+		{
+			dqdt_update_done();
+
+#if CONFIG_DQDT_DEBUG == 2
 			dqdt_print_summary(logical);
 #endif
+		}
 	}
   
 	return 0;
@@ -274,8 +354,8 @@ bool_t dqdt_down_traversal(struct dqdt_cluster_s *logical,
 		found = select(logical,attr,i);
 		if(found)
 		{
-			val =  dqdt_distance(attr->origin, logical->children[i]);
-			val = (i << 16) | val;
+			val =  dqdt_distance(attr->origin, logical->children[i], attr);
+			val = (i << 16) | (val % 101);
 			distance_tbl[i] = val;
 		}
 	}
@@ -294,7 +374,8 @@ bool_t dqdt_down_traversal(struct dqdt_cluster_s *logical,
 		}
 	}
 
-	down_dmsg(1, "%s: D-Tbl: [%x,%x,%x,%x]\n", 
+	down_dmsg(1,
+		  "%s: D-Tbl: [%x,%x,%x,%x]\n", 
 		  __FUNCTION__,
 		  distance_tbl[0],
 		  distance_tbl[1],
@@ -497,37 +578,38 @@ error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s
 	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
   
 	attr->origin      = current_cluster->levels_tbl[0];
-	attr->t_threshold = 10;
- 
-	for(threshold = 10; threshold < 100; threshold += 20)
+	attr->t_threshold = 2;
+	attr->u_threshold = 98;
+	attr->d_type      = DQDT_DIST_MANHATTAN;
+
+	dqdt_wait_for_update();
+
+	err = dqdt_up_traversal(logical,
+				attr,
+				dqdt_placement_child_select,
+				dqdt_placement_clstr_select,
+				dqdt_cpu_free_select,
+				DQDT_MAX_DEPTH,
+				logical->index);
+
+	if(err == 0) goto found;
+
+	err = EAGAIN;
+
+	for(threshold = 10; ((threshold < 100) && (err != 0)); threshold += 20)
 	{
 		attr->u_threshold = threshold;
 		
-		switch(threshold)
-		{
-		case 10:
-		case 50:
-			err = dqdt_up_traversal(logical,
-						attr,
-						dqdt_placement_child_select,
-						dqdt_placement_clstr_select,
-						dqdt_cpu_free_select,
-						DQDT_MAX_DEPTH,
-						logical->index);
-			break;
-		default:
-			err = dqdt_up_traversal(logical,
-						attr,
-						dqdt_placement_child_select,
-						dqdt_placement_clstr_select,
-						dqdt_cpu_min_usage_select,
-						DQDT_MAX_DEPTH,
-						logical->index);
-		}
-
-		if(err == 0) break;
+		err = dqdt_up_traversal(logical,
+					attr,
+					dqdt_placement_child_select,
+					dqdt_placement_clstr_select,
+					dqdt_cpu_min_usage_select,
+					DQDT_MAX_DEPTH,
+					logical->index);
 	}
 
+found:
 	select_dmsg(1, "%s: ended, found %s\n", __FUNCTION__, (err == 0) ? "(Yes)" : "(No)");
 	return err;
 }
@@ -544,6 +626,7 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
   
 	attr->origin      = current_cluster->levels_tbl[0];
 	attr->t_threshold = current_cluster->onln_cpu_nr;
+	attr->d_type      = DQDT_DIST_MANHATTAN;
 
 	for(threshold = 20; threshold < 100; threshold += 20)
 	{
@@ -650,18 +733,23 @@ error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 	error_t err;
 
 	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
-	attr->m_threshold = 1024;
-	attr->t_threshold = 10;
-	attr->origin = current_cluster->levels_tbl[0];
+	attr->m_threshold = current_cluster->ppm.uprio_pages_min;
+	attr->t_threshold = 5;
+	attr->d_type      = DQDT_DIST_RANDOM;
+	attr->origin      = current_cluster->levels_tbl[0];
+	err               = EAGAIN;
 
-	for(threshold = 10; threshold <= 110; threshold += 20)
+	dqdt_wait_for_update();
+
+	for(threshold = 10; ((threshold <= 100) && (err != 0)); threshold += 15)
 	{
 		attr->u_threshold = threshold;
 
 		switch(threshold)
 		{
+		case 55:
+			attr->m_threshold >>= 1;
 		case 10:
-		case 70:
 			err = dqdt_up_traversal(logical,
 						attr,
 						dqdt_task_placement_child_select,
@@ -671,7 +759,11 @@ error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 						5);
 			break;
     
-		case 30:
+		case 70:
+			attr->m_threshold >>= 1;
+			
+		case 40:
+		case 25:
 			err = dqdt_up_traversal(logical,
 						attr,
 						dqdt_task_placement_child_select,
@@ -681,7 +773,9 @@ error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 						5);
 			break;
 
-		default:
+		case 100:
+			attr->t_threshold = 10;
+		case 85:
 			err = dqdt_up_traversal(logical,
 						attr,
 						dqdt_placement_child_select,
@@ -691,8 +785,6 @@ error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 						5);
       
 		}
-
-		if(err == 0) break;
 	}
 
 	select_dmsg(1, "%s: ended, found %s [%d]\n", 
@@ -808,7 +900,8 @@ error_t dqdt_mem_request(struct dqdt_cluster_s *logical, struct dqdt_attr_s *att
 		    current_cluster->id,
 		    logical->level,
 		    logical->home->id);
-  
+
+	attr->d_type = DQDT_DIST_MANHATTAN;
 	attr->origin = current_cluster->levels_tbl[0];
 
 	err = dqdt_up_traversal(logical,
