@@ -47,6 +47,7 @@
 #define PMM_COW
 #define PMM_MIGRATE
 #define PMM_SWAP
+#define PMM_LOCKED
 #define PMM_CLEAR
 
 /** Page flags */
@@ -76,6 +77,8 @@ struct pmm_page_info_s
 	uint_t attr;
 	uint_t ppn;
 	struct cluster_s *cluster;
+	bool_t isAtomic;
+	void *data;
 };
 
 typedef struct pmm_page_info_s pmm_page_info_t;
@@ -98,6 +101,8 @@ error_t pmm_release(struct pmm_s *pmm);
 error_t pmm_destroy(struct pmm_s *pmm);
 
 /* Page related operations*/
+error_t pmm_lock_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info);
+error_t pmm_unlock_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info);
 error_t pmm_set_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info);
 error_t pmm_get_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info);
 struct ppm_s* pmm_ppn2ppm(ppn_t ppn);
