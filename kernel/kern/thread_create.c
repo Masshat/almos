@@ -36,7 +36,7 @@
 #include <pmm.h>
 #include <page.h>
 
-const char* thread_state_name[THREAD_STATES_NR] = 
+const char* const thread_state_name[THREAD_STATES_NR] = 
 {
 	"S_CREATE",
 	"S_USR",
@@ -46,7 +46,7 @@ const char* thread_state_name[THREAD_STATES_NR] =
 	"S_DEAD"
 };
 
-const char* thread_type_name[THREAD_TYPES_NR] =
+const char* const thread_type_name[THREAD_TYPES_NR] =
 {
 	"USR",
 	"KTHREAD",

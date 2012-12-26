@@ -48,8 +48,8 @@ typedef enum
 	THREAD_STATES_NR
 } thread_state_t;
 
-const char* thread_state_name[THREAD_STATES_NR];
-const char* thread_type_name[THREAD_TYPES_NR];
+const char* const thread_state_name[THREAD_STATES_NR];
+const char* const thread_type_name[THREAD_TYPES_NR];
 
 struct cpu_desc_s;
 struct sched_s;
@@ -90,6 +90,7 @@ typedef struct
  */
 struct thread_info
 {
+	//struct mcs_mailbox_s mailbox;
 	uint_t pgfault_cntr;
 	uint_t remote_pages_cntr;
 	uint_t spurious_pgfault_cntr;
