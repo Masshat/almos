@@ -103,7 +103,7 @@ struct vm_region_op_s
 	vm_reg_pagefault_t *page_fault;
 };
 
-extern struct vm_region_op_s vm_region_default_op;
+extern const struct vm_region_op_s vm_region_default_op;
 
 KMEM_OBJATTR_INIT(vm_region_kmem_init);
 
