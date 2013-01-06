@@ -419,9 +419,11 @@ error_t task_load_init(struct task_s *task)
 
 	printk(INFO, "INFO: Loading Init Process [ %s ]\n", INIT_PATH);
 
-	err = dqdt_task_placement(dqdt_root, &attr);
+	//err = dqdt_task_placement(dqdt_root, &attr);
+	//assert(err == 0);
 
-	assert(err == 0);
+	attr.cpu = current_cpu;
+	attr.cluster = attr.cpu->cluster;
 
 	if((err = task_create(&init, &attr, CPU_USR_MODE)))
 		return err;
