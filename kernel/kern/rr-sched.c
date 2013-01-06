@@ -236,7 +236,7 @@ SCHED_SCOPE void rr_clock_balancing(struct thread_s *this, uint_t ticks_nr)
 	logical = cluster->levels_tbl[0];
 
 	cond1   = ((rQueues->u_runnable > 0) && (rQueues->scheduler->user_nr > 1));
-	cond2   = (rQueues->u_runnable > (logical->info.summary.T / cluster->onln_cpu_nr));
+	cond2   = (rQueues->u_runnable > (atomic_get(&logical->info.summary.T) / cluster->onln_cpu_nr));
 	cond3   = ((cpu->usage >= 180) && ((logical->info.summary.U < 80) || (logical->parent->info.summary.U < 95)));
 
 	isUrgent = (cond1 && (cond2 || cond3)) ? true : false;
