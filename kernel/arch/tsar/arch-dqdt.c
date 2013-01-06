@@ -80,6 +80,7 @@ error_t arch_dqdt_chip_init(struct dqdt_cluster_s ***chip,
 			if(ptr == NULL) 
 				return ENOMEM;
 
+			ptr->cores_nr            = clusters_tbl[cid].cluster->onln_cpu_nr;
 			ptr->flags               = DQDT_CLUSTER_UP;
 			ptr->home                = clusters_tbl[cid].cluster;
 			ptr->home->levels_tbl[0] = ptr;
@@ -181,15 +182,17 @@ struct dqdt_cluster_s * arch_dqdt_make_cluster(struct dqdt_cluster_s ***matrix,
 	uint_t clstr_x;
 	uint_t clstr_y;
 	uint_t childs_nr;
-  
-	child0  = NULL;
-	child1  = NULL;
-	child2  = NULL;
-	child3  = NULL;
-	cluster = NULL;
-	clstr_x = x;
-	clstr_y = y;
+	uint_t cores_nr;
+
 	childs_nr = 0;
+	cores_nr  = 0;  
+	child0    = NULL;
+	child1    = NULL;
+	child2    = NULL;
+	child3    = NULL;
+	cluster   = NULL;
+	clstr_x   = x;
+	clstr_y   = y;
 
 	dqdt_dmsg(1, "%s: level %d, x %d, y %d\n", __FUNCTION__, level, x, y);
 
@@ -200,6 +203,7 @@ struct dqdt_cluster_s * arch_dqdt_make_cluster(struct dqdt_cluster_s ***matrix,
 		clstr_x = x;
 		clstr_y = y;
 		childs_nr ++;
+		cores_nr += child0->cores_nr;
 	}
 
 	if(matrix[x+1][y]->flags & DQDT_CLUSTER_UP) 
@@ -209,6 +213,7 @@ struct dqdt_cluster_s * arch_dqdt_make_cluster(struct dqdt_cluster_s ***matrix,
 		clstr_x = x+1;
 		clstr_y = y;
 		childs_nr ++;
+		cores_nr += child1->cores_nr;
 	}
    
 	if(matrix[x][y+1]->flags & DQDT_CLUSTER_UP) 
@@ -218,6 +223,7 @@ struct dqdt_cluster_s * arch_dqdt_make_cluster(struct dqdt_cluster_s ***matrix,
 		clstr_x = x;
 		clstr_y = y+1;
 		childs_nr ++;
+		cores_nr += child2->cores_nr;
 	}
   
 	if(matrix[x+1][y+1]->flags & DQDT_CLUSTER_UP)
@@ -227,6 +233,7 @@ struct dqdt_cluster_s * arch_dqdt_make_cluster(struct dqdt_cluster_s ***matrix,
 		clstr_x = x+1;
 		clstr_y = y+1;
 		childs_nr ++;
+		cores_nr += child3->cores_nr;
 	}
   
 	req.type  = KMEM_GENERIC;
@@ -290,13 +297,15 @@ struct dqdt_cluster_s * arch_dqdt_make_cluster(struct dqdt_cluster_s ***matrix,
 	else
 		child3->parent = ptr;
 
+	ptr->cores_nr  = cores_nr;
 	ptr->childs_nr = childs_nr;
-
-	dqdt_dmsg(1, "%s: level %d, x %d, y %d, childs_nr %d, isUp %s, done\n", 
+	
+	dqdt_dmsg(1, "%s: level %d, x %d, y %d, childs_nr %d, cores_nr %d, isUp %s, done\n", 
 		  __FUNCTION__, 
 		  level, 
 		  x, 
 		  y,
+		  cores_nr,
 		  childs_nr,
 		  (cluster == NULL) ? "No" : "Yes");
 
