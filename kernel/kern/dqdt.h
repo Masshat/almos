@@ -25,12 +25,14 @@
 
 #include <config.h>
 #include <types.h>
+#include <atomic.h>
 
 #define DQDT_MAX_DEPTH        CONFIG_MAX_DQDT_DEPTH
 #define DQDT_LEVELS_NR        CONFIG_DQDT_LEVELS_NR
 #define DQDT_CLUSTER_UP       0x01
 #define DQDT_CLUSTER_READY    0x02
 
+struct boot_info_s;
 struct cluster_s;
 struct cpu_s;
 
@@ -38,7 +40,7 @@ struct cpu_s;
 struct dqdt_attr_s;
 
 /** Initialize DQDT internal logics */
-void dqdt_init(void);
+void dqdt_init(struct boot_info_s *info);
 
 /** Initialize DQDT attribut, data is a service-specific info */
 #define dqdt_attr_init(attr,data)
@@ -55,8 +57,11 @@ void dqdt_print(struct dqdt_cluster_s *cluster);
 /** Print summary information of the given logical cluster */
 void dqdt_print_summary(struct dqdt_cluster_s *cluster);
 
-/** Update the DQDT */
+/** Update the core-usage & memory estimations, should be called periodically */
 error_t dqdt_update(void);
+
+/** Update the threads number, should be called on each task's placement or destroy */
+error_t dqdt_update_threads_number(struct dqdt_cluster_s *logical, uint_t core_index, sint_t expected_T, sint_t count);
 
 /** Ask the DQDT for a thread placement decision */
 error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr);
@@ -81,21 +86,26 @@ extern struct dqdt_cluster_s *dqdt_root;
 
 struct dqdt_attr_s
 {
+	/* Public Members */
 	struct cluster_s *cluster;
 	struct cpu_s *cpu;
-	uint_t u_threshold;
-	uint_t m_threshold;
-	uint_t t_threshold;
-	uint_t d_type;
-	struct dqdt_cluster_s *origin;
 	void *data;
+
+	/* Private Members */
+	uint_t flags;
+	uint_t m_threshold;
+	uint_t u_threshold;
+	uint_t d_type;
+	uint_t *select_tbl;
+	struct dqdt_cluster_s *origin;
 };
 
 #undef dqdt_attr_init
-#define dqdt_attr_init(_attr_,_data_)		\
-	do{(_attr_)->cluster   = NULL;		\
-		(_attr_)->cpu  = NULL;		\
-		(_attr_)->data = (_data_);	\
+#define dqdt_attr_init(_attr_,_data_)			\
+	do{(_attr_)->cluster     = NULL;		\
+		(_attr_)->cpu    = NULL;		\
+		(_attr_)->d_type = 0;			\
+		(_attr_)->data = (_data_);		\
 	}while(0)
 
 
@@ -107,10 +117,10 @@ struct dqdt_attr_s
 
 typedef struct dqdt_indicators_s
 {
-	uint_t M;
-	uint_t T;
-	uint_t U;
-	uint_t pages_tbl[CONFIG_PPM_MAX_ORDER] CACHELINE;
+	atomic_t T;
+	uint_t   U;
+	uint_t   M;
+	uint_t   pages_tbl[CONFIG_PPM_MAX_ORDER] CACHELINE;
 } dqdt_indicators_t;
 
 typedef struct dqdt_estimation_s
@@ -125,6 +135,7 @@ struct dqdt_cluster_s
 	uint_t level;
 	uint_t flags;
 	uint_t childs_nr;
+	uint_t cores_nr;
 	dqdt_estimation_t info;
 	struct cluster_s *home;
 	struct dqdt_cluster_s *parent;

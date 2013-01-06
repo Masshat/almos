@@ -24,14 +24,25 @@
 #include <thread.h>
 #include <scheduler.h>
 #include <wait_queue.h>
-
+#include <cluster.h>
+#include <dqdt.h>
+#include <task.h>
 
 int sys_thread_exit (void *exit_val)
 {
 	struct thread_s *this = current_thread;
+	struct dqdt_cluster_s *logical;
+	struct cpu_s *cpu;
 	uint_t state;
 	bool_t isEmpty;
 	bool_t isReleased;
+
+	cpu     = current_cpu;
+	logical = cpu->cluster->levels_tbl[0];
+ 
+	/* TODO: the cpu->lid must match the core index in the logical cluster */
+	if(this->task->pid != 1)
+		(void)dqdt_update_threads_number(logical, cpu->lid, -1, -1);
 
 	spinlock_lock(&this->lock);
 
@@ -55,7 +66,7 @@ int sys_thread_exit (void *exit_val)
 	{
 		this->info.join->info.exit_value = exit_val;
 		wakeup_one(&this->info.wait_queue, WAIT_ANY);
-		spinlock_unlock_nosched(&this->lock);		
+		spinlock_unlock_nosched(&this->lock);
 	}
 
 exit_dead:

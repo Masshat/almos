@@ -29,12 +29,15 @@
 #include <pmm.h>
 #include <cpu.h>
 #include <bits.h>
+#include <boot-info.h>
 
 #include <dqdt.h>
 
 #define DQDT_MGR_PERIOD      CONFIG_DQDT_MGR_PERIOD
+#define DQDT_DIST_NOTSET     0	/* must be zero (c.f: see dqdt_attr_init) */
 #define DQDT_DIST_MANHATTAN  1
 #define DQDT_DIST_RANDOM     2
+#define DQDT_SELECT_LTCN     0x001
 
 #if 0
 #define down_dmsg(x,...)    printk(INFO, __VA_ARGS__)
@@ -48,6 +51,7 @@
 #define update_dmsg(x,...)  dqdt_dmsg(x,__VA_ARGS__)
 #endif
 
+
 struct dqdt_cluster_s *dqdt_root;
 static spinlock_t dqdt_lock;
 static struct wait_queue_s dqdt_task_queue;
@@ -55,57 +59,58 @@ static uint_t dqdt_count;
 static uint_t dqdt_threshold;
 static uint_t dqdt_last_pid;
 
-void dqdt_init()
+void dqdt_init(struct boot_info_s *info)
 {
-	spinlock_init(&dqdt_lock, "dqdt lock");
-	wait_queue_init(&dqdt_task_queue, "dqdt task");
-	dqdt_count     = 0;
-	dqdt_threshold = 100;
-	dqdt_last_pid  = 0;
-	cpu_wbflush();
+	uint_t i;
+
+	struct cluster_s *cluster = current_cluster;
+	struct dqdt_cluster_s *logical = cluster->levels_tbl[0];
+
+	if(cluster->id == info->boot_cluster_id)
+	{
+		spinlock_init(&dqdt_lock, "dqdt lock");
+		wait_queue_init(&dqdt_task_queue, "dqdt task");
+		dqdt_count     = 0;
+		dqdt_threshold = 100;
+		dqdt_last_pid  = 0;
+		cpu_wbflush();
+	}
+	
+	for(i = 0; i < 4; i++)
+		atomic_init(&logical->info.tbl[i].T, 0);
+
+	atomic_init(&logical->info.summary.T, 0);
+}
+
+struct dqdt_cluster_s* dqdt_logical_lookup(uint_t level)
+{
+	register struct dqdt_cluster_s *current;
+
+	current = current_cluster->levels_tbl[0];
+  
+	while((current != NULL) && (current->level != level))
+		current = current->parent;
+
+	return (current == NULL) ? dqdt_root : current;
 }
 
 void dqdt_wait_for_update()
 {
-	bool_t dontWait = false;
 	struct thread_s *this;
 
 	this = current_thread;
 
 	spinlock_lock(&dqdt_lock);
-
-	if(((dqdt_last_pid == this->task->pid) && (dqdt_count < dqdt_threshold)) || 
-	   ((dqdt_count == 0) && (dqdt_last_pid == 0)))
-	{
-		dontWait      = true;
-		dqdt_last_pid = this->task->pid;
-		dqdt_count   += 1;
-	}
-	else
-	{
-		wait_on(&dqdt_task_queue, WAIT_LAST);
-		dqdt_count += 3;
-	}
-
+	wait_on(&dqdt_task_queue, WAIT_LAST);
 	spinlock_unlock(&dqdt_lock);
-	
-	if(dontWait)
-		return;
 
 	sched_sleep(current_thread);
 }
 
 void dqdt_update_done()
 {
-	struct thread_s *thread;
-
 	spinlock_lock(&dqdt_lock);
-
-	thread         = wakeup_one(&dqdt_task_queue, WAIT_FIRST);
-	dqdt_count     = 0;
-	dqdt_last_pid  = (thread == NULL) ? 0 : thread->task->pid;
-	dqdt_threshold = (dqdt_root->info.summary.U < 60) ?  100 : 10;
-
+	(void)wakeup_one(&dqdt_task_queue, WAIT_FIRST);
 	spinlock_unlock(&dqdt_lock);
 }
 
@@ -125,7 +130,7 @@ static inline uint_t dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluste
 
 	case DQDT_DIST_RANDOM:
 		//srand(cpu_time_stamp());
-		d = rand();
+		d = rand() % 0xFFF;
 		break;
 
 	default:
@@ -140,15 +145,16 @@ void dqdt_print_summary(struct dqdt_cluster_s *cluster)
 {
 	uint_t i;
 
-	printk(INFO,"cpu %d, cid %d, level %d, index %d, Indicators Summary:\n",
+	printk(INFO,"cpu %d, cid %d, level %d, cores_nr %d, index %d, Indicators Summary:\n",
 	       cpu_get_id(),
 	       current_cluster->id,
 	       cluster->level,
+	       cluster->cores_nr,
 	       cluster->index);
 
 	printk(INFO,"   M %d, T %d, U %d\n", 
 	       cluster->info.summary.M, 
-	       cluster->info.summary.T, 
+	       atomic_get(&cluster->info.summary.T), 
 	       cluster->info.summary.U);
   
 	printk(INFO,"   Pages_tbl [");
@@ -194,6 +200,25 @@ void dqdt_print(struct dqdt_cluster_s *cluster)
 	       cluster->index);
 }
 
+void dqdt_indicators_update(dqdt_indicators_t *entry,
+			 uint_t M, 
+			 uint_t T,
+			 uint_t U,
+			 uint_t *pages_tbl)
+{
+	register uint_t i;
+
+	entry->M = M;
+	entry->U = U;
+
+	//(void)atomic_set(&entry->T, T);
+
+	for(i = 0; ((pages_tbl != NULL) && (i < PPM_MAX_ORDER)); i++)
+		entry->pages_tbl[i] = pages_tbl[i];
+
+	cpu_wbflush();
+}
+
 error_t dqdt_update(void)
 {
 	struct dqdt_cluster_s *logical;
@@ -208,6 +233,7 @@ error_t dqdt_update(void)
 	cluster = current_cluster;
 	usage   = 0;
 	threads = 0;
+	uint_t t = 0;
 
 	update_dmsg(1, "%s: cluster %d, started, onln_cpu_nr %d\n", 
 		    __FUNCTION__, 
@@ -218,38 +244,43 @@ error_t dqdt_update(void)
 	{
 		cpu_compute_stats(&cluster->cpu_tbl[i], CONFIG_DQDT_MGR_PERIOD);
 		usage   += cluster->cpu_tbl[i].busy_percent;//cluster->cpu_tbl[i].usage;
-		threads += cluster->cpu_tbl[i].scheduler.u_runnable;
+		//threads += cluster->cpu_tbl[i].scheduler.user_nr;
+		t += atomic_get(&cluster->levels_tbl[0]->info.tbl[i].T);
 	}
 
 	usage /= cluster->onln_cpu_nr;
   
-	update_dmsg(1, "%s: cluster %d, usage %d, T %d\n", 
-		    __FUNCTION__, 
-		    cluster->id, 
-		    usage, 
-		    threads);
+	update_dmsg(1, "%s: cluster %d, usage %d, T %d/%d\n",
+		    __FUNCTION__,
+		    cluster->id,
+		    usage,
+		    threads,t);
  
 	logical = cluster->levels_tbl[0];
 
-	logical->info.summary.M = cluster->ppm.free_pages_nr;
-	logical->info.summary.T = threads;
-	logical->info.summary.U = usage;
-  
 	for(i = 0; i < PPM_MAX_ORDER; i++)
 		logical->info.summary.pages_tbl[i] = cluster->ppm.free_pages[i].pages_nr;
 
+	dqdt_indicators_update(&logical->info.summary,
+			       cluster->ppm.free_pages_nr,
+			       threads,
+			       usage,
+			       NULL);
+
 	parent = logical->parent;
 
-	memcpy(&parent->info.tbl[logical->index], 
-	       &logical->info.summary, 
-	       sizeof(logical->info.summary));
+	dqdt_indicators_update(&parent->info.tbl[logical->index], 
+			       cluster->ppm.free_pages_nr,
+			       threads,
+			       usage,
+			       &logical->info.summary.pages_tbl[0]);
 
 	for(i = 1; i < DQDT_LEVELS_NR; i++)
 	{
 		logical = cluster->levels_tbl[i];
-    
+
 		if(logical == NULL)
-			continue;  /* TODO: verify that we can break here instead continue */
+			continue;  /* TODO: verify that we can break here instead of continue */
    
 		update_dmsg(1, "%s: cluster %d, level %d, logical level %d\n", 
 			    __FUNCTION__, 
@@ -266,45 +297,40 @@ error_t dqdt_update(void)
 			if(logical->children[j] != NULL)
 			{
 				free_pages += logical->info.tbl[j].M;
-				threads    += logical->info.tbl[j].T;
+				//threads    += atomic_get(&logical->info.tbl[j].T);
 				usage      += logical->info.tbl[j].U;
       
 				for(p = 0; p < PPM_MAX_ORDER; p++)
 					pages_tbl[p] += logical->info.tbl[j].pages_tbl[p];
 			}
 		}
+
+		usage = usage / logical->childs_nr;
     
-		update_dmsg(1, "%s: cluster %d, level %d, usage %d, T %d\n", 
+		update_dmsg(1, "%s: cluster %d, level %d, usage %d, T %d, M %d (j=%d,p=%d)\n", 
 			    __FUNCTION__,
 			    cluster->id,
 			    i, 
-			    usage/logical->childs_nr, 
-			    threads);
+			    usage,
+			    threads,
+			    free_pages,j,p);
 
-		logical->info.summary.M = free_pages;
-		logical->info.summary.T = threads;
-		logical->info.summary.U = usage / logical->childs_nr;
-		memcpy(&logical->info.summary.pages_tbl[0], &pages_tbl[0], sizeof(pages_tbl));
-
-#if CONFIG_DQDT_DEBUG == 2
-		update_dmsg(1, "%s: cluster %d, level %d summary pages_tbl [", 
-			    __FUNCTION__, 
-			    cluster->id, i);
-    
-		for(p=0; p < PPM_MAX_ORDER; p++)
-			update_dmsg(1, "%d, ", logical->info.summary.pages_tbl[p]);
-    
-		update_dmsg(1, "\b\b]\n");
-#endif	/* CONFIG_DQDT_DEBUG */
+		dqdt_indicators_update(&logical->info.summary,
+				       free_pages,
+				       threads,
+				       usage,
+				       pages_tbl);
 
 		parent = logical->parent;
     
 		if(parent != NULL)
 		{
-			memcpy(&parent->info.tbl[logical->index], 
-			       &logical->info.summary, 
-			       sizeof(logical->info.summary));
-
+			dqdt_indicators_update(&parent->info.tbl[logical->index],
+					       free_pages,
+					       threads,
+					       usage,
+					       pages_tbl);
+			
 			update_dmsg(1, "%s: cluster %d, level %d to level %d, propagated\n", 
 				    __FUNCTION__, 
 				    cluster->id, 
@@ -323,83 +349,287 @@ error_t dqdt_update(void)
 	return 0;
 }
 
+void dqdt_primary_table_sort1(uint_t *values_tbl, uint_t *aux_tbl, uint_t count)
+{
+	uint_t tmp, i, j;
+
+	for(i = 0; i < count; i++)
+	{
+		for(j = i + 1; j < count; j++)
+		{
+			if(values_tbl[j] < values_tbl[i])
+			{
+				tmp           = values_tbl[i];
+				values_tbl[i] = values_tbl[j];
+				values_tbl[j] = tmp;
+
+				tmp           = aux_tbl[i];
+				aux_tbl[i]    = aux_tbl[j];
+				aux_tbl[j]    = tmp;
+			}
+		}
+	}
+}
+
+void dqdt_primary_table_sort2(uint_t *key_tbl, uint_t *aux1_tbl, uint_t *aux2_tbl, uint_t count)
+{
+	uint_t tmp, i, j;
+
+	for(i = 0; i < count; i++)
+	{
+		for(j = i + 1; j < count; j++)
+		{
+			if(key_tbl[j] < key_tbl[i])
+			{
+				tmp         = key_tbl[i];
+				key_tbl[i]  = key_tbl[j];
+				key_tbl[j]  = tmp;
+
+				tmp         = aux1_tbl[i];
+				aux1_tbl[i] = aux1_tbl[j];
+				aux1_tbl[j] = tmp;
+
+				tmp         = aux2_tbl[i];
+				aux2_tbl[i] = aux2_tbl[j];
+				aux2_tbl[j] = tmp;
+			}
+		}
+	}
+}
+
+void dqdt_primary_table_sort3(uint_t *key_tbl, uint_t *aux1_tbl, uint_t *aux2_tbl, uint_t *aux3_tbl, uint_t count)
+{
+	uint_t tmp, i, j;
+
+	for(i = 0; i < count; i++)
+	{
+		for(j = i + 1; j < count; j++)
+		{
+			if(key_tbl[j] < key_tbl[i])
+			{
+				tmp         = key_tbl[i];
+				key_tbl[i]  = key_tbl[j];
+				key_tbl[j]  = tmp;
+
+				tmp         = aux1_tbl[i];
+				aux1_tbl[i] = aux1_tbl[j];
+				aux1_tbl[j] = tmp;
+
+				tmp         = aux2_tbl[i];
+				aux2_tbl[i] = aux2_tbl[j];
+				aux2_tbl[j] = tmp;
+				
+				tmp         = aux3_tbl[i];
+				aux3_tbl[i] = aux3_tbl[j];
+				aux3_tbl[j] = tmp;
+			}
+		}
+	}
+}
+
+void dqdt_secondary_table_sort(uint_t *key_tbl, uint_t *aux_tbl, uint_t *select_tbl, uint_t count)
+{
+	register uint_t i,j,tmp;
+
+	for(j = 0; j <= count; j++)
+	{
+		for(i = 0; i < (count-1); i++)
+		{
+			if((key_tbl[i] == key_tbl[i+1]) && (aux_tbl[i] > aux_tbl[i+1]))
+			{
+				tmp             = aux_tbl[i];
+				aux_tbl[i]      = aux_tbl[i+1];
+				aux_tbl[i+1]    = tmp;
+
+				tmp             = select_tbl[i];
+				select_tbl[i]   = select_tbl[i+1];
+				select_tbl[i+1] = tmp;
+			}
+		}
+	}
+}
+
+void dqdt_tertiary_table_sort(uint_t *key1_tbl, uint_t *key2_tbl, uint_t *aux_tbl, uint_t *select_tbl, uint_t count)
+{
+	register uint_t i,j,tmp;
+
+	for(j = 0; j <= count; j++)
+	{
+		for(i = 0; i < (count-1); i++)
+		{
+			if((key1_tbl[i] == key1_tbl[i+1]) && 
+			   (key2_tbl[i] == key2_tbl[i+1]) && 
+			   (aux_tbl[i] > aux_tbl[i+1]))
+			{
+				tmp             = aux_tbl[i];
+				aux_tbl[i]      = aux_tbl[i+1];
+				aux_tbl[i+1]    = tmp;
+
+				tmp             = select_tbl[i];
+				select_tbl[i]   = select_tbl[i+1];
+				select_tbl[i+1] = tmp;
+			}
+		}
+	}
+}
+
+DQDT_SELECT_HELPER(dqdt_up_clstr_select_strategy1)
+{
+	register uint_t T;
+
+	T = atomic_get(&logical->info.summary.T);
+
+	up_dmsg(1, "%s: cpu %d, current level %d, T:%d/%d\n", 
+		__FUNCTION__, cpu_get_id(),logical->level, T, logical->cores_nr);
+
+	return (T < logical->cores_nr) ? true : false;
+}
+
+DQDT_SELECT_HELPER(dqdt_up_clstr_select_strategy2)
+{
+	bool_t found;
+
+	up_dmsg(1, "%s: cpu %d, current level %d, try up_s1 first .. U:%d/%d\n", 
+		__FUNCTION__, cpu_get_id(),logical->level,
+		logical->info.summary.U, attr->u_threshold);
+
+	found = dqdt_up_clstr_select_strategy1(logical,attr,child_index);
+	
+	return (found || (logical->info.summary.U < attr->u_threshold)) ? true : false;
+}
+
+DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy2)
+{
+	register uint_t i;
+	uint_t usage_tbl[4];
+	uint_t distance_tbl[4];
+	uint_t threads_tbl[4];
+	
+	for(i = 0; i < 4; i++)
+	{
+		attr->select_tbl[i] = i;
+
+		if((logical->children[i] == NULL) || (i == child_index))
+		{
+			usage_tbl[i]    = (uint_t)-1;
+			distance_tbl[i] = (uint_t)-1;
+			threads_tbl[i]  = (uint_t)-1;
+			continue;
+		}
+		
+		usage_tbl[i]    = logical->info.tbl[i].U;
+		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
+		threads_tbl[i]  = atomic_get(&logical->info.tbl[i].T);
+	}
+
+	dqdt_primary_table_sort3(usage_tbl, threads_tbl, distance_tbl, attr->select_tbl, 4);
+
+	dqdt_secondary_table_sort(usage_tbl, threads_tbl, attr->select_tbl, 4);
+
+	dqdt_tertiary_table_sort(usage_tbl, threads_tbl, distance_tbl, attr->select_tbl, 4);
+	
+	return true;
+}
+
+
+DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy1)
+{
+	register uint_t i;
+	uint_t threads_tbl[4];
+	uint_t distance_tbl[4];
+	
+	i = atomic_get(&logical->info.summary.T);
+
+	up_dmsg(1, "%s: cpu %d, current level %d, T:%d\n", 
+		__FUNCTION__, cpu_get_id(),logical->level,i);
+
+	if((attr->flags & DQDT_SELECT_LTCN) && (i >= logical->cores_nr))
+		return false;
+	
+	for(i = 0; i < 4; i++)
+	{
+		attr->select_tbl[i] = i;
+
+		if((logical->children[i] == NULL) || (i == child_index))
+		{
+			threads_tbl[i]  = (uint_t)-1;
+			distance_tbl[i] = (uint_t)-1;
+			continue;
+		}
+
+		threads_tbl[i]  = atomic_get(&logical->info.tbl[i].T);
+		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
+	}
+	
+	up_dmsg(1,"%s: cpu %d, current level %d, before sort: T-Tbl [%d,%d,%d,%d], "
+		  "S-Tbl (%x) [%d,%d,%d,%d], D-Tbl [%d,%d,%d,%d]\n",
+		__FUNCTION__, cpu_get_id(),logical->level,
+		threads_tbl[0], threads_tbl[1], threads_tbl[2], threads_tbl[3],
+		attr->select_tbl, attr->select_tbl[0],attr->select_tbl[1],attr->select_tbl[2],attr->select_tbl[3],
+		distance_tbl[0],distance_tbl[1],distance_tbl[2],distance_tbl[3]);
+ 
+	dqdt_primary_table_sort2(&threads_tbl[0], &distance_tbl[0], attr->select_tbl, 4);
+
+	up_dmsg(1,"%s: cpu %d, current level %d, before d-sort: T-Tbl [%d,%d,%d,%d], S-Tbl [%d,%d,%d,%d]\n",
+		__FUNCTION__, cpu_get_id(),logical->level,
+		threads_tbl[0], threads_tbl[1], threads_tbl[2], threads_tbl[3],
+		attr->select_tbl[0],attr->select_tbl[1],attr->select_tbl[2],attr->select_tbl[3]);
+
+	dqdt_secondary_table_sort(&threads_tbl[0], &distance_tbl[0], attr->select_tbl, 4);
+
+	up_dmsg(1,"%s: cpu %d, current level %d, S-Tbl [%d,%d,%d,%d]\n",
+		__FUNCTION__, cpu_get_id(),logical->level,
+		attr->select_tbl[0],attr->select_tbl[1],attr->select_tbl[2],attr->select_tbl[3]);
+
+	return true;
+}
+
+
 bool_t dqdt_down_traversal(struct dqdt_cluster_s *logical, 
 			   struct dqdt_attr_s *attr,
 			   dqdt_select_t *select, 
 			   dqdt_select_t *request,
 			   uint_t index)
 {
-	register uint_t i, j,val;
-	register bool_t found, done;
-	uint_t distance_tbl[4] = {100,100,100,100};
+	register uint_t i,j;
+	register bool_t found,done;
+	uint_t select_tbl[4];
  
-	down_dmsg(1, "%s: cpu %d, current level %d, tid [0x%x - 0x%x] SP 0x%x\n", 
+	down_dmsg(1, "%s: cpu %d, current level %d\n", 
 		  __FUNCTION__, 
 		  cpu_get_id(),
-		  logical->level,
-		  current_thread,
-		  &current_thread->signature,
-		  cpu_get_stack());
+		  logical->level);
 
 	if(logical->level == 0)
 		return request(logical,attr,-1);
 	
-	for(i = 0; i < 4; i++)
-	{
-		if((logical->children[i] == NULL) || (i == index))
-			continue;
-    
-		down_dmsg(1, "%s: looking for child %d\n", __FUNCTION__, i);
+	attr->select_tbl = &select_tbl[0];
+
+	found = select(logical, attr, index);
+
+	if(!found)
+		return false;
 	
-		found = select(logical,attr,i);
-		if(found)
-		{
-			val =  dqdt_distance(attr->origin, logical->children[i], attr);
-			val = (i << 16) | (val % 101);
-			distance_tbl[i] = val;
-		}
-	}
-
-	for(i = 0; i < 4; i++)
-	{
-		val = distance_tbl[i];
-    
-		for(j = i + 1; j < 4; j++)
-		{
-			if(distance_tbl[j] < (val & 0xFFFF))
-			{
-				distance_tbl[i] = distance_tbl[j];
-				distance_tbl[j] = val;
-			}
-		}
-	}
-
 	down_dmsg(1,
-		  "%s: D-Tbl: [%x,%x,%x,%x]\n", 
+		  "%s: S-Tbl: [%d,%d,%d,%d]\n", 
 		  __FUNCTION__,
-		  distance_tbl[0],
-		  distance_tbl[1],
-		  distance_tbl[2],
-		  distance_tbl[3]);
+		  select_tbl[0],
+		  select_tbl[1],
+		  select_tbl[2],
+		  select_tbl[3]);
 
 	for(i = 0; i < 4; i++)
 	{
-		val = distance_tbl[i];
+		j = select_tbl[i];
 
-		if((val & 0xFFFF) != 100)
-		{
-			j = val >> 16;
-			assert(logical->children[j] != NULL);
+		if((logical->children[j] == NULL) || (j == index))
+			continue;
 
-			done = dqdt_down_traversal(logical->children[j], 
-						   attr, 
-						   select, 
-						   request, 5);
+		done = dqdt_down_traversal(logical->children[j], attr, select, request, 5);
 			
-			if(done) return true;
+		if(done) return true;
       
-			down_dmsg(1, "%s: child %d is busy\n", __FUNCTION__, j);
-		}
+		down_dmsg(1, "%s: child %d is busy\n", __FUNCTION__, j);
 	}
 
 	down_dmsg(1, "%s: current level %d do not mach request\n", 
@@ -426,7 +656,7 @@ error_t dqdt_up_traversal(struct dqdt_cluster_s *logical,
 	if(logical->level > limit)
 		return ERANGE;
  
-	up_dmsg(1, "%s: current level %d\n", __FUNCTION__, logical->level);
+	up_dmsg(1, "%s: cpu %d, current level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
     
 	found = clstr_select(logical,attr,-1);
   
@@ -453,22 +683,93 @@ error_t dqdt_up_traversal(struct dqdt_cluster_s *logical,
 				 logical->index);
 }
 
-DQDT_SELECT_HELPER(dqdt_placement_child_select)
+error_t dqdt_update_threads_number(struct dqdt_cluster_s *logical, 
+				   uint_t core_index, 
+				   sint_t expected_T, 
+				   sint_t count)
 {
-	//return (logical->info.tbl[child_index].U <= attr->u_threshold) ? true : false;
-	return (logical->info.tbl[child_index].U < 100) ? true : false;
+	uint_t index;
+	sint_t old;
+
+	old = atomic_add(&logical->info.tbl[core_index].T, count);
+
+	up_dmsg(1,"%s: cpu %d, started, level %d, index %d, expected %d, old %d, count %d\n",
+		__FUNCTION__, cpu_get_id(), logical->level, core_index, expected_T, old, count);
+
+	if((expected_T >= 0) && (old != expected_T))
+	{
+		(void)atomic_add(&logical->info.tbl[core_index].T, -count);
+		return EAGAIN;
+	}
+
+	old = atomic_add(&logical->info.summary.T, count);
+
+	up_dmsg(1,"%s: cpu %d, started, level %d, summary %d\n",
+		__FUNCTION__, cpu_get_id(), logical->level, old+1);
+	
+	index   = logical->index;
+	logical = logical->parent;
+
+	while(logical != NULL)
+	{
+		old = atomic_add(&logical->info.tbl[index].T, count);
+		
+		up_dmsg(1,"%s: cpu %d, started, level %d, T[%d]=%d\n",
+			__FUNCTION__, cpu_get_id(), logical->level, index, old+1);
+		
+		old = atomic_add(&logical->info.summary.T, count);
+		
+		up_dmsg(1,"%s: cpu %d, started, level %d, T=%d\n",
+			__FUNCTION__, cpu_get_id(), logical->level, old+1);
+
+		index   = logical->index;
+		logical = logical->parent;
+	}
+
+	return 0;
 }
 
-DQDT_SELECT_HELPER(dqdt_placement_clstr_select)
-{
-	//return (logical->info.summary.U <= attr->u_threshold) ? true : false;
-	return (logical->info.summary.U <= 90) ? true : false;
-}
 
-DQDT_SELECT_HELPER(dqdt_migrate_clstr_select)
+DQDT_SELECT_HELPER(dqdt_core_min_threads_select)
 {
-	//return (logical->info.summary.U <= attr->u_threshold) ? true : false;
-	return (logical->info.summary.U < 100) ? true : false;
+	register struct cluster_s *cluster;
+	register struct cpu_s *cpu;
+	register uint_t i, min, indx, val;
+	error_t err;
+
+	val = atomic_get(&logical->info.summary.T);
+
+	up_dmsg(1,"%s: cpu %d, started, level %d, T:%d\n",
+		__FUNCTION__, cpu_get_id(), logical->level, val);
+
+	if((attr->flags & DQDT_SELECT_LTCN) && (val >= logical->cores_nr))
+		return false;
+
+	min  = (uint_t) -1;
+	indx = 0;
+
+	for(i = 0; i < 4; i++)
+	{
+		val = atomic_get(&logical->info.tbl[i].T);
+
+		if(val < min)
+		{
+			min  = val;
+			indx = i;
+		}
+	}
+	
+	up_dmsg(1,"%s: cpu %d, started, level %d, Indx:%d, Min:%d\n",
+		__FUNCTION__, cpu_get_id(), logical->level, indx,min);
+
+	cluster       = logical->home;
+	cpu           = &cluster->cpu_tbl[indx];
+	attr->cluster = cluster;
+	attr->cpu     = cpu;
+
+	err = dqdt_update_threads_number(logical, indx, min, 1);
+
+	return (err == 0) ? true : false;
 }
 
 DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
@@ -504,297 +805,131 @@ DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 	}
 
 	cpu = &cluster->cpu_tbl[min];
+	cluster->cpu_tbl[min].usage = 100;
+	cpu_wbflush();
+	pmm_cache_flush_vaddr((vma_t)&cluster->cpu_tbl[min].usage, PMM_DATA);
+
+	(void) dqdt_update_threads_number(logical, min, -1, 1);
+
+	attr->cluster = cluster;
+	attr->cpu     = cpu;
+	return true;
+}
+
+error_t dqdt_do_placement(struct dqdt_cluster_s *logical, 
+			  struct dqdt_attr_s *attr, 
+			  uint_t index, 
+			  uint_t depth,
+			  uint_t d_type)
+{
+	error_t err;
 	
-	if((usage <= attr->u_threshold) && (cpu->scheduler.u_runnable <= attr->t_threshold))
-	{
-		cluster->cpu_tbl[min].usage = 100;
-		cpu_wbflush();
-		pmm_cache_flush_vaddr((vma_t)&cluster->cpu_tbl[min].usage, PMM_DATA);
-		attr->cluster               = cluster;
-		attr->cpu                   = cpu;
-		return true;
-	}
+	attr->flags  = DQDT_SELECT_LTCN;
+	attr->origin = current_cluster->levels_tbl[0];
+	attr->d_type = d_type;
 
-	current_thread->info.u_err_nr ++;
-	select_dmsg(1, "%s: cluster %d is busy\n", __FUNCTION__, cluster->id);
-	return false;
-}
+	err = dqdt_up_traversal(logical,
+				attr,
+				dqdt_down_clstr_select_strategy1,
+				dqdt_up_clstr_select_strategy1,
+				dqdt_core_min_threads_select,
+				depth,
+				index);
+	if(err == 0) return 0;
 
-static bool_t dqdt_cpu_isSelectable(struct cpu_s *cpu, struct dqdt_attr_s *attr)
-{
-	if((cpu->scheduler.user_nr == 0) && (cpu->busy_percent <= 80))
-		return true;
-	else
-		return false;
-}
+	select_dmsg(1, "%s: Try strategy 2, logical level %d\n", __FUNCTION__, logical->level);
 
-DQDT_SELECT_HELPER(dqdt_cpu_free_select)
-{
-	register struct cluster_s *cluster;
-	register uint_t i;
-	register bool_t found;
+	dqdt_wait_for_update();
 
-	cluster = logical->home;
-  
-	assert(cluster != NULL);
+	attr->flags = 0;
+	attr->u_threshold = 100;
 
-	select_dmsg(1, "%s: cluster %d, T %d\n", 
-		    __FUNCTION__,
-		    cluster->id, 
-		    cluster->levels_tbl[0]->info.summary.T);
-  
-	for(i = 0; i < cluster->onln_cpu_nr; i++)
-	{
-		select_dmsg(1, "%s: cpu lid %d, U %d\n",
-			    __FUNCTION__, 
-			    i, 
-			    cluster->cpu_tbl[i].usage);
-    
-		found = dqdt_cpu_isSelectable(&cluster->cpu_tbl[i], attr);
-    
-		if(found == true)
-		{
-			attr->cluster = cluster;
-			attr->cpu = &cluster->cpu_tbl[i];
-			cluster->cpu_tbl[i].usage = 100; /* fake weight */
-			cpu_wbflush();
-			pmm_cache_flush_vaddr((vma_t)&cluster->cpu_tbl[i].usage, PMM_DATA);
-			//sched_wakeup(cluster->manager);
-			return true;
-		}
-	}
+	err = dqdt_up_traversal(dqdt_root,
+				attr,
+				dqdt_down_clstr_select_strategy2,
+				dqdt_up_clstr_select_strategy2,
+				dqdt_cpu_min_usage_select,
+				depth,
+				5);
 
-	current_thread->info.u_err_nr ++;
-	select_dmsg(1, "%s: cluster %d is busy\n", __FUNCTION__, cluster->id);
-	return false;
+	if(err == 0) return 0;
+
+	attr->u_threshold = 200;
+
+	err = dqdt_up_traversal(logical,
+				attr,
+				dqdt_down_clstr_select_strategy2,
+				dqdt_up_clstr_select_strategy2,
+				dqdt_cpu_min_usage_select,
+				depth,
+				index);
+
+	return err;
 }
 
 
 error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
-	register uint_t threshold;
-	error_t err;
-
-	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
-  
-	attr->origin      = current_cluster->levels_tbl[0];
-	attr->t_threshold = 2;
-	attr->u_threshold = 98;
-	attr->d_type      = DQDT_DIST_MANHATTAN;
-
-	dqdt_wait_for_update();
-
-	err = dqdt_up_traversal(logical,
-				attr,
-				dqdt_placement_child_select,
-				dqdt_placement_clstr_select,
-				dqdt_cpu_free_select,
-				DQDT_MAX_DEPTH,
-				logical->index);
-
-	if(err == 0) goto found;
-
-	err = EAGAIN;
-
-	for(threshold = 10; ((threshold < 100) && (err != 0)); threshold += 20)
-	{
-		attr->u_threshold = threshold;
-		
-		err = dqdt_up_traversal(logical,
-					attr,
-					dqdt_placement_child_select,
-					dqdt_placement_clstr_select,
-					dqdt_cpu_min_usage_select,
-					DQDT_MAX_DEPTH,
-					logical->index);
-	}
-
-found:
-	select_dmsg(1, "%s: ended, found %s\n", __FUNCTION__, (err == 0) ? "(Yes)" : "(No)");
-	return err;
+	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
+	
+	return dqdt_do_placement(logical, attr, logical->index, DQDT_MAX_DEPTH, DQDT_DIST_MANHATTAN);
 }
 
 error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
-	register uint_t threshold;
 	struct thread_s *this;
+	struct cluster_s *cluster;
+	bool_t cond1;
+	bool_t cond2;
 	error_t err;
-	bool_t isFailThreshold;
-	bool_t isSuccessThreshold;
 
-	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
-  
-	attr->origin      = current_cluster->levels_tbl[0];
-	attr->t_threshold = current_cluster->onln_cpu_nr;
-	attr->d_type      = DQDT_DIST_MANHATTAN;
+	cluster = current_cluster;
 
-	for(threshold = 20; threshold < 100; threshold += 20)
-	{
-		attr->u_threshold = threshold;
+	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
 
-		switch(threshold)
-		{
-		case 20:
-		case 70:
-			err = dqdt_up_traversal(logical,
-						attr,
-						dqdt_placement_child_select,
-						dqdt_migrate_clstr_select,
-						dqdt_cpu_free_select,
-						3,
-						logical->index);
-			break;
-
-		default:
-			err = dqdt_up_traversal(logical,
-						attr,
-						dqdt_placement_child_select,
-						dqdt_migrate_clstr_select,
-						dqdt_cpu_min_usage_select,
-						3,
-						logical->index);
-		}
-		
-		if(err == 0) break;
-	}
-
-#if 1
-	/* TODO: move these thresholds to per-task variables */
-	this               = current_thread;
-       	isFailThreshold    = (this->info.migration_fail_cntr > 5) ? true : false;
-	isSuccessThreshold = (this->info.migration_cntr > 3) ? true : false; 
+	err = dqdt_do_placement(logical,
+				attr,
+				(cluster->levels_tbl[0] == logical) ? logical->index : 5,
+				DQDT_MAX_DEPTH,
+				DQDT_DIST_MANHATTAN);
 	
-	if(isFailThreshold || isSuccessThreshold)
-	{
-		err = dqdt_up_traversal(dqdt_root,
-					attr,
-					dqdt_placement_child_select,
-					dqdt_migrate_clstr_select,
-					dqdt_cpu_min_usage_select,
-					10,
-					10);
+	if(err == 0)
+		return 0;
 
+	/* TODO: move these thresholds to per-task variables */
+	this = current_thread;
+
+       	cond1 = this->info.migration_fail_cntr > 5; 
+	cond2 = this->info.migration_cntr > 3;
+
+	if(cond1 || cond2)
+	{
+		err = dqdt_do_placement(dqdt_root, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_MANHATTAN);
+	
 		if(err == 0)
-			this->info.migration_fail_cntr = (isFailThreshold) ? 0 : this->info.migration_fail_cntr;
+			this->info.migration_fail_cntr = (cond1) ? 0 : this->info.migration_fail_cntr;
 	}
-#endif
+
 	select_dmsg(1, "%s: ended, found %s\n", __FUNCTION__, (err == 0) ? "(Yes)" : "(No)");
 	return err;
 }
 
 
-DQDT_SELECT_HELPER(dqdt_task_placement_child_select)
-{
-	register bool_t found = false;
-
-	select_dmsg(1, "%s: level %d, child indx %d, U %d, M %d\n",
-		    __FUNCTION__,
-		    logical->level,
-		    child_index,
-		    logical->info.tbl[child_index].U,
-		    logical->info.tbl[child_index].M);
-
-	if((logical->info.tbl[child_index].U <= attr->u_threshold) &&
-	   (logical->info.tbl[child_index].M >= attr->m_threshold))
-	{
-		found = true;
-	}
-
-	return found;
-}
-
-DQDT_SELECT_HELPER(dqdt_task_placement_clstr_select)
-{
-	select_dmsg(1, "%s: level %d, u_threshold %d, summary [U:%d, M:%d]\n",
-		    __FUNCTION__,
-		    logical->level,
-		    attr->u_threshold,
-		    logical->info.summary.U,
-		    logical->info.summary.M);
-
-	return (logical->info.summary.U <= attr->u_threshold) ? true : false;
-}
-
-struct dqdt_cluster_s* dqdt_logical_lookup(uint_t level)
-{
-	register struct dqdt_cluster_s *current;
-
-	current = current_cluster->levels_tbl[0];
-  
-	while((current != NULL) && (current->level != level))
-		current = current->parent;
-
-	return (current == NULL) ? dqdt_root : current;
-}
-
 error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
-	register uint_t threshold;
 	error_t err;
 
-	select_dmsg(1, "%s: started, logical level %d\n", __FUNCTION__, logical->level);
 	attr->m_threshold = current_cluster->ppm.uprio_pages_min;
-	attr->t_threshold = 5;
-	attr->d_type      = DQDT_DIST_RANDOM;
-	attr->origin      = current_cluster->levels_tbl[0];
-	err               = EAGAIN;
+	
+	err = dqdt_do_placement(logical, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_RANDOM);
 
-	dqdt_wait_for_update();
+	if(err)
+		err = dqdt_do_placement(dqdt_root, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_RANDOM);
 
-	for(threshold = 10; ((threshold <= 100) && (err != 0)); threshold += 15)
-	{
-		attr->u_threshold = threshold;
-
-		switch(threshold)
-		{
-		case 55:
-			attr->m_threshold >>= 1;
-		case 10:
-			err = dqdt_up_traversal(logical,
-						attr,
-						dqdt_task_placement_child_select,
-						dqdt_task_placement_clstr_select,
-						dqdt_cpu_free_select,
-						DQDT_MAX_DEPTH,
-						5);
-			break;
-    
-		case 70:
-			attr->m_threshold >>= 1;
-			
-		case 40:
-		case 25:
-			err = dqdt_up_traversal(logical,
-						attr,
-						dqdt_task_placement_child_select,
-						dqdt_task_placement_clstr_select,
-						dqdt_cpu_min_usage_select,
-						DQDT_MAX_DEPTH,
-						5);
-			break;
-
-		case 100:
-			attr->t_threshold = 10;
-		case 85:
-			err = dqdt_up_traversal(logical,
-						attr,
-						dqdt_placement_child_select,
-						dqdt_placement_clstr_select,
-						dqdt_cpu_min_usage_select,
-						DQDT_MAX_DEPTH,
-						5);
-      
-		}
-	}
-
-	select_dmsg(1, "%s: ended, found %s [%d]\n", 
-		    __FUNCTION__, 
-		    (err == 0) ? "(Yes)" : "(No)",
-		    err);
 	return err;
 }
 
-DQDT_SELECT_HELPER(dqdt_mem_clstr_select)
+bool_t dqdt_check_mem_indicators(dqdt_indicators_t *entry, struct dqdt_attr_s *attr)
 {
 	register struct ppm_dqdt_req_s *req;
 	register bool_t found;
@@ -802,91 +937,102 @@ DQDT_SELECT_HELPER(dqdt_mem_clstr_select)
 
 	req = attr->data;
 
-	select_dmsg(1, 
-		    "%s: level %d, threshold %d, order %d, summary [U:%d, M:%d]\n",
-		    __FUNCTION__,
-		    logical->level,
-		    req->threshold,
-		    req->order,
-		    logical->info.summary.U,
-		    logical->info.summary.M);
-  
 	for(found = false, i = req->order; ((i < CONFIG_PPM_MAX_ORDER) && (found == false)); i++)
-	{
-		found = (logical->info.summary.pages_tbl[i] != 0) ? true : false;
-	}
+		found = (entry->pages_tbl[i] != 0) ? true : false;
 
-	return (found && (logical->info.summary.M > req->threshold)) ? true : false;
+	return (found && (entry->M > req->threshold)) ? true : false;
 }
 
-DQDT_SELECT_HELPER(dqdt_mem_child_select)
+DQDT_SELECT_HELPER(dqdt_mem_up_select)
 {
-	register struct ppm_dqdt_req_s *req;
-	register bool_t found;
-	register uint_t i;
-
-	req = attr->data;
-
-	select_dmsg(1, 
-		    "%s: level %d, child indx %d, threshold %d, order %d, U %d, M %d\n",
-		    __FUNCTION__,
-		    logical->level,
-		    child_index,
-		    req->threshold,
-		    req->order,
-		    logical->info.tbl[child_index].U,
-		    logical->info.tbl[child_index].M);
-
-	for(found = false, i = req->order; ((i < CONFIG_PPM_MAX_ORDER) && (found == false)); i++)
-	{
-		found = (logical->info.tbl[child_index].pages_tbl[i] != 0) ? true : false;
-	}
-
-	return (found && (logical->info.tbl[child_index].M > req->threshold)) ? true : false;
+	return dqdt_check_mem_indicators(&logical->info.summary, attr);
 }
 
-DQDT_SELECT_HELPER(dqdt_mem_select)
+DQDT_SELECT_HELPER(dqdt_mem_down_select)
 {
-	register struct ppm_dqdt_req_s *req;
-	register struct ppm_s *ppm;
-	register bool_t found;
 	register uint_t i;
+	register uint_t val;
+	bool_t found;
+	uint_t found_tbl[4];
+	uint_t distance_tbl[4];
 
-	req = attr->data;
+	found = false;
 
-	select_dmsg(1,
-		    "%s: level %d, cid %d, threshold %d, order %d, summary [U:%d, M:%d]\n",
-		    __FUNCTION__,
-		    logical->level,
-		    logical->home->id,
-		    req->threshold,
-		    req->order,
-		    logical->info.summary.U,
-		    logical->info.summary.M);
-  
-	ppm = &logical->home->ppm;
-  
-	for(found = false, i = req->order; ((i < CONFIG_PPM_MAX_ORDER) && (found == false)); i++)
+	for(i = 0; i < 4; i++)
 	{
-		found = (ppm->free_pages[i].pages_nr != 0) ? true : false;
+		attr->select_tbl[i] = i;
+
+		if((logical->children[i] == NULL) || (i == child_index))
+		{
+			found_tbl[i] = false;
+			continue;
+		}
+
+		val = dqdt_check_mem_indicators(&logical->info.tbl[i], attr);
+		
+		if(val == true)
+		{
+			found_tbl[i] = 1; /* Any min value */
+			found = true;
+		}
+		else
+			found_tbl[i] = 10; /* Any max value */
+
+		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
 	}
 
-	found = (found && (ppm->free_pages_nr > req->threshold)) ? true : false;
+	if(found == false)
+		return false;
 
-	if(found)
-	{
-		attr->cluster = logical->home;
-		attr->cpu = NULL;
-		return true;
-	}
+	dqdt_primary_table_sort1(found_tbl, attr->select_tbl, 4);
+	
+	dqdt_secondary_table_sort(found_tbl, distance_tbl, attr->select_tbl, 4);
+	
+	return true;
+}
+
+DQDT_SELECT_HELPER(dqdt_mem_do_select)
+{
+        register struct ppm_dqdt_req_s *req;
+        register struct ppm_s *ppm;
+        register bool_t found;
+        register uint_t i;
+
+        req = attr->data;
+
+        select_dmsg(1,
+                    "%s: level %d, cid %d, threshold %d, order %d, summary [U:%d, M:%d]\n",
+                    __FUNCTION__,
+                    logical->level,
+                    logical->home->id,
+                    req->threshold,
+                    req->order,
+                    logical->info.summary.U,
+                    logical->info.summary.M);
   
-	current_thread->info.m_err_nr ++;
+        ppm = &logical->home->ppm;
   
-	select_dmsg(1,
-		    "%s: cluster %d is busy\n", 
-		    __FUNCTION__, 
-		    logical->home->id);
-	return false;
+        for(found = false, i = req->order; ((i < CONFIG_PPM_MAX_ORDER) && (found == false)); i++)
+        {
+                found = (ppm->free_pages[i].pages_nr != 0) ? true : false;
+        }
+
+        found = (found && (ppm->free_pages_nr > req->threshold)) ? true : false;
+
+        if(found)
+        {
+                attr->cluster = logical->home;
+                attr->cpu = NULL;
+                return true;
+        }
+  
+        current_thread->info.m_err_nr ++;
+  
+        select_dmsg(1,
+                    "%s: cluster %d is busy\n", 
+                    __FUNCTION__, 
+                   logical->home->id);
+        return false;
 }
 
 
@@ -906,9 +1052,9 @@ error_t dqdt_mem_request(struct dqdt_cluster_s *logical, struct dqdt_attr_s *att
 
 	err = dqdt_up_traversal(logical,
 				attr,
-				dqdt_mem_child_select,
-				dqdt_mem_clstr_select,
-				dqdt_mem_select,
+				dqdt_mem_down_select,
+				dqdt_mem_up_select,
+				dqdt_mem_do_select,
 				DQDT_MAX_DEPTH,
 				logical->index);
 

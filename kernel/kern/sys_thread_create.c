@@ -166,20 +166,25 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 			attr.cpu_lid = dqdt_attr_getcpu(&dqdt_attr)->lid;
 			attr.cid     = dqdt_attr_getcluster(&dqdt_attr)->id;
 		}
+		else
+		{
+			attr.cpu_gid = task->threads_nr % arch_onln_cpu_nr();
+			attr.cpu_lid = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
+			attr.cid     = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
+
+			(void)dqdt_update_threads_number(clusters_tbl[attr.cid].cluster->levels_tbl[0], 
+							 attr.cpu_lid, -1, 1);
+		}
 	}
 	else
 	{
 		attr.cpu_gid  = attr.cpu_gid % arch_onln_cpu_nr();
 		attr.cpu_lid  = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
 		attr.cid      = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
-		info.isPinned = true; 
-	}
+		info.isPinned = true;
 
-	if(attr.cpu_gid < 0)
-	{
-		attr.cpu_gid = task->threads_nr % arch_onln_cpu_nr();
-		attr.cpu_lid = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
-		attr.cid     = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
+		(void)dqdt_update_threads_number(clusters_tbl[attr.cid].cluster->levels_tbl[0],
+						 attr.cpu_lid, -1, 1);
 	}
 
 	info.isDone = false;

@@ -119,11 +119,16 @@ error_t thread_migrate(struct thread_s *this)
 	tid  = this->info.order;
 	pid  = task->pid;
 
-	err = dqdt_thread_migrate(cpu->cluster->levels_tbl[0], &attr);
+	dqdt_attr_init(&attr, NULL);
+	err = dqdt_thread_migrate(dqdt_root, &attr);
 
 	if((err) || (attr.cpu == cpu))
 	{
 		this->info.migration_fail_cntr ++;
+
+		if(attr.cpu == cpu)
+			(void)dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1, -1);
+
 		return EAGAIN;
 	}
 
@@ -168,6 +173,7 @@ error_t thread_migrate(struct thread_s *this)
 		return err;
 	}
 
+	(void)dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1, -1);
 	sched_remove(this);
 	return 0;
 }
@@ -234,6 +240,7 @@ error_t do_migrate(th_migrate_info_t *info)
 	
 	thread_set_imported(new);
 	thread_clear_exported(new);
+	/* TODO: put a threshold on the migration number to prevent against permanent migration */
 	new->info.migration_cntr ++;
 	sched_add(new);
 	return 0;

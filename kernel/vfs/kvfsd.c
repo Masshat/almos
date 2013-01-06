@@ -153,7 +153,7 @@ void* kvfsd(void *arg)
 		if((cntr % 4) == 0)
 			dqdt_print_summary(dqdt_root);
 
-		cntr += 1;
+		cntr ++;
 	}
 	return NULL;
 }

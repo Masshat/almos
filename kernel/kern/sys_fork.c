@@ -178,12 +178,14 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 		attr.cluster  = clusters_tbl[cid].cluster;
 		attr.cpu      = &attr.cluster->cpu_tbl[cpu_lid];
 		err           = -100;
-		info.isPinned = true; 
+		info.isPinned = true;
+		(void)dqdt_update_threads_number(attr.cluster->levels_tbl[0], cpu_lid, -1, 1);
 	}
 	else
 	{
 		info.isPinned = false;
 #if 1
+		dqdt_attr_init(&attr, NULL);
 		err = dqdt_task_placement(dqdt_root, &attr);
 #else
 		err = -101;
