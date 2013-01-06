@@ -163,7 +163,6 @@ error_t cluster_init(struct boot_info_s *info,
 	{
 		entry->flags = CLUSTER_UP | CLUSTER_IO;
 		cluster->task = NULL;
-		dqdt_init();
 	}
 	else
 	{
