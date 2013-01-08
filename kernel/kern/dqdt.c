@@ -585,6 +585,59 @@ DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy1)
 }
 
 
+DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy3)
+{
+	register uint_t i,j;
+	register sint_t val, cores;
+	uint_t threads_tbl[4];
+	uint_t distance_tbl[4];
+
+	val = atomic_get(&logical->info.summary.T);
+
+	if((attr->flags & DQDT_SELECT_LTCN) && (val >= logical->cores_nr))
+		return false;
+
+	cores = logical->cores_nr / logical->childs_nr;
+
+	for(i = 0; i < 4; i++)
+	{
+		attr->select_tbl[i] = i;
+
+		if((logical->children[i] == NULL) || (i == child_index))
+		{
+			threads_tbl[i]  = (uint_t)-1;
+			distance_tbl[i] = (uint_t)-1;
+			continue;
+		}
+		val = atomic_get(&logical->info.tbl[i].T);
+		val = cores - val;
+		threads_tbl[i]  = (uint_t)val;
+		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
+	}
+
+	for(i = 0; i < 3; i++)
+	{
+		for(j = 1; j < 4; j++)
+		{
+			if(((threads_tbl[i] > 0) && (threads_tbl[j] < threads_tbl[i])) ||
+			   ((threads_tbl[i] <= 0) && (threads_tbl[j] > 0)))
+			{
+				val = threads_tbl[j];
+				threads_tbl[j] = threads_tbl[i];
+				threads_tbl[i] = val;
+
+				val = attr->select_tbl[j];
+				attr->select_tbl[j] = attr->select_tbl[i];
+				attr->select_tbl[i] = val;
+			}
+		}
+	}
+
+	dqdt_secondary_table_sort(&threads_tbl[0], &distance_tbl[0], attr->select_tbl, 4);
+
+	return true;
+}
+
 bool_t dqdt_down_traversal(struct dqdt_cluster_s *logical, 
 			   struct dqdt_attr_s *attr,
 			   dqdt_select_t *select, 
@@ -626,9 +679,9 @@ bool_t dqdt_down_traversal(struct dqdt_cluster_s *logical,
 			continue;
 
 		done = dqdt_down_traversal(logical->children[j], attr, select, request, 5);
-			
+
 		if(done) return true;
-      
+
 		down_dmsg(1, "%s: child %d is busy\n", __FUNCTION__, j);
 	}
 
@@ -830,7 +883,7 @@ error_t dqdt_do_placement(struct dqdt_cluster_s *logical,
 
 	err = dqdt_up_traversal(logical,
 				attr,
-				dqdt_down_clstr_select_strategy1,
+				dqdt_down_clstr_select_strategy3,
 				dqdt_up_clstr_select_strategy1,
 				dqdt_core_min_threads_select,
 				depth,
