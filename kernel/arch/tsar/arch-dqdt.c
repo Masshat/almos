@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <types.h>
 #include <cpu.h>
+#include <bits.h>
 #include <thread.h>
 #include <system.h>
 #include <kmem.h>
@@ -33,6 +34,32 @@
 #include <kdmsg.h>
 #include <dqdt.h>
 
+uint_t arch_dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluster_s *c2, struct dqdt_attr_s *attr)
+{
+	register sint_t x1,y1,x2,y2,d;
+  
+	switch(attr->d_type)
+	{
+	case DQDT_DIST_MANHATTAN:
+		x1 = c1->home->x_coord;
+		y1 = c1->home->y_coord;
+		x2 = c2->home->x_coord;
+		y2 = c2->home->y_coord;
+		d = ABS((x1 - x2)) + ABS((y1 - y2));
+		break;
+
+	case DQDT_DIST_RANDOM:
+		//srand(cpu_time_stamp());
+		d = rand() % 0xFFF;
+		break;
+
+	default:
+		d = 1;
+		break;
+	}
+
+	return d;
+}
 
 static uint_t __cluster_index(uint_t x, uint_t y, uint_t ymax)
 {

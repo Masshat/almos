@@ -36,6 +36,7 @@ struct irq_action_s;
 struct event_s;
 struct boot_info_s;
 struct dqdt_cluster_s;
+struct dqdt_attr_s;
 
 /** Provided structures, functions and macros */
 #define ARCH_THREAD_PAGE_ORDER	
@@ -69,6 +70,13 @@ error_t arch_cpu_init(struct cpu_s *cpu);
 error_t arch_cpu_set_irq_entry(struct cpu_s *cpu, int irq_nr, struct irq_action_s *action);
 error_t arch_cpu_get_irq_entry(struct cpu_s *cpu, int irq_nr, struct irq_action_s **action);
 error_t arch_cpu_send_ipi(struct cpu_s *target);
+
+/* Specific architecture-dependent DQDT macros & functions */
+#define DQDT_DIST_NOTSET     0	/* must be zero (c.f: see dqdt_attr_init in kern/dqdt.h) */
+#define DQDT_DIST_MANHATTAN  1
+#define DQDT_DIST_RANDOM     2
+
+uint_t arch_dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluster_s *c2, struct dqdt_attr_s *attr);
 
 /* Specific architecture depanding CPU operations */
 typedef enum

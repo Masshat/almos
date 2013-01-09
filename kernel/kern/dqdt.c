@@ -23,21 +23,22 @@
 #include <config.h>
 #include <types.h>
 #include <errno.h>
+#include <system.h>
 #include <thread.h>
 #include <task.h>
 #include <cluster.h>
 #include <pmm.h>
 #include <cpu.h>
-#include <bits.h>
 #include <boot-info.h>
 
 #include <dqdt.h>
 
 #define DQDT_MGR_PERIOD      CONFIG_DQDT_MGR_PERIOD
-#define DQDT_DIST_NOTSET     0	/* must be zero (c.f: see dqdt_attr_init) */
-#define DQDT_DIST_MANHATTAN  1
-#define DQDT_DIST_RANDOM     2
 #define DQDT_SELECT_LTCN     0x001
+#define DQDT_THREAD_OP       0x002
+#define DQDT_FORK_OP         0x004
+#define DQDT_MIGRATE_OP      0x008
+#define DQDT_MEMORY_OP       0x010
 
 #if 0
 #define down_dmsg(x,...)    printk(INFO, __VA_ARGS__)
@@ -51,13 +52,11 @@
 #define update_dmsg(x,...)  dqdt_dmsg(x,__VA_ARGS__)
 #endif
 
-
 struct dqdt_cluster_s *dqdt_root;
+/* TODO: use the lock-free kfifo (MWSR) instead of using spinlock + wait_queue */
 static spinlock_t dqdt_lock;
 static struct wait_queue_s dqdt_task_queue;
-static uint_t dqdt_count;
-static uint_t dqdt_threshold;
-static uint_t dqdt_last_pid;
+static uint_t dqdt_update_cntr;
 
 void dqdt_init(struct boot_info_s *info)
 {
@@ -70,9 +69,7 @@ void dqdt_init(struct boot_info_s *info)
 	{
 		spinlock_init(&dqdt_lock, "dqdt lock");
 		wait_queue_init(&dqdt_task_queue, "dqdt task");
-		dqdt_count     = 0;
-		dqdt_threshold = 100;
-		dqdt_last_pid  = 0;
+		dqdt_update_cntr = 1;
 		cpu_wbflush();
 	}
 	
@@ -109,36 +106,23 @@ void dqdt_wait_for_update()
 
 void dqdt_update_done()
 {
+	register bool_t isEmpty;
+
 	spinlock_lock(&dqdt_lock);
-	(void)wakeup_one(&dqdt_task_queue, WAIT_FIRST);
-	spinlock_unlock(&dqdt_lock);
-}
 
-static inline uint_t dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluster_s *c2, struct dqdt_attr_s *attr)
-{
-	register sint_t x1,y1,x2,y2,d;
-  
-	switch(attr->d_type)
+	isEmpty = wait_queue_isEmpty(&dqdt_task_queue);
+	
+	if((!isEmpty) && ((dqdt_update_cntr % 3) == 0))
 	{
-	case DQDT_DIST_MANHATTAN:
-		x1 = c1->home->x_coord;
-		y1 = c1->home->y_coord;
-		x2 = c2->home->x_coord;
-		y2 = c2->home->y_coord;
-		d = ABS((x1 - x2)) + ABS((y1 - y2));
-		break;
-
-	case DQDT_DIST_RANDOM:
-		//srand(cpu_time_stamp());
-		d = rand() % 0xFFF;
-		break;
-
-	default:
-		d = 1;
-		break;
+		(void)wakeup_one(&dqdt_task_queue, WAIT_FIRST);
+		dqdt_update_cntr = 1;
+		isEmpty          = wait_queue_isEmpty(&dqdt_task_queue);
 	}
 
-	return d;
+	spinlock_unlock(&dqdt_lock);
+
+	if(!isEmpty)
+		dqdt_update_cntr ++;
 }
 
 void dqdt_print_summary(struct dqdt_cluster_s *cluster)
@@ -518,7 +502,7 @@ DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy2)
 		}
 		
 		usage_tbl[i]    = logical->info.tbl[i].U;
-		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
+		distance_tbl[i] = arch_dqdt_distance(attr->origin, logical->children[i], attr);
 		threads_tbl[i]  = atomic_get(&logical->info.tbl[i].T);
 	}
 
@@ -558,7 +542,7 @@ DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy1)
 		}
 
 		threads_tbl[i]  = atomic_get(&logical->info.tbl[i].T);
-		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
+		distance_tbl[i] = arch_dqdt_distance(attr->origin, logical->children[i], attr);
 	}
 	
 	up_dmsg(1,"%s: cpu %d, current level %d, before sort: T-Tbl [%d,%d,%d,%d], "
@@ -612,7 +596,7 @@ DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy3)
 		val = atomic_get(&logical->info.tbl[i].T);
 		val = cores - val;
 		threads_tbl[i]  = (uint_t)val;
-		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
+		distance_tbl[i] = arch_dqdt_distance(attr->origin, logical->children[i], attr);
 	}
 
 	for(i = 0; i < 3; i++)
@@ -871,19 +855,22 @@ DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 
 error_t dqdt_do_placement(struct dqdt_cluster_s *logical, 
 			  struct dqdt_attr_s *attr, 
-			  uint_t index, 
+			  uint_t index,
 			  uint_t depth,
 			  uint_t d_type)
 {
 	error_t err;
-	
-	attr->flags  = DQDT_SELECT_LTCN;
+
+	attr->flags |= DQDT_SELECT_LTCN;
 	attr->origin = current_cluster->levels_tbl[0];
 	attr->d_type = d_type;
 
+	cpu_wbflush();
+
 	err = dqdt_up_traversal(logical,
 				attr,
-				dqdt_down_clstr_select_strategy3,
+				(attr->flags & DQDT_FORK_OP) ? 
+				       dqdt_down_clstr_select_strategy1 : dqdt_down_clstr_select_strategy3,
 				dqdt_up_clstr_select_strategy1,
 				dqdt_core_min_threads_select,
 				depth,
@@ -894,7 +881,7 @@ error_t dqdt_do_placement(struct dqdt_cluster_s *logical,
 
 	dqdt_wait_for_update();
 
-	attr->flags = 0;
+	attr->flags &= ~DQDT_SELECT_LTCN;
 	attr->u_threshold = 100;
 
 	err = dqdt_up_traversal(dqdt_root,
@@ -924,7 +911,7 @@ error_t dqdt_do_placement(struct dqdt_cluster_s *logical,
 error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
 	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
-	
+	attr->flags = DQDT_THREAD_OP;
 	return dqdt_do_placement(logical, attr, logical->index, DQDT_MAX_DEPTH, DQDT_DIST_MANHATTAN);
 }
 
@@ -937,6 +924,7 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 	error_t err;
 
 	cluster = current_cluster;
+	attr->flags = DQDT_MIGRATE_OP;
 
 	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
 
@@ -973,7 +961,8 @@ error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 	error_t err;
 
 	attr->m_threshold = current_cluster->ppm.uprio_pages_min;
-	
+	attr->flags       = DQDT_FORK_OP;
+
 	err = dqdt_do_placement(logical, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_RANDOM);
 
 	if(err)
@@ -1031,7 +1020,7 @@ DQDT_SELECT_HELPER(dqdt_mem_down_select)
 		else
 			found_tbl[i] = 10; /* Any max value */
 
-		distance_tbl[i] = dqdt_distance(attr->origin, logical->children[i], attr);
+		distance_tbl[i] = arch_dqdt_distance(attr->origin, logical->children[i], attr);
 	}
 
 	if(found == false)
@@ -1102,6 +1091,7 @@ error_t dqdt_mem_request(struct dqdt_cluster_s *logical, struct dqdt_attr_s *att
 
 	attr->d_type = DQDT_DIST_MANHATTAN;
 	attr->origin = current_cluster->levels_tbl[0];
+	attr->flags  = DQDT_MEMORY_OP;
 
 	err = dqdt_up_traversal(logical,
 				attr,
