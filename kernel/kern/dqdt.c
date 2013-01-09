@@ -912,7 +912,7 @@ error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s
 {
 	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
 	attr->flags = DQDT_THREAD_OP;
-	return dqdt_do_placement(logical, attr, logical->index, DQDT_MAX_DEPTH, DQDT_DIST_MANHATTAN);
+	return dqdt_do_placement(logical, attr, logical->index, DQDT_MAX_DEPTH, DQDT_DIST_DEFAULT);
 }
 
 error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
@@ -932,7 +932,7 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 				attr,
 				(cluster->levels_tbl[0] == logical) ? logical->index : 5,
 				DQDT_MAX_DEPTH,
-				DQDT_DIST_MANHATTAN);
+				DQDT_DIST_DEFAULT);
 	
 	if(err == 0)
 		return 0;
@@ -945,7 +945,7 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 
 	if(cond1 || cond2)
 	{
-		err = dqdt_do_placement(dqdt_root, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_MANHATTAN);
+		err = dqdt_do_placement(dqdt_root, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_DEFAULT);
 	
 		if(err == 0)
 			this->info.migration_fail_cntr = (cond1) ? 0 : this->info.migration_fail_cntr;
@@ -1089,7 +1089,7 @@ error_t dqdt_mem_request(struct dqdt_cluster_s *logical, struct dqdt_attr_s *att
 		    logical->level,
 		    logical->home->id);
 
-	attr->d_type = DQDT_DIST_MANHATTAN;
+	attr->d_type = DQDT_DIST_DEFAULT;
 	attr->origin = current_cluster->levels_tbl[0];
 	attr->flags  = DQDT_MEMORY_OP;
 

@@ -73,7 +73,7 @@ error_t arch_cpu_send_ipi(struct cpu_s *target);
 
 /* Specific architecture-dependent DQDT macros & functions */
 #define DQDT_DIST_NOTSET     0	/* must be zero (c.f: see dqdt_attr_init in kern/dqdt.h) */
-#define DQDT_DIST_MANHATTAN  1
+#define DQDT_DIST_DEFAULT    1
 #define DQDT_DIST_RANDOM     2
 
 uint_t arch_dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluster_s *c2, struct dqdt_attr_s *attr);

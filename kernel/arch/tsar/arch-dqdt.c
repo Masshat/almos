@@ -40,7 +40,7 @@ uint_t arch_dqdt_distance(struct dqdt_cluster_s *c1, struct dqdt_cluster_s *c2, 
   
 	switch(attr->d_type)
 	{
-	case DQDT_DIST_MANHATTAN:
+	case DQDT_DIST_DEFAULT:
 		x1 = c1->home->x_coord;
 		y1 = c1->home->y_coord;
 		x2 = c2->home->x_coord;
