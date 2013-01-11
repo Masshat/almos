@@ -142,13 +142,6 @@ struct dqdt_cluster_s
 	struct dqdt_cluster_s *children[4];
 };
 
-
-#define DQDT_SELECT_HELPER(n) bool_t (n) (struct dqdt_cluster_s *logical, \
-					  struct dqdt_attr_s *attr,	\
-					  uint_t child_index)
-
-typedef DQDT_SELECT_HELPER(dqdt_select_t);
-
 /////////////////////////////////////////////////////
 
 #endif	/* _DQDT_H_ */
