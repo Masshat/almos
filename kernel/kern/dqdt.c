@@ -62,74 +62,8 @@ struct dqdt_cluster_s *dqdt_root;
 /* TODO: use the lock-free kfifo (MWSR) instead of using spinlock + wait_queue */
 static spinlock_t dqdt_lock;
 static struct wait_queue_s dqdt_task_queue;
+static atomic_t dqdt_waiting_cntr;
 static uint_t dqdt_update_cntr;
-
-void dqdt_init(struct boot_info_s *info)
-{
-	uint_t i;
-
-	struct cluster_s *cluster = current_cluster;
-	struct dqdt_cluster_s *logical = cluster->levels_tbl[0];
-
-	if(cluster->id == info->boot_cluster_id)
-	{
-		spinlock_init(&dqdt_lock, "dqdt lock");
-		wait_queue_init(&dqdt_task_queue, "dqdt task");
-		dqdt_update_cntr = 1;
-		cpu_wbflush();
-	}
-	
-	for(i = 0; i < 4; i++)
-		atomic_init(&logical->info.tbl[i].T, 0);
-
-	atomic_init(&logical->info.summary.T, 0);
-}
-
-struct dqdt_cluster_s* dqdt_logical_lookup(uint_t level)
-{
-	register struct dqdt_cluster_s *current;
-
-	current = current_cluster->levels_tbl[0];
-  
-	while((current != NULL) && (current->level != level))
-		current = current->parent;
-
-	return (current == NULL) ? dqdt_root : current;
-}
-
-void dqdt_wait_for_update()
-{
-	struct thread_s *this;
-
-	this = current_thread;
-
-	spinlock_lock(&dqdt_lock);
-	wait_on(&dqdt_task_queue, WAIT_LAST);
-	spinlock_unlock(&dqdt_lock);
-
-	sched_sleep(current_thread);
-}
-
-void dqdt_update_done()
-{
-	register bool_t isEmpty;
-
-	spinlock_lock(&dqdt_lock);
-
-	isEmpty = wait_queue_isEmpty(&dqdt_task_queue);
-	
-	if((!isEmpty) && ((dqdt_update_cntr % 3) == 0))
-	{
-		(void)wakeup_one(&dqdt_task_queue, WAIT_FIRST);
-		dqdt_update_cntr = 1;
-		isEmpty          = wait_queue_isEmpty(&dqdt_task_queue);
-	}
-
-	spinlock_unlock(&dqdt_lock);
-
-	if(!isEmpty)
-		dqdt_update_cntr ++;
-}
 
 void dqdt_print_summary(struct dqdt_cluster_s *cluster)
 {
@@ -188,6 +122,80 @@ void dqdt_print(struct dqdt_cluster_s *cluster)
 	printk(INFO, "Leaving Level %d, Index %d\n", 
 	       cluster->level, 
 	       cluster->index);
+}
+
+void dqdt_init(struct boot_info_s *info)
+{
+	uint_t i;
+
+	struct cluster_s *cluster = current_cluster;
+	struct dqdt_cluster_s *logical = cluster->levels_tbl[0];
+
+	if(cluster->id == info->boot_cluster_id)
+	{
+		spinlock_init(&dqdt_lock, "dqdt lock");
+		wait_queue_init(&dqdt_task_queue, "dqdt task");
+		atomic_init(&dqdt_waiting_cntr, 0);
+		dqdt_update_cntr = 0;
+		cpu_wbflush();
+	}
+
+	for(i = 0; i < 4; i++)
+		atomic_init(&logical->info.tbl[i].T, 0);
+
+	atomic_init(&logical->info.summary.T, 0);
+}
+
+struct dqdt_cluster_s* dqdt_logical_lookup(uint_t level)
+{
+	register struct dqdt_cluster_s *current;
+
+	current = current_cluster->levels_tbl[0];
+
+	while((current != NULL) && (current->level != level))
+		current = current->parent;
+
+	return (current == NULL) ? dqdt_root : current;
+}
+
+void dqdt_wait_for_update()
+{
+	struct thread_s *this;
+
+	this = current_thread;
+
+	spinlock_lock(&dqdt_lock);
+	wait_on(&dqdt_task_queue, WAIT_LAST);
+	spinlock_unlock(&dqdt_lock);
+
+	(void)atomic_add(&dqdt_waiting_cntr, 1);
+
+	sched_sleep(current_thread);
+
+	(void)atomic_add(&dqdt_waiting_cntr, -1);
+}
+
+
+void dqdt_update_done()
+{
+	register bool_t isEmpty;
+
+	dqdt_update_cntr ++;
+
+	if((dqdt_update_cntr % 2) == 0)
+	{
+		spinlock_lock(&dqdt_lock);
+
+		isEmpty = wait_queue_isEmpty(&dqdt_task_queue);
+
+		if(!isEmpty)
+		{
+			(void)wakeup_one(&dqdt_task_queue, WAIT_FIRST);
+			isEmpty = wait_queue_isEmpty(&dqdt_task_queue);
+		}
+
+		spinlock_unlock(&dqdt_lock);
+	}
 }
 
 void dqdt_indicators_update(dqdt_indicators_t *entry,
@@ -336,6 +344,52 @@ error_t dqdt_update(void)
 		}
 	}
   
+	return 0;
+}
+
+error_t dqdt_update_threads_number(struct dqdt_cluster_s *logical,
+				   uint_t core_index,
+				   sint_t expected_T,
+				   sint_t count)
+{
+	bool_t isEmpty;
+	uint_t index;
+	sint_t old;
+
+	old = atomic_add(&logical->info.tbl[core_index].T, count);
+
+	if((expected_T >= 0) && (old != expected_T))
+	{
+		(void)atomic_add(&logical->info.tbl[core_index].T, -count);
+		return EAGAIN;
+	}
+
+	(void)atomic_add(&logical->info.summary.T, count);
+
+	index   = logical->index;
+	logical = logical->parent;
+
+	while(logical != NULL)
+	{
+		(void)atomic_add(&logical->info.tbl[index].T, count);
+		(void)atomic_add(&logical->info.summary.T, count);
+
+		index   = logical->index;
+		logical = logical->parent;
+	}
+
+	if((count < 0) && ((old = atomic_get(&dqdt_waiting_cntr)) != 0))
+	{
+		spinlock_lock(&dqdt_lock);
+
+		isEmpty = wait_queue_isEmpty(&dqdt_task_queue);
+
+		if(!isEmpty)
+			(void)wakeup_one(&dqdt_task_queue, WAIT_FIRST);
+
+		spinlock_unlock(&dqdt_lock);
+	}
+
 	return 0;
 }
 
@@ -712,40 +766,6 @@ error_t dqdt_up_traversal(struct dqdt_cluster_s *logical,
 				 limit, 
 				 logical->index);
 }
-
-error_t dqdt_update_threads_number(struct dqdt_cluster_s *logical, 
-				   uint_t core_index, 
-				   sint_t expected_T, 
-				   sint_t count)
-{
-	uint_t index;
-	sint_t old;
-
-	old = atomic_add(&logical->info.tbl[core_index].T, count);
-
-	if((expected_T >= 0) && (old != expected_T))
-	{
-		(void)atomic_add(&logical->info.tbl[core_index].T, -count);
-		return EAGAIN;
-	}
-
-	(void)atomic_add(&logical->info.summary.T, count);
-
-	index   = logical->index;
-	logical = logical->parent;
-
-	while(logical != NULL)
-	{
-		(void)atomic_add(&logical->info.tbl[index].T, count);		
-		(void)atomic_add(&logical->info.summary.T, count);
-		
-		index   = logical->index;
-		logical = logical->parent;
-	}
-
-	return 0;
-}
-
 
 DQDT_SELECT_HELPER(dqdt_core_min_threads_select)
 {
