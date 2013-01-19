@@ -650,8 +650,8 @@ DQDT_SELECT_HELPER(dqdt_down_clstr_select_strategy3)
 	{
 		for(j = 1; j < 4; j++)
 		{
-			if(((threads_tbl[i] > 0) && (threads_tbl[j] < threads_tbl[i])) ||
-			   ((threads_tbl[i] <= 0) && (threads_tbl[j] > 0)))
+			if(((threads_tbl[i] >  0) && (threads_tbl[j] < threads_tbl[i])) ||
+			   ((threads_tbl[i] == 0) && (threads_tbl[j] < (uint_t)-1)))
 			{
 				val = threads_tbl[j];
 				threads_tbl[j] = threads_tbl[i];
