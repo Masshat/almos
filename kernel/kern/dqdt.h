@@ -96,7 +96,7 @@ struct dqdt_attr_s
 	uint_t m_threshold;
 	uint_t u_threshold;
 	uint_t d_type;
-	uint_t *select_tbl;
+	sint_t *select_tbl;
 	struct dqdt_cluster_s *origin;
 };
 
