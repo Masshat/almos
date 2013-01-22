@@ -127,7 +127,7 @@ error_t thread_migrate(struct thread_s *this)
 		this->info.migration_fail_cntr ++;
 
 		if(attr.cpu == cpu)
-			(void)dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1, -1);
+			dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
 
 		return EAGAIN;
 	}
@@ -173,7 +173,7 @@ error_t thread_migrate(struct thread_s *this)
 		return err;
 	}
 
-	(void)dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1, -1);
+	dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
 	sched_remove(this);
 	return 0;
 }

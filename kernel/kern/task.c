@@ -81,7 +81,7 @@ void task_default_placement(struct dqdt_attr_s *attr)
 	cpu_lid      %= current_cluster->cpu_nr;
 	attr->cluster = clusters_tbl[cid].cluster;
 	attr->cpu     = &attr->cluster->cpu_tbl[cpu_lid];
-	(void)dqdt_update_threads_number(attr->cluster->levels_tbl[0], cpu_lid, -1, 1);
+	dqdt_update_threads_number(attr->cluster->levels_tbl[0], cpu_lid, 1);
 }
 
 struct task_s* task_lookup(uint_t pid)

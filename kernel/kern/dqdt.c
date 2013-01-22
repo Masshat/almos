@@ -50,13 +50,13 @@
 #define down_dmsg(x,...)    printk(INFO, __VA_ARGS__)
 #define up_dmsg(x,...)      printk(INFO, __VA_ARGS__)
 #define select_dmsg(x,...)  printk(INFO, __VA_ARGS__)
-#define sort_dmsg(x,...)  printk(INFO, __VA_ARGS__)
+#define sort_dmsg(x,...)    printk(INFO, __VA_ARGS__)
 #define update_dmsg(x,...)  printk(INFO, __VA_ARGS__)
 #else
 #define down_dmsg(x,...)    dqdt_dmsg(x,__VA_ARGS__)
 #define up_dmsg(x,...)      dqdt_dmsg(x,__VA_ARGS__)
 #define select_dmsg(x,...)  dqdt_dmsg(x,__VA_ARGS__)
-#define sort_dmsg(x,...)  dqdt_dmsg(x,__VA_ARGS__)
+#define sort_dmsg(x,...)    dqdt_dmsg(x,__VA_ARGS__)
 #define update_dmsg(x,...)  dqdt_dmsg(x,__VA_ARGS__)
 #endif
 
@@ -355,28 +355,14 @@ error_t dqdt_update(void)
 	return 0;
 }
 
-error_t dqdt_update_threads_number(struct dqdt_cluster_s *logical,
-				   uint_t core_index,
-				   sint_t expected_T,
-				   sint_t count)
+void dqdt_update_threads_number(struct dqdt_cluster_s *logical, uint_t core_index, sint_t count)
 {
-	bool_t isEmpty;
-	uint_t index;
+	register bool_t isEmpty;
+	register uint_t index;
 	sint_t old;
 
-	old = atomic_add(&logical->info.tbl[core_index].T, count);
-
-	if((expected_T >= 0) && (old != expected_T))
-	{
-		(void)atomic_add(&logical->info.tbl[core_index].T, -count);
-		return EAGAIN;
-	}
-
-	(void)atomic_add(&logical->info.summary.T, count);
-
-	index   = logical->index;
-	logical = logical->parent;
-
+	index = core_index;
+	
 	while(logical != NULL)
 	{
 		(void)atomic_add(&logical->info.tbl[index].T, count);
@@ -397,8 +383,6 @@ error_t dqdt_update_threads_number(struct dqdt_cluster_s *logical,
 
 		spinlock_unlock(&dqdt_lock);
 	}
-
-	return 0;
 }
 
 void dqdt_primary_table_sort1(sint_t *values_tbl, sint_t *aux_tbl, uint_t count)
@@ -800,35 +784,55 @@ DQDT_SELECT_HELPER(dqdt_core_min_threads_select)
 	register struct cluster_s *cluster;
 	register struct cpu_s *cpu;
 	register uint_t i, min, indx, val;
-	error_t err;
+	uint_t new_core_T;
+	uint_t new_clstr_T;
+	uint_t old_clstr_T;
+	uint_t cntr = 4;
+	bool_t isDone;
 
-	val = atomic_get(&logical->info.summary.T);
+	isDone = false;
 
-	if((attr->flags & DQDT_SELECT_LTCN) && (val >= logical->cores_nr))
-		return false;
-
-	min  = (uint_t) -1;
-	indx = 0;
-
-	for(i = 0; i < 4; i++)
+	while(!isDone && (cntr > 0))
 	{
-		val = atomic_get(&logical->info.tbl[i].T);
+		cntr --;
+		min  = (uint_t) -1;
+		indx = 0;
 
-		if(val < min)
+		for(i = 0; i < 4; i++)
 		{
-			min  = val;
-			indx = i;
+			val = atomic_get(&logical->info.tbl[i].T);
+
+			if(val < min)
+			{
+				min  = val;
+				indx = i;
+			}
 		}
+
+		cluster       = logical->home;
+		cpu           = &cluster->cpu_tbl[indx];
+		attr->cluster = cluster;
+		attr->cpu     = cpu;
+
+		old_clstr_T = atomic_get(&logical->info.summary.T);
+
+		if((attr->flags & DQDT_SELECT_LTCN) && (old_clstr_T >= logical->cores_nr))
+			return false;
+
+		dqdt_update_threads_number(logical, indx, 1);
+
+		new_clstr_T  = atomic_get(&logical->info.summary.T);
+		new_core_T   = atomic_get(&logical->info.tbl[indx].T);
+		min         += 1;
+		old_clstr_T += 1;
+
+		if((new_core_T != min) || (new_clstr_T != old_clstr_T))
+			dqdt_update_threads_number(logical, indx, -1);
+		else
+			isDone = true;
 	}
 
-	cluster       = logical->home;
-	cpu           = &cluster->cpu_tbl[indx];
-	attr->cluster = cluster;
-	attr->cpu     = cpu;
-
-	err = dqdt_update_threads_number(logical, indx, min, 1);
-
-	return (err == 0) ? true : false;
+	return isDone;
 }
 
 DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
@@ -860,7 +864,7 @@ DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 	cpu_wbflush();
 	pmm_cache_flush_vaddr((vma_t)&cluster->cpu_tbl[min].usage, PMM_DATA);
 
-	(void) dqdt_update_threads_number(logical, min, -1, 1);
+	dqdt_update_threads_number(logical, min, 1);
 
 	attr->cluster = cluster;
 	attr->cpu     = cpu;
@@ -934,10 +938,7 @@ error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s
 
 error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
-	struct thread_s *this;
 	struct cluster_s *cluster;
-	bool_t cond1;
-	bool_t cond2;
 	error_t err;
 
 	cluster = current_cluster;
@@ -951,23 +952,6 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 				DQDT_MAX_DEPTH,
 				DQDT_DIST_DEFAULT);
 	
-	if(err == 0)
-		return 0;
-
-	/* TODO: move these thresholds to per-task variables */
-	this = current_thread;
-
-       	cond1 = this->info.migration_fail_cntr > 5; 
-	cond2 = this->info.migration_cntr > 3;
-
-	if(cond1 || cond2)
-	{
-		err = dqdt_do_placement(dqdt_root, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_DEFAULT);
-	
-		if(err == 0)
-			this->info.migration_fail_cntr = (cond1) ? 0 : this->info.migration_fail_cntr;
-	}
-
 	select_dmsg(1, "%s: ended, found %s\n", __FUNCTION__, (err == 0) ? "(Yes)" : "(No)");
 	return err;
 }
@@ -1086,7 +1070,7 @@ error_t dqdt_mem_request(struct dqdt_cluster_s *logical, struct dqdt_attr_s *att
 	error_t err;
 
 	attr->d_type = DQDT_DIST_DEFAULT;
-	attr->origin = current_cluster->levels_tbl[0];
+	attr->origin = logical;
 	attr->flags  = DQDT_MEMORY_OP;
 
 	err = dqdt_up_traversal(logical,

@@ -42,7 +42,7 @@ int sys_thread_exit (void *exit_val)
  
 	/* TODO: the cpu->lid must match the core index in the logical cluster */
 	if(this->task->pid != 1)
-		(void)dqdt_update_threads_number(logical, cpu->lid, -1, -1);
+		dqdt_update_threads_number(logical, cpu->lid, -1);
 
 	spinlock_lock(&this->lock);
 

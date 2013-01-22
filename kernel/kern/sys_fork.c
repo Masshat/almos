@@ -179,7 +179,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 		attr.cpu      = &attr.cluster->cpu_tbl[cpu_lid];
 		err           = -100;
 		info.isPinned = true;
-		(void)dqdt_update_threads_number(attr.cluster->levels_tbl[0], cpu_lid, -1, 1);
+		dqdt_update_threads_number(attr.cluster->levels_tbl[0], cpu_lid, 1);
 	}
 	else
 	{

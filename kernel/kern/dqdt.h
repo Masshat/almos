@@ -60,8 +60,8 @@ void dqdt_print_summary(struct dqdt_cluster_s *cluster);
 /** Update the core-usage & memory estimations, should be called periodically */
 error_t dqdt_update(void);
 
-/** Update the threads number, should be called on each task's placement or destroy */
-error_t dqdt_update_threads_number(struct dqdt_cluster_s *logical, uint_t core_index, sint_t expected_T, sint_t count);
+/** Update the threads number, should be called on each task's placement or destroy made outside the DQDT*/
+void dqdt_update_threads_number(struct dqdt_cluster_s *logical, uint_t core_index, sint_t count);
 
 /** Ask the DQDT for a thread placement decision */
 error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr);
