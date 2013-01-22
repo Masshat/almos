@@ -102,6 +102,8 @@ void pthread_destroy(struct thread_s *thread)
 	uint_t tm_end;
 	uint_t u_err_nr;
 	uint_t m_err_nr;
+	uint_t migration_cntr;
+	uint_t migration_fail_cntr;
 	kmem_req_t req; 
 
 	tm_start            = cpu_time_stamp();
@@ -110,6 +112,8 @@ void pthread_destroy(struct thread_s *thread)
 	remote_pages_nr     = thread->info.remote_pages_cntr;
 	u_err_nr            = thread->info.u_err_nr;
 	m_err_nr            = thread->info.m_err_nr;
+	migration_cntr      = thread->info.migration_cntr;
+	migration_fail_cntr = thread->info.migration_fail_cntr;
 	stack_addr          = (uint_t)thread->info.attr.stack_addr;
 	task                = thread->task;
 	ticks_nr            = thread->ticks_nr;
@@ -186,7 +190,7 @@ void pthread_destroy(struct thread_s *thread)
 	tm_end = cpu_time_stamp();
 
 #if CONFIG_SHOW_THREAD_DESTROY_MSG
-	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cluster %d, cpu %d, tm %u [ %d, %d, %d, %d, %d, %d ][%u]\n",
+	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cluster %d, cpu %d, tm %u [ %d, %d, %d, %d, %d, %d, %d, %d ][%u]\n",
 	       __FUNCTION__,
 	       pid,
 	       tid,
@@ -199,6 +203,8 @@ void pthread_destroy(struct thread_s *thread)
 	       remote_pages_nr,
 	       u_err_nr,
 	       m_err_nr,
+	       migration_fail_cntr,
+	       migration_cntr,
 	       ticks_nr,
 	       tm_end);
 #endif

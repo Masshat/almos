@@ -282,6 +282,98 @@ error_t pmm_get_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info)
 }
 
 
+error_t pmm_lock_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info)
+{
+	volatile uint_t *pde;
+	volatile uint_t *pte_ptr;
+	struct cluster_s *cluster;
+	struct page_s *page;
+	uint_t *pte;
+	uint_t pde_val;
+	uint_t attr;
+	ppn_t  pte_ppn;
+	bool_t isAtomic;
+
+	pde      = &pmm->pgdir[MMU_PDE(vaddr)];
+	pde_val  = *pde;
+	pte      = NULL;
+	pte_ppn  = 0;
+  
+	if((pde_val != 0) && !(pde_val & PMM_HUGE))
+		return EINVAL;
+
+	if(pde_val == 0)
+	{
+		cluster = (pmm->cluster == NULL) ? current_cluster : pmm->cluster;
+
+		if((page = pmm_alloc_pages(cluster, 0, &pte_ppn, &pte)) == NULL)
+			return ENOMEM;
+
+		do 
+		{
+			isAtomic = cpu_atomic_cas((void*)pde, 0, PMM_PRESENT | MMU_PTD1 | pte_ppn);
+		}while((isAtomic == false) && (*pde == 0));
+
+		if(isAtomic == false)
+		{
+			/* TODO: diffre this free operation by adding it to a propre queue, 
+			 * Events system doesn't help here cause we don't want to preempt 
+			 * the user thread */
+			ppm_free_pages(page);	
+			pde_val = *pde;
+			pte_ppn = pde_val & MMU_PPN_MASK;
+			pte     = pmm_ppn2vma(pte_ppn);
+			current_thread->info.spurious_pgfault_cntr ++;
+		}
+	}
+	else
+	{
+		pte_ppn = pde_val & MMU_PPN_MASK;
+		pte     = pmm_ppn2vma(pte_ppn);
+	}
+
+	pte_ptr  = (volatile uint_t*)((char*)pte + MMU_PTE(vaddr));
+	isAtomic = false;
+	attr     = pte_ptr[0];
+
+	while(attr == 0)
+	{
+		isAtomic = cpu_atomic_cas((void*)pte_ptr, attr, attr | PMM_LOCKED);
+		attr = pte_ptr[0];
+	}
+
+	info->attr     = attr;
+	info->ppn      = pte_ptr[1] & MMU_PPN_MASK;
+	info->isAtomic = isAtomic;
+	info->data     = (void*)pte_ptr;
+
+	return 0;
+}
+
+error_t pmm_unlock_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info)
+{
+	volatile uint_t *pte;
+	bool_t isAtomic;
+	uint_t attr;
+
+	pte      = info->data;
+	attr     = pte[0];
+	isAtomic = false;
+
+	while((isAtomic == false) && (attr & PMM_LOCKED))
+	{
+		isAtomic = cpu_atomic_cas((void*)pte, attr, attr & ~PMM_LOCKED);
+		attr     = pte[0];
+	}
+
+	info->attr     = attr;
+	info->ppn      = pte[1];
+	info->isAtomic = isAtomic;
+	return 0;
+}
+
+
+
 /* Region related operations */
 error_t pmm_region_dup(struct pmm_s *dst, struct pmm_s *src, vma_t vaddr, vma_t limit, uint_t flags)
 {

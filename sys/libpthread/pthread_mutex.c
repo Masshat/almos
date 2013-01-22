@@ -156,7 +156,7 @@ int pthread_mutex_lock (pthread_mutex_t *mutex)
 
 	if((mutex->attr.type == PTHREAD_MUTEX_RECURSIVE) && (mutex->value == this))
 	{
-		mutex->attr.cntr += 1;
+		mutex->attr.cntr += 1;	
 		return 0;
 	}
 

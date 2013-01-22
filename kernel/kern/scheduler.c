@@ -121,7 +121,7 @@ error_t sched_register(struct thread_s *thread)
 	cpu   = thread_current_cpu(thread);
 	db    = cpu->scheduler.db;
 
-#if (CONFIG_REMOTE_THREAD_CREATE || CONFIG_REMOTE_FORK)
+#if (CONFIG_REMOTE_THREAD_CREATE && CONFIG_REMOTE_FORK)
 	uint_t irq_state;
 	cpu_disable_all_irq(&irq_state);
 #else
@@ -140,7 +140,7 @@ error_t sched_register(struct thread_s *thread)
 		thread->ltid = index;
 	}
 
-#if CONFIG_REMOTE_THREAD_CREATE  
+#if (CONFIG_REMOTE_THREAD_CREATE && CONFIG_REMOTE_FORK)
 	cpu_restore_irq(irq_state);
 #else
 	spinlock_unlock(&db->lock);

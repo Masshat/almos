@@ -48,10 +48,10 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 	register bool_t isAtomic;
 	register uint_t this;
 	register uint_t limit;
-
+	
 	if (lock == NULL)
 	{
-		dmsg_r(stderr, "%s: pid %d, tid %d, EINVAL\n",
+		dmsg_r(stderr, "%s: pid %d, tid %d, EINVAL\n", 
 		       __FUNCTION__, (int)getpid(), (unsigned)pthread_self);
 
 		return EINVAL;
@@ -64,8 +64,9 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 	// Check if lock is not owned by the caller thread.
 	if (lock->val == this)
 	{
-		dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x EDEADLK\n",
+		dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x EDEADLK\n", 
 		       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
+
 		return EDEADLK;
 	}
 
@@ -79,16 +80,19 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 		if(cntr > limit)
 		{
 			pthread_yield();
-			dmsg_r(stderr, "%s: pid %d, tid %d, val %d, 0x%x, yielded\n",
+
+			dmsg_r(stderr, "%s: pid %d, tid %d, val %d, 0x%x, yielded\n", 
 			       __FUNCTION__, (int)getpid(), (unsigned)this, (unsigned)lock->val, (unsigned)lock);
+
 			cpu_invalid_dcache_line(lock);
 			limit = 2000;
 			cntr  = 0;
 		}
 	}
 
-	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x locked\n",
+	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x locked\n", 
 	       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
+
 	return 0;
 }
 
@@ -122,7 +126,7 @@ int pthread_spin_unlock (pthread_spinlock_t *lock)
 {
 	if (lock == NULL)
 	{
-		dmsg_r(stderr, "%s: pid %d, tid %d EINVAL\n",
+		dmsg_r(stderr, "%s: pid %d, tid %d EINVAL\n", 
 		       __FUNCTION__, (int)getpid(), (unsigned)pthread_self());
 		return EINVAL;
 	}
@@ -132,15 +136,17 @@ int pthread_spin_unlock (pthread_spinlock_t *lock)
 	{
 		dmsg_r(stderr, "libpthread: %s: pid %d, tid %d, val %d, EPERM\n",
 		       __FUNCTION__, (int)getpid(), (int)pthread_self(), (int)lock->val);
-
-		return EPERM;
+		
+       		return EPERM;
 	}
 	// Update lock's control informations  
 	lock->val = __PTHREAD_OBJECT_FREE;
 	cpu_wbflush();
 	cpu_invalid_dcache_line(lock);
-	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x unlocked\n",
+
+	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x unlocked\n", 
 	       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
+
 	return 0;
 }
 

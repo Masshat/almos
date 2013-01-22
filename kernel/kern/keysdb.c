@@ -143,7 +143,7 @@ static inline void keysdb_index(struct keysdb_s *db, uint_t key, uint_t *rec_ind
 	*key_index = key & ((1 << bits) - 1);
 }
 
-error_t keysdb_insert(struct keysdb_s *db, uint_t key, void *value)
+error_t keysdb_insert_seq(struct keysdb_s *db, uint_t key, void *value)
 {
 	kmem_req_t req;
 	keys_record_t *rec;
@@ -170,6 +170,57 @@ error_t keysdb_insert(struct keysdb_s *db, uint_t key, void *value)
 	if(rec->tbl[key_index] != NULL) 
 		return EEXIST;
 	
+	rec->tbl[key_index] = value;
+	return 0;
+}
+
+error_t keysdb_insert(struct keysdb_s *db, uint_t key, void *value)
+{
+	kmem_req_t req;
+	keys_record_t *rec;
+	uint_t record_index;
+	uint_t key_index;
+	bool_t isAtomic;
+	bool_t isAllocated;
+	volatile keys_record_t **ptr;
+
+	keysdb_index(db, key, &record_index, &key_index);
+
+	isAllocated = false;
+	isAtomic    = false;
+	rec         = NULL;
+	ptr         = (volatile keys_record_t**)&db->root[record_index];
+
+	while((*ptr == NULL) && (isAtomic == false))
+	{
+		if(rec == NULL)
+		{
+			req.type = KMEM_KEYSREC;
+			req.size = sizeof(keys_record_t);
+			req.flags = AF_USER;
+			rec = kmem_alloc(&req);
+
+			if(rec == NULL)
+				return ENOMEM;
+
+			memset(rec, 0, req.size);
+			isAllocated = true;
+		}
+
+		isAtomic = cpu_atomic_cas((void*)&db->root[record_index], 0, (uint_t)rec);
+	}
+
+	if(isAllocated && (db->root[record_index] != rec))
+	{
+		req.ptr = rec;
+		kmem_free(&req);
+	}
+  
+	rec = db->root[record_index];
+
+	if(rec->tbl[key_index] != NULL)
+		return EEXIST;
+
 	rec->tbl[key_index] = value;
 	return 0;
 }
@@ -223,6 +274,7 @@ void* keysdb_remove(struct keysdb_s *db, uint_t key)
 
 	value = rec->tbl[key_index];
 	rec->tbl[key_index] = NULL;
+	cpu_wbflush();
 
 	return value;
 }

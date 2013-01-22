@@ -48,8 +48,7 @@ static int sys_notAvailable()
 
 typedef int (*sys_func_t) ();
 
-static sys_func_t
-sys_call_tbl[__SYS_CALL_SERVICES_NUM] = {
+static const sys_func_t sys_call_tbl[__SYS_CALL_SERVICES_NUM] = {
 	sys_thread_exit,
 	sys_mmap,
 	sys_thread_create,

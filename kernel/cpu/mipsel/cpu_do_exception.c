@@ -91,8 +91,8 @@ error_t CpU_exception_handler(struct thread_s *this, reg_t cpu_id, reg_t *regs_t
 		       cpu->fpu_owner->info.order,
 		       cpu->fpu_owner,
 		       cpu_time_stamp());
-	}
 #endif
+	}
 
 	cpu_fpu_context_restore(&this->uzone);
 	cpu->fpu_owner = this;

@@ -42,7 +42,8 @@ typedef enum
 
 struct rwlock_s
 {
-	spinlock_t lock;
+	//spinlock_t lock;
+	mcs_lock_t lock;
 	uint_t signature;
 	sint_t count;
 	struct wait_queue_s rd_wait_queue;

@@ -178,13 +178,15 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 		attr.cluster  = clusters_tbl[cid].cluster;
 		attr.cpu      = &attr.cluster->cpu_tbl[cpu_lid];
 		err           = -100;
-		info.isPinned = false; 
+		info.isPinned = true;
+		dqdt_update_threads_number(attr.cluster->levels_tbl[0], cpu_lid, 1);
 	}
 	else
 	{
-		info.isPinned = true;
+		info.isPinned = false;
 #if 1
-		err = dqdt_task_placement(dqdt_logical_lookup(3), &attr);
+		dqdt_attr_init(&attr, NULL);
+		err = dqdt_task_placement(dqdt_root, &attr);
 #else
 		err = -101;
 #endif
@@ -289,6 +291,9 @@ error_t do_fork(fork_info_t *info)
 		  cpu_get_id(), 
 		  cpu_time_stamp());
   
+	child_thread = NULL;
+	child_task   = NULL;
+	page         = NULL;
 	attr.cluster = info->cpu->cluster;
 	
 #if CONFIG_FORK_LOCAL_ALLOC
@@ -423,7 +428,8 @@ fail_mem:
 fail_task:
 	printk(WARNING, "WARNING: %s: destroy child task\n", __FUNCTION__);
 
-	task_destroy(child_task);
+	if(child_task != NULL)
+		task_destroy(child_task);
 
 	printk(WARNING, "WARNING: %s: fork err %d [%d]\n", 
 	       __FUNCTION__, 

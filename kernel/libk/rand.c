@@ -20,7 +20,8 @@
 
 #include <types.h>
 #include <thread.h>
-#include <cpu.h>
+//#include <cpu.h>
+#include <atomic.h>
 
 /* PRNG parameters. Best results if:
  * PRNG_C and PRNG_M are relatively prime
@@ -31,7 +32,7 @@
  * so the modulus is implicit.
  */
 
-#if 0
+#if 1
 /* PRNG_A is a prime number */
 static uint32_t PRNG_A = 65519;
 
@@ -48,15 +49,29 @@ static atomic_t last_num;
  */
 void srand(unsigned int seed)
 {
-  current_cpu->last_num = seed;
+	//current_cpu->last_num = seed;
+	atomic_init(&last_num,seed);
 }
 
 uint_t rand(void)
 {  
-  struct cpu_s *cpu;
+	uint_t old, new;
+	bool_t isAtomic = false;
+	uint_t count    = 1000;
 
-  cpu = current_cpu;
-  cpu->last_num = ((cpu->last_num * cpu->prng_A) + cpu->prng_C) ^ cpu_time_stamp();
-  return cpu->last_num;
+	//struct cpu_s *cpu;
+
+	//cpu = current_cpu;
+	//cpu->last_num = ((cpu->last_num * cpu->prng_A) + cpu->prng_C) ^ cpu_time_stamp();
+	while((count > 0) && (isAtomic == false))
+	{
+		old = atomic_get(&last_num);
+		new = ((old * PRNG_A) + PRNG_C);
+
+		isAtomic = atomic_cas(&last_num, old, new);
+		count --;
+	}
+
+	return new;
 }
 

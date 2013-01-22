@@ -47,35 +47,36 @@
 
 typedef KMEM_OBJATTR_INIT(kmem_init_t);
 
-static kmem_init_t *kmem_init_tbl[KMEM_TYPES_NR] = {NULL, /* RESERVED */
-						    NULL, /* RESERVED */
-						    blkio_kmem_init,
-						    radix_node_kmem_init,
-						    dma_kmem_request_init, 
-						    mapper_kmem_init,
-						    task_kmem_init,
-						    task_fdinfo_kmem_init,
-						    devfs_kmem_context_init,
-						    devfs_kmem_node_init,
-						    devfs_kmem_file_init,
-						    vfat_kmem_context_init,
-						    vfat_kmem_node_init,
-						    vfat_kmem_file_init,
-						    sysfs_kmem_node_init,
-						    sysfs_kmem_file_init,
-						    vfs_kmem_context_init,
-						    vfs_kmem_node_init,
-						    vfs_kmem_file_init,
-						    vm_region_kmem_init,
-						    sem_kmem_init,
-						    cv_kmem_init,
-						    barrier_kmem_init,
-						    rwlock_kmem_init,
-						    wqdb_kmem_init,
-						    keysrec_kmem_init,
-						    ext2_kmem_context_init,
-						    ext2_kmem_node_init,
-						    ext2_kmem_file_init};
+static kmem_init_t * const kmem_init_tbl[KMEM_TYPES_NR] = {
+	NULL, /* RESERVED */
+	NULL, /* RESERVED */
+	blkio_kmem_init,
+	radix_node_kmem_init,
+	dma_kmem_request_init, 
+	mapper_kmem_init,
+	task_kmem_init,
+	task_fdinfo_kmem_init,
+	devfs_kmem_context_init,
+	devfs_kmem_node_init,
+	devfs_kmem_file_init,
+	vfat_kmem_context_init,
+	vfat_kmem_node_init,
+	vfat_kmem_file_init,
+	sysfs_kmem_node_init,
+	sysfs_kmem_file_init,
+	vfs_kmem_context_init,
+	vfs_kmem_node_init,
+	vfs_kmem_file_init,
+	vm_region_kmem_init,
+	sem_kmem_init,
+	cv_kmem_init,
+	barrier_kmem_init,
+	rwlock_kmem_init,
+	wqdb_kmem_init,
+	keysrec_kmem_init,
+	ext2_kmem_context_init,
+	ext2_kmem_node_init,
+	ext2_kmem_file_init};
 
 static void* kmem_kcm_alloc(struct cluster_s *cluster, struct kmem_req_s *req);
 
@@ -121,12 +122,13 @@ void* kmem_alloc(struct kmem_req_s *req)
     
 		if(cluster->ppm.free_pages_nr < cluster->ppm.kprio_pages_min)
 		{      
+#if 0
 			printk(INFO, "INFO: %s: cpu %d, cid %d, memory shortage found [%u]\n", 
 			       __FUNCTION__,
 			       cpu_get_id(),
 			       cluster->id, 
 			       cpu_time_stamp());
-
+#endif
 			for(i = 0; i < CLUSTER_TOTAL_KEYS_NR; i++)
 			{
 				kcm = cluster->keys_tbl[i];

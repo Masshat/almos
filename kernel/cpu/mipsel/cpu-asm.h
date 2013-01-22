@@ -397,6 +397,7 @@ static inline sint_t cpu_atomic_add(void *ptr, sint_t val)
 		 "addu    $3,      %0,       %2      \n"
 		 "sc      $3,      (%1)              \n"
 		 "beq     $3,      $0,       1b      \n"
+		 "nop                                \n"
 		 "sync                               \n"
 		 :"=&r"(current) : "r" (ptr), "r" (val) : "$3");
 

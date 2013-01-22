@@ -51,6 +51,8 @@ inline bool_t atomic_cas(atomic_t *ptr, sint_t old, sint_t new);
 
 inline sint_t atomic_get(atomic_t *ptr);
 
+inline sint_t atomic_set(atomic_t *ptr, sint_t val);
+
 
 /* Refcount operations */
 

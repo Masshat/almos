@@ -69,6 +69,21 @@ inline sint_t atomic_get(atomic_t *ptr)
 	return cpu_atomic_get((void*)&ptr->val);
 }
 
+inline sint_t atomic_set(atomic_t *ptr, sint_t val)
+{
+	sint_t old;
+	bool_t isAtomic;
+
+	isAtomic = false;
+
+	while(isAtomic == false)
+	{
+		old      = atomic_get(ptr);
+		isAtomic = atomic_cas(ptr, old, val);
+	}
+
+	return old;
+}
 
 /* Refcount operations */
 

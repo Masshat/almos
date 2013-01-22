@@ -50,6 +50,7 @@
 #undef PMM_HUGE
 #undef PMM_MIGRATE
 #undef PMM_SWAP
+#undef PMM_LOCKED
 #undef PMM_CLEAR
 
 /** Page flags */
@@ -94,7 +95,8 @@
 #define PMM_COW                 0x01
 #define PMM_MIGRATE             0x02
 #define PMM_SWAP                0x04
-#define PMM_CLEAR               0x08
+#define PMM_LOCKED              0x08
+#define PMM_CLEAR               0x10
 
 /** Page flags */
 #define PMM_TEXT                0x001
