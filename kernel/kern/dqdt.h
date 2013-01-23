@@ -90,6 +90,7 @@ struct dqdt_attr_s
 	struct cluster_s *cluster;
 	struct cpu_s *cpu;
 	void *data;
+	uint_t tm_request;
 
 	/* Private Members */
 	uint_t flags;

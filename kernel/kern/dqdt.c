@@ -935,31 +935,50 @@ error_t dqdt_do_placement(struct dqdt_cluster_s *logical,
 
 error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
+	register error_t err;
+	register uint_t tm_start, tm_end;
+
 	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
 	attr->flags = DQDT_THREAD_OP;
-	return dqdt_do_placement(logical, attr, logical->index, DQDT_MAX_DEPTH, DQDT_DIST_DEFAULT);
+
+	tm_start = cpu_time_stamp();
+
+	err = dqdt_do_placement(logical, attr, logical->index, DQDT_MAX_DEPTH, DQDT_DIST_DEFAULT);
+
+	tm_end = cpu_time_stamp();
+
+	attr->tm_request = tm_end - tm_start;
+
+	return err;
 }
 
 error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
 	struct cluster_s *cluster;
+	register uint_t tm_start, tm_end;
 	error_t err;
 
 	cluster = current_cluster;
 	attr->flags = DQDT_MIGRATE_OP;
+
+	tm_start = cpu_time_stamp();
 
 	err = dqdt_do_placement(logical,
 				attr,
 				(cluster->levels_tbl[0] == logical) ? logical->index : 5,
 				DQDT_MAX_DEPTH,
 				DQDT_DIST_DEFAULT);
-	
+
+	tm_end = cpu_time_stamp();
+
 	select_dmsg(1, "%s: cpu %d, pid %d, tid %d, ended, found %s\n",
 		    __FUNCTION__,
 		    cpu_get_id(),
 		    current_thread->task->pid,
 		    current_thread->info.order,
 		    (err == 0) ? "(Yes)" : "(No)");
+
+	attr->tm_request = tm_end - tm_start;
 
 	return err;
 }
@@ -968,14 +987,21 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 error_t dqdt_task_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s *attr)
 {
 	error_t err;
+	register uint_t tm_start, tm_end;
 
 	attr->m_threshold = current_cluster->ppm.uprio_pages_min;
 	attr->flags       = DQDT_FORK_OP;
+
+	tm_start = cpu_time_stamp();
 
 	err = dqdt_do_placement(logical, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_RANDOM);
 
 	if(err)
 		err = dqdt_do_placement(dqdt_root, attr, 5, DQDT_MAX_DEPTH, DQDT_DIST_RANDOM);
+
+	tm_end = cpu_time_stamp();
+
+	attr->tm_request = tm_end - tm_start;
 
 	return err;
 }
