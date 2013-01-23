@@ -28,6 +28,12 @@
 #include <system.h>
 #include <signal.h>
 
+#define irq_cpu_dmsg(c,...)				\
+	do{						\
+		if(cpu_get_id() == (c))			\
+			isr_dmsg(INFO, __VA_ARGS__);	\
+	}while(0)
+
 void do_interrupt(struct thread_s *this, uint_t irq_num)
 {
 	register thread_state_t old_state;

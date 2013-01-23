@@ -46,16 +46,20 @@ typedef struct
 	pthread_t         key; 
 	pthread_attr_t    *attr;
 	struct task_s     *task;
+	uint_t            tm_event;
 }thread_info_t;
 
 error_t do_thread_create(thread_info_t *info);
 
 EVENT_HANDLER(thread_create_event_handler)
 {
+	register uint_t tm_start, tm_end;
 	pthread_attr_t attr;
 	thread_info_t  linfo;
 	thread_info_t *rinfo;
 	error_t err;
+
+	tm_start = cpu_time_stamp();
 
 	rinfo = event_get_argument(event);
 	memcpy(&attr, rinfo->attr, sizeof(attr));
@@ -66,10 +70,13 @@ EVENT_HANDLER(thread_create_event_handler)
 	linfo.task     = rinfo->task;
 
 	err = do_thread_create(&linfo);
-  
+
+	tm_end = cpu_time_stamp();
+
 	rinfo->sched_listner = linfo.sched_listner;
 	rinfo->new_thread    = linfo.new_thread;
 	rinfo->err           = err;
+	rinfo->tm_event      = tm_end - tm_start;
 
 	cpu_wbflush();
 	rinfo->isDone = true;
@@ -81,6 +88,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 {
 	thread_info_t info;
 	pthread_attr_t attr;
+	struct dqdt_attr_s dqdt_attr;
 	struct thread_s *this;
 	register struct task_s *task;
 	register error_t err;
@@ -91,7 +99,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	uint_t tm_end;
 	uint_t tm_bRemote;
 	uint_t tm_aRemote;
-  
+
 	tm_start = cpu_time_stamp();
 	this     = current_thread;
 	task     = this->task;
@@ -108,7 +116,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 		err = EPERM;
 		goto fail_access;
 	}
-  
+
 	if((err = cpu_uspace_copy(&attr, thread_attr, sizeof(attr)))) 
 		goto fail_ucopy_attr;
 
@@ -133,9 +141,9 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	}
 
 	spinlock_lock(&task->th_lock);
-  
+
 	order = bitmap_ffs2(task->bitmap, task->next_order, sizeof(task->bitmap));
-  
+
 	if(order != -1)
 	{
 		bitmap_clear(task->bitmap, order);
@@ -144,20 +152,18 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	}
 
 	spinlock_unlock(&task->th_lock);
- 
+
 	if(order == -1)
-	{ 
+	{
 		err = EAGAIN;
 		goto fail_thread_order;
 	}
 
 	if(attr.cpu_gid < 0)
 	{
-		struct dqdt_attr_s dqdt_attr;
-
 		info.isPinned = false;
 		dqdt_attr_init(&dqdt_attr, NULL);
-    
+
 		err = dqdt_thread_placement(current_cluster->levels_tbl[0], &dqdt_attr);
 
 		if(err == 0)
@@ -192,7 +198,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	info.task   = task;
 
 #if CONFIG_REMOTE_THREAD_CREATE
-  
+
 	event_set_argument(&info.event, &info);
 	event_set_handler(&info.event, thread_create_event_handler);
 	event_set_priority(&info.event, E_CREATE);
@@ -227,14 +233,16 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	if(err) goto fail_remote;
 
 	err = cpu_uspace_copy(tid, &order, sizeof(pthread_t));
-  
+
 	if(err) goto fail_tid;
 
 	sched_event = sched_event_make(info.new_thread, SCHED_OP_ADD_CREATED);
 	sched_event_send(info.sched_listner, sched_event);
 	tm_end = cpu_time_stamp();
-	
-	printk(INFO, "INFO: %s: cpu %d, pid %d, done [tid:%d, gid:%d, cid:%d, s:%u, bR:%u, aR:%u, e:%u, t:%u]\n", 
+
+	printk(INFO,
+	       "INFO: %s: cpu %d, pid %d, done "
+	       "[tid:%d, gid:%d, cid:%d, s:%u, bR:%u, aR:%u, e:%u, d:%u, t:%u, r:%u]\n",
 	       __FUNCTION__,
 	       cpu_get_id(),
 	       task->pid,
@@ -245,14 +253,16 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	       tm_bRemote,
 	       tm_aRemote,
 	       tm_end,
-	       tm_end - tm_start);
+	       dqdt_attr.tm_request,
+	       tm_end - tm_start,
+	       info.tm_event);
 
 	return 0;
-  
+
 fail_tid:
 	info.new_thread->state = S_DEAD;
 	thread_destroy(info.new_thread);
-  
+
 fail_remote:
 fail_thread_order:
 fail_threads_limit:
@@ -265,7 +275,6 @@ fail_inval:
 	current_thread->info.errno = err;
 	return err;
 }
-  
 
 error_t do_thread_create(thread_info_t *info)
 {
@@ -311,7 +320,7 @@ error_t do_thread_create(thread_info_t *info)
 
 	// Determinate New Thread Attributes (default values)
 	attr->sched_policy = SCHED_RR;
-    
+
 	if((err = thread_create(task, attr, &new_thread)))
 		goto fail_create;
 
@@ -330,7 +339,7 @@ error_t do_thread_create(thread_info_t *info)
 #endif
 
 	tm_astep3 = cpu_time_stamp();
-  
+
 	// Add the new thread to the set of created threads
 	new_thread->info.order    = info->key;
 	new_thread->info.attr.key = info->key;
@@ -356,7 +365,7 @@ error_t do_thread_create(thread_info_t *info)
 	info->sched_listner = sched_get_listner(new_thread,SCHED_OP_ADD_CREATED);
 	info->new_thread    = new_thread;
 	tm_end              = cpu_time_stamp();
-  
+
 #if CONFIG_SHOW_THREAD_CREATE_MSG
 	// m: mmap, 
 	// c: create, 
@@ -364,7 +373,7 @@ error_t do_thread_create(thread_info_t *info)
 	// l: add to task thread list, 
 	// s: sched_add_create, 
 	// e: total time
-	printk(INFO, 
+	printk(INFO,
 	       "INFO: %s: tid %x, pid %d, order %d, flags %x, cluster %d, "
 	       "cpu %d [ m %d, c %d, a %d, l %d, s %d, e %d ][%u]\n",
 	       __FUNCTION__,
@@ -381,7 +390,7 @@ error_t do_thread_create(thread_info_t *info)
 	       tm_end - tm_astep4,
 	       tm_end - tm_start,
 	       tm_end);
- #endif 
+ #endif
 	return 0;
 
 fail_create:

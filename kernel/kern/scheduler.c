@@ -206,6 +206,7 @@ SCHED_SCOPE void sched_event_notify(struct scheduler_s *scheduler)
 		if(event & SCHED_OP_ADD_CREATED)
 		{
 			thread = (struct thread_s*)(event & ~SCHED_OP_MASK);
+			thread->state = S_CREATE;
 			db->tbl[i].ports[SCHED_PORT(SCHED_OP_ADD_CREATED)] = 0;
 			thread->local_sched->op.add_created(thread);
 			
@@ -398,6 +399,8 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 				 this->info.order,
 				 ret);
 		}
+
+		thread_set_cap_migrate(this);
 	}
 
 #if 0
