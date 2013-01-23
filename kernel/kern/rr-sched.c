@@ -314,7 +314,6 @@ SCHED_SCOPE void rr_add_created(struct thread_s *thread)
 
 	sched->count ++;
 	rQueues->scheduler->total_nr ++;
-	thread->boosted_prio = 2;
 
 	if(type == KTHREAD)
 	{
@@ -329,7 +328,12 @@ SCHED_SCOPE void rr_add_created(struct thread_s *thread)
 		list_add_last(&rQueues->runnable, &thread->list);
 
 		if(thread_isImported(thread))
+		{
+			thread->boosted_prio = 3 * RR_QUANTUM;
 			thread_clear_imported(thread);
+		}
+		else
+			thread->boosted_prio = RR_QUANTUM;
 	}
 }
 
