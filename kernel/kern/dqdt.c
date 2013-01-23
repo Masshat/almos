@@ -166,8 +166,9 @@ struct dqdt_cluster_s* dqdt_logical_lookup(uint_t level)
 	return (current == NULL) ? dqdt_root : current;
 }
 
-void dqdt_wait_for_update()
+void dqdt_wait_for_update(void)
 {
+#if CONFIG_DQDT_WAIT_FOR_UPDATE
 	struct thread_s *this;
 
 	this = current_thread;
@@ -181,11 +182,13 @@ void dqdt_wait_for_update()
 	sched_sleep(current_thread);
 
 	(void)atomic_add(&dqdt_waiting_cntr, -1);
+#endif
 }
 
 
-void dqdt_update_done()
+void dqdt_update_done(void)
 {
+#if CONFIG_DQDT_WAIT_FOR_UPDATE
 	register bool_t isEmpty;
 
 	dqdt_update_cntr ++;
@@ -204,6 +207,7 @@ void dqdt_update_done()
 
 		spinlock_unlock(&dqdt_lock);
 	}
+#endif
 }
 
 void dqdt_indicators_update(dqdt_indicators_t *entry,
@@ -944,15 +948,19 @@ error_t dqdt_thread_migrate(struct dqdt_cluster_s *logical, struct dqdt_attr_s *
 	cluster = current_cluster;
 	attr->flags = DQDT_MIGRATE_OP;
 
-	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
-
 	err = dqdt_do_placement(logical,
 				attr,
 				(cluster->levels_tbl[0] == logical) ? logical->index : 5,
 				DQDT_MAX_DEPTH,
 				DQDT_DIST_DEFAULT);
 	
-	select_dmsg(1, "%s: ended, found %s\n", __FUNCTION__, (err == 0) ? "(Yes)" : "(No)");
+	select_dmsg(1, "%s: cpu %d, pid %d, tid %d, ended, found %s\n",
+		    __FUNCTION__,
+		    cpu_get_id(),
+		    current_thread->task->pid,
+		    current_thread->info.order,
+		    (err == 0) ? "(Yes)" : "(No)");
+
 	return err;
 }
 

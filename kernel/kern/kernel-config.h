@@ -72,6 +72,7 @@
 #define CONFIG_DQDT_LEVELS_NR            5
 #define CONFIG_DQDT_MGR_PERIOD           4
 #define CONFIG_DQDT_ROOTMGR_PERIOD       4
+#define CONFIG_DQDT_WAIT_FOR_UPDATE      no
 #define CONFIG_CPU_BALANCING_PERIOD      4
 #define CONFIG_CLUSTER_KEYS_NR           8
 #define CONFIG_REL_KFIFO_SIZE            32

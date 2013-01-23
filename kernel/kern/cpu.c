@@ -109,6 +109,7 @@ void cpu_compute_stats(struct cpu_s *cpu, sint_t threshold)
 	idle_percent      = (idle_percent > 100) ? 100 : idle_percent;
 	busy_percent      = 100 - idle_percent;
 	usage             = busy_percent + (cpu->usage / 2);
+	//usage             = cpu->usage + ((busy_percent - cpu->usage) / 2);
 	cpu->usage        = usage;
 	cpu->busy_percent = busy_percent;
 	cpu_wbflush();

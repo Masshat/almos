@@ -113,7 +113,7 @@ error_t thread_migrate(struct thread_s *this)
 	uint_t tid,pid;
 	uint_t state;
 	error_t err;
-  
+
 	task = this->task;
 	cpu  = current_cpu;
 	tid  = this->info.order;
@@ -126,7 +126,7 @@ error_t thread_migrate(struct thread_s *this)
 	{
 		this->info.migration_fail_cntr ++;
 
-		if(attr.cpu == cpu)
+		if(err == 0)
 			dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
 
 		return EAGAIN;

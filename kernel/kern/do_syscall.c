@@ -195,6 +195,7 @@ END_DO_SYSCALL:
 
 	if(thread_migration_isActivated(this))
 	{
+		thread_clear_cap_migrate(this);
 		cpu_enable_all_irq(NULL);
 		ret = thread_migrate(this);
 		cpu_disable_all_irq(NULL);
@@ -217,6 +218,7 @@ END_DO_SYSCALL:
 				 this->info.order,
 				 ret);
 		}
+		thread_set_cap_migrate(this);
 	}
 	
 	if(thread_sched_isActivated(this))
