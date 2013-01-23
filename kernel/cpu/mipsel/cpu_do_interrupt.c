@@ -22,6 +22,7 @@
 
 #include <cpu.h>
 #include <thread.h>
+#include <task.h>
 #include <interrupt.h>
 #include <kdmsg.h>
 
@@ -36,7 +37,9 @@ void cpu_do_interrupt(struct thread_s *this,
  
 #if CONFIG_SHOW_EPC_CPU0
 	if(cpu_id == 0)
-		except_dmsg("cpu %d, tid %x, EPC %x, ra %x\n", cpu_id, this, regs_tbl[EPC], regs_tbl[RA]);
+		isr_dmsg(INFO,"cpu %d, pid %d, tid %d, state %s, EPC %x, ra %x\n",
+			 cpu_id, this->task->pid, this->info.order,
+			 thread_state_name[this->state], regs_tbl[EPC], regs_tbl[RA]);
 #endif
 
 	if(this->info.isTraced)
