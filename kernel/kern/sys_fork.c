@@ -46,6 +46,7 @@ typedef struct
 	struct event_s    event;
 	struct thread_s  *child_thread;
 	struct task_s    *child_task;
+	uint_t           tm_event;
 	bool_t isPinned;
 
 #if CONFIG_FORK_LOCAL_ALLOC
@@ -61,18 +62,13 @@ EVENT_HANDLER(fork_event_handler)
 	fork_info_t *rinfo;
 	fork_info_t linfo;
 	error_t err;
-#if 1
-	uint_t tm_start;
-	uint_t tm_bFork;
-	uint_t tm_aFork;
-	uint_t tm_end;
-#endif
+	register uint_t tm_start, tm_end;
 
 	tm_start = cpu_time_stamp();
 
-	fork_dmsg(1, "%s: cpu %d, started [%d]\n", 
-		  __FUNCTION__, 
-		  cpu_get_id(), 
+	fork_dmsg(1, "%s: cpu %d, started [%d]\n",
+		  __FUNCTION__,
+		  cpu_get_id(),
 		  tm_start);
 
 	rinfo = event_get_argument(event);
@@ -84,30 +80,20 @@ EVENT_HANDLER(fork_event_handler)
 	linfo.child_task   = NULL;
 	linfo.isPinned     = rinfo->isPinned;
 
-	tm_bFork = cpu_time_stamp();
 	err = do_fork(&linfo);
-	tm_aFork = cpu_time_stamp();
-
-	rinfo->child_thread = linfo.child_thread;
-	rinfo->child_task   = linfo.child_task;
-	rinfo->err = err;
-	cpu_wbflush();
-	rinfo->isDone = true;
-	cpu_wbflush();
 
 	tm_end = cpu_time_stamp();
 
-#if 0
-	printk(INFO,"%s: cpu %d, done [s:%u, bf:%u, af:%u, e:%u, t:%u]\n",
-	       __FUNCTION__,
-	       linfo.cpu->gid,
-	       tm_start,
-	       tm_bFork,
-	       tm_aFork,
-	       tm_end,
-	       tm_end - tm_start);
-#endif
+	rinfo->child_thread = linfo.child_thread;
+	rinfo->child_task   = linfo.child_task;
+	rinfo->err          = err;
+	rinfo->tm_event     = tm_end - tm_start;
 
+	cpu_wbflush();
+
+	rinfo->isDone = true;
+
+	cpu_wbflush();
 	return 0;
 }
 
@@ -132,9 +118,9 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 
 	tm_start = cpu_time_stamp();
 
-	fork_dmsg(1, "%s: cpu %d, started [%d]\n", 
+	fork_dmsg(1, "%s: cpu %d, started [%d]\n",
 		  __FUNCTION__, 
-		  cpu_get_id(), 
+		  cpu_get_id(),
 		  tm_start);
 
 	this_thread = current_thread;
@@ -160,7 +146,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	info.isDone      = false;
 	info.this_thread = this_thread;
 	info.this_task   = this_task;
-	
+
 	cpu_disable_all_irq(&irq_state);
 	cpu_restore_irq(irq_state);
   
@@ -194,7 +180,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 			task_default_placement(&attr);
 	}
 
-	printk(INFO, "INFO: %s: new task will be placed on cluster %d, cpu %d [%d]\n", 
+	printk(INFO, "INFO: %s: new task will be placed on cluster %d, cpu %d [%d]\n",
 	       __FUNCTION__,
 	       attr.cluster->id,
 	       attr.cpu->lid,
@@ -257,7 +243,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 
 	tm_end = cpu_time_stamp();
     
-	printk(INFO, "INFO: %s: cpu %d, pid %d, done [s:%u, bR:%u, aR:%u, e:%u, t:%u]\n", 
+	printk(INFO, "INFO: %s: cpu %d, pid %d, done [s:%u, bR:%u, aR:%u, e:%u, d:%u, t:%u, r:%u]\n",
 	       __FUNCTION__,
 	       cpu_get_id(),
 	       this_task->pid,
@@ -265,7 +251,9 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	       tm_bRemote,
 	       tm_aRemote,
 	       tm_end,
-	       tm_end - tm_start);
+	       attr.tm_request,
+	       tm_end - tm_start,
+	       info.tm_event);
 
 	return child_task->pid;
 

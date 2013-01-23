@@ -45,6 +45,7 @@ typedef struct
 	struct cpu_s        *ocpu;
 	void                *sched_listner;
 	uint_t              sched_event;
+	uint_t              event_tm;
 	struct event_s      event;
 }th_migrate_info_t;
 
@@ -52,7 +53,6 @@ error_t do_migrate(th_migrate_info_t *info);
 
 EVENT_HANDLER(migrate_event_handler)
 {
-	struct cpu_s *cpu;
 	th_migrate_info_t *rinfo;
 	th_migrate_info_t linfo;
 	error_t err;
@@ -71,25 +71,13 @@ EVENT_HANDLER(migrate_event_handler)
 
 	cpu_wbflush();
 
-	err          = do_migrate(&linfo);
-	tm_end       = cpu_time_stamp();
-	rinfo->err   = err;
+	err             = do_migrate(&linfo);
+	tm_end          = cpu_time_stamp();
+	rinfo->err      = err;
+	rinfo->event_tm = tm_end - tm_start;
+	cpu_wbflush();
 
 	sched_event_send(rinfo->sched_listner, rinfo->sched_event);
-	
-	cpu = current_cpu;
-
-	printk(INFO, "INFO: [pid %d, tid %d (%x)] has been migrated from [cid %d, cpu %d] to [cid %d, cpu %d] [%u - %u]\n", 
-	       pid,
-	       tid,
-	       linfo.victim,
-	       linfo.ocpu->cluster->id,
-	       linfo.ocpu->lid,
-	       cpu->cluster->id,
-	       cpu->lid,
-	       tm_end,
-	       tm_end - tm_start);
-
 	return 0;
 }
 
@@ -107,6 +95,8 @@ EVENT_HANDLER(migrate_event_handler)
 error_t thread_migrate(struct thread_s *this)
 {
 	th_migrate_info_t info;
+	register uint_t tm_start;
+	register uint_t tm_end;
 	struct dqdt_attr_s attr;
 	struct task_s *task;
 	struct cpu_s *cpu;
@@ -119,7 +109,10 @@ error_t thread_migrate(struct thread_s *this)
 	tid  = this->info.order;
 	pid  = task->pid;
 
+	tm_start = cpu_time_stamp();
+
 	dqdt_attr_init(&attr, NULL);
+
 	err = dqdt_thread_migrate(dqdt_root, &attr);
 
 	if((err) || (attr.cpu == cpu))
@@ -174,6 +167,23 @@ error_t thread_migrate(struct thread_s *this)
 	}
 
 	dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
+
+	tm_end = cpu_time_stamp();
+
+	printk(INFO,
+	       "INFO: pid %d, tid %d has been migrated from "
+	       "[cid %d, cpu %d] to [cid %d, cpu %d] [e:%u, d:%u, t:%u, r:%u]\n",
+	       pid,
+	       tid,
+	       cpu->cluster->id,
+	       cpu->lid,
+	       attr.cpu->cluster->id,
+	       attr.cpu->lid,
+	       tm_end,
+	       attr.tm_request,
+	       tm_end - tm_start,
+	       info.event_tm);
+
 	sched_remove(this);
 	return 0;
 }
