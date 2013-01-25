@@ -156,12 +156,19 @@ int pthread_detach(pthread_t thread)
 	return retval;
 }
 
-int pthread_migrate_np(void)
+int pthread_migrate_np(pthread_attr_t *attr)
 {
 	register __pthread_tls_t *tls;
-	register int retval; 
+	register int retval;
+	pthread_attr_t _attr;
 
-	retval = (int)cpu_syscall(NULL,NULL,NULL,NULL,SYS_MIGRATE);
+	if(attr == NULL)
+	{
+		pthread_attr_init(&_attr);
+		attr = &_attr;
+	}
+
+	retval = (int)cpu_syscall((void*)attr,NULL,NULL,NULL,SYS_MIGRATE);
 
 	if(retval == 0)
 	{
