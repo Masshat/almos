@@ -425,7 +425,7 @@ error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len)
 	return 0;
 }
 
-error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start)
+error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags)
 {
 	struct list_entry *entry;
 	struct vm_region_s *region;
@@ -441,13 +441,13 @@ error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start)
 	{
 		region = list_element(entry, struct vm_region_s, vm_list);
         
-		if((region->vm_flags & VM_REG_STACK)  ||
-		   (region->vm_flags & VM_REG_SHARED))
-			goto AUTO_MIGRATE_NEXT_REGION;
+		if(((region->vm_flags & VM_REG_STACK) && !(flags & MGRT_STACK))  ||
+		   (region->vm_flags  & VM_REG_SHARED))
+			goto skip_current_region;
 
 		vmm_madvise_migrate(vmm, region->vm_start, region->vm_limit - region->vm_start);
   
-	AUTO_MIGRATE_NEXT_REGION:
+	skip_current_region:
 		entry = list_next(&vmm->regions_root, entry);
 	}
 

@@ -92,6 +92,9 @@ struct vmm_s
 #define MADV_DONTNEED      0x4
 #define MADV_MIGRATE       0x5
 
+#define MGRT_DEFAULT       0x0
+#define MGRT_STACK         0x1
+
 typedef struct mmap_attr_s
 {
 	void *addr;
@@ -132,7 +135,7 @@ error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len);
 
 error_t vmm_madvise_willneed(struct vmm_s *vmm, uint_t start, uint_t len);
 
-error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start);
+error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags);
 
 /** Page Fault Handler */
 error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags);
