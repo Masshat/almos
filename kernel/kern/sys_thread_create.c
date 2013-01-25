@@ -335,7 +335,7 @@ error_t do_thread_create(thread_info_t *info)
 
 #if CONFIG_AUTO_NEXT_TOUCH
 	if((online_clusters != 1) && (task->threads_count == 1))
-		vmm_set_auto_migrate(&task->vmm, task->vmm.data_start);
+		vmm_set_auto_migrate(&task->vmm, task->vmm.data_start, MGRT_DEFAULT);
 #endif
 
 	tm_astep3 = cpu_time_stamp();

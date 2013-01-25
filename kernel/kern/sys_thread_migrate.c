@@ -68,6 +68,7 @@ int sys_thread_migrate(pthread_attr_t *thread_attr)
 
 	cpu_gid = (attr.cpu_gid < 0) ? -1 : (attr.cpu_gid % arch_onln_cpu_nr());
 
+#if CONFIG_SHOW_SYSMGRT_MSG
 	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cpu %d: asked to migrate to cpu %d [%u]\n",
 	       __FUNCTION__,
 	       this->task->pid,
@@ -76,6 +77,7 @@ int sys_thread_migrate(pthread_attr_t *thread_attr)
 	       cpu_get_id(),
 	       cpu_gid,
 	       cpu_time_stamp());
+#endif
 
 	cpu_disable_all_irq(&mode);
 	thread_clear_cap_migrate(this);
@@ -91,6 +93,7 @@ int sys_thread_migrate(pthread_attr_t *thread_attr)
 	thread_migration_deactivate(this);
 	cpu_restore_irq(mode);
 
+#if CONFIG_SHOW_SYSMGRT_MSG
 	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cpu %d, err %d, done [%u]\n", 
 	       __FUNCTION__,
 	       this->task->pid,
@@ -99,6 +102,7 @@ int sys_thread_migrate(pthread_attr_t *thread_attr)
 	       cpu_get_id(),
 	       err,
 	       cpu_time_stamp());
+#endif
 
 fail_attr_inval:
 fail_ucopy_attr:

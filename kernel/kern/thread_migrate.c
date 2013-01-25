@@ -159,16 +159,11 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 	
 	if(err != 0) /* DONE */
 	{
+
+#if CONFIG_AUTO_NEXT_TOUCH_MGRT
 		if((current_cluster->id != cpu->cluster->id) && (task->threads_count == 1))
-		{
-			printk(INFO, "INFO: Auto-Next-Touch for pid %d, tid %d, cpu %d\n",
-			       task->pid,
-			       current_thread->info.order,
-			       current_cpu->gid);
-
-			vmm_set_auto_migrate(&task->vmm, task->vmm.data_start);
-		}
-
+			vmm_set_auto_migrate(&task->vmm, task->vmm.data_start, MGRT_STACK);
+#endif
 		return 0;
 	}
 
@@ -202,6 +197,7 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 
 	tm_end = cpu_time_stamp();
 
+#if CONFIG_SHOW_MIGRATE_MSG
 	printk(INFO,
 	       "INFO: pid %d, tid %d has been migrated from "
 	       "[cid %d, cpu %d] to [cid %d, cpu %d] [e:%u, d:%u, t:%u, r:%u]\n",
@@ -215,6 +211,7 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 	       attr.tm_request,
 	       tm_end - tm_start,
 	       info.event_tm);
+#endif
 
 	sched_remove(this);
 	return 0;
