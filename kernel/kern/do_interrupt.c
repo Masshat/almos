@@ -76,7 +76,7 @@ void do_interrupt(struct thread_s *this, uint_t irq_num)
 	{
 		thread_clear_cap_migrate(this);
 		cpu_enable_all_irq(&irq_state);
-		ret = thread_migrate(this);
+		ret = thread_migrate(this,-1);
 		cpu_restore_irq(irq_state);
 
                 /* this pointer has expired */

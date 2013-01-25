@@ -235,7 +235,7 @@ int sys_thread_join (pthread_t tid, void **thread_return);
 int sys_thread_detach (pthread_t tid);
 int sys_thread_getattr(pthread_attr_t *attr);
 int sys_thread_exit (void *exit_val);
-int sys_thread_migrate();
+int sys_thread_migrate(pthread_attr_t *thread_attr);
 int sys_thread_yield();
 int sys_thread_sleep();
 int sys_thread_wakeup(pthread_t tid, pthread_t *tid_tbl, uint_t count);
@@ -259,7 +259,7 @@ error_t thread_dup(struct task_s *task,
 		   struct cluster_s *dst_clstr,
 		   struct thread_s *src);
 
-error_t thread_migrate(struct thread_s *thread);
+error_t thread_migrate(struct thread_s *thread, sint_t cpu_gid);
 error_t thread_destroy(struct thread_s *thread);
 
 EVENT_HANDLER(thread_destroy_handler);

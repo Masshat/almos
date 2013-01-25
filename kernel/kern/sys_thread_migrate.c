@@ -25,24 +25,73 @@
 #include <task.h>
 #include <scheduler.h>
 
-int sys_thread_migrate()
+#define MAX_CPU_NR (CONFIG_MAX_CLUSTER_NR * CONFIG_MAX_CPU_PER_CLUSTER_NR)
+
+int sys_thread_migrate(pthread_attr_t *thread_attr)
 {
 	struct thread_s *this;
+	pthread_attr_t attr;
+	uint_t mode;
+	sint_t cpu_gid;
 	error_t err;
 
 	this = current_thread;
 
-	printk(INFO, "%s: pid %d, tid %d (%x), cpu %d [%u]\n", 
+	if(thread_attr == NULL)
+	{
+		err = EINVAL;
+		goto fail_inval;
+	}
+
+	if((uint_t)thread_attr >= CONFIG_KERNEL_OFFSET)
+	{
+		err = EPERM;
+		goto fail_access;
+	}
+
+	if((err = cpu_uspace_copy(&attr, thread_attr, sizeof(attr))))
+		goto fail_ucopy_attr;
+
+	cpu_gid = (sint_t)cpu_get_id();
+
+	if(attr.cpu_gid == cpu_gid)
+	{
+		thread_migration_disable(this);
+		return 0;
+	}
+
+	if((attr.cpu_gid > 0) && (attr.cpu_gid >= MAX_CPU_NR))
+	{
+		err = EINVAL;
+		goto fail_attr_inval;
+	}
+
+	cpu_gid = (attr.cpu_gid < 0) ? -1 : (attr.cpu_gid % arch_onln_cpu_nr());
+
+	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cpu %d: asked to migrate to cpu %d [%u]\n",
 	       __FUNCTION__,
 	       this->task->pid,
 	       this->info.order,
 	       this,
 	       cpu_get_id(),
+	       cpu_gid,
 	       cpu_time_stamp());
 
-	err = thread_migrate(this);
+	cpu_disable_all_irq(&mode);
+	thread_clear_cap_migrate(this);
+	cpu_restore_irq(mode);
 
-	printk(INFO, "%s: pid %d, tid %d (%x), cpu %d, err %d, done [%u]\n", 
+	err = thread_migrate(this, cpu_gid);
+
+	/* Reload this pointer */
+	this = current_thread;
+
+	cpu_disable_all_irq(&mode);
+	thread_set_cap_migrate(this);
+	thread_migration_deactivate(this);
+	cpu_restore_irq(mode);
+
+	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cpu %d, err %d, done [%u]\n", 
 	       __FUNCTION__,
 	       this->task->pid,
 	       this->info.order,
@@ -51,6 +100,10 @@ int sys_thread_migrate()
 	       err,
 	       cpu_time_stamp());
 
+fail_attr_inval:
+fail_ucopy_attr:
+fail_access:
+fail_inval:
 	this->info.errno = err;
 	return (err) ? -1 : 0;
 }

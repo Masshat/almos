@@ -92,15 +92,17 @@ EVENT_HANDLER(migrate_event_handler)
  *
  * TODO: verify the compatiblity with !CONFIG_REMOTE_THREAD_CREATE
 */
-error_t thread_migrate(struct thread_s *this)
+error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 {
-	struct dqdt_cluster_s *logical;
-	th_migrate_info_t info;
+	register uint_t cid, lid;
 	register uint_t tm_start;
 	register uint_t tm_end;
+	struct dqdt_cluster_s *logical;
+	struct cluster_s *cluster;
 	struct dqdt_attr_s attr;
 	struct task_s *task;
 	struct cpu_s *cpu;
+	th_migrate_info_t info;
 	uint_t tid,pid;
 	uint_t state;
 	error_t err;
@@ -109,22 +111,37 @@ error_t thread_migrate(struct thread_s *this)
 	cpu     = current_cpu;
 	tid     = this->info.order;
 	pid     = task->pid;
-	logical = cpu->cluster->levels_tbl[0];
 
 	tm_start = cpu_time_stamp();
 
-	dqdt_attr_init(&attr, NULL);
-
-	err = dqdt_thread_migrate(logical, &attr);
-
-	if((err) || (attr.cpu == cpu))
+	if(target_gid < 0)
 	{
-		this->info.migration_fail_cntr ++;
+		dqdt_attr_init(&attr, NULL);
 
-		if(err == 0)
-			dqdt_update_threads_number(logical, cpu->lid, -1);
+		logical = cpu->cluster->levels_tbl[0];
 
-		return EAGAIN;
+		err = dqdt_thread_migrate(logical, &attr);
+
+		if((err) || (attr.cpu == cpu))
+		{
+			this->info.migration_fail_cntr ++;
+
+			if(err == 0)
+				dqdt_update_threads_number(logical, cpu->lid, -1);
+
+			return EAGAIN;
+		}
+	}
+	else
+	{
+		lid             = arch_cpu_lid(target_gid, current_cluster->cpu_nr);
+		cid             = arch_cpu_cid(target_gid, current_cluster->cpu_nr);
+		cluster         = clusters_tbl[cid].cluster;
+		attr.cpu        = &cluster->cpu_tbl[lid];
+		attr.cluster    = cluster;
+		attr.tm_request = (uint_t)-1;
+
+		dqdt_update_threads_number(cluster->levels_tbl[0], lid, 1);
 	}
 
 	cpu_disable_all_irq(&state);
@@ -140,7 +157,20 @@ error_t thread_migrate(struct thread_s *this)
 
 	err = cpu_context_save(&this->info.pss);
 	
-	if(err != 0) return 0;	   /* DONE */
+	if(err != 0) /* DONE */
+	{
+		if((current_cluster->id != cpu->cluster->id) && (task->threads_count == 1))
+		{
+			printk(INFO, "INFO: Auto-Next-Touch for pid %d, tid %d, cpu %d\n",
+			       task->pid,
+			       current_thread->info.order,
+			       current_cpu->gid);
+
+			vmm_set_auto_migrate(&task->vmm, task->vmm.data_start);
+		}
+
+		return 0;
+	}
 
 	info.victim        = this;
 	info.task          = task;
