@@ -94,6 +94,7 @@ EVENT_HANDLER(migrate_event_handler)
 */
 error_t thread_migrate(struct thread_s *this)
 {
+	struct dqdt_cluster_s *logical;
 	th_migrate_info_t info;
 	register uint_t tm_start;
 	register uint_t tm_end;
@@ -104,23 +105,24 @@ error_t thread_migrate(struct thread_s *this)
 	uint_t state;
 	error_t err;
 
-	task = this->task;
-	cpu  = current_cpu;
-	tid  = this->info.order;
-	pid  = task->pid;
+	task    = this->task;
+	cpu     = current_cpu;
+	tid     = this->info.order;
+	pid     = task->pid;
+	logical = cpu->cluster->levels_tbl[0];
 
 	tm_start = cpu_time_stamp();
 
 	dqdt_attr_init(&attr, NULL);
 
-	err = dqdt_thread_migrate(dqdt_root, &attr);
+	err = dqdt_thread_migrate(logical, &attr);
 
 	if((err) || (attr.cpu == cpu))
 	{
 		this->info.migration_fail_cntr ++;
 
 		if(err == 0)
-			dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
+			dqdt_update_threads_number(logical, cpu->lid, -1);
 
 		return EAGAIN;
 	}
