@@ -574,7 +574,7 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 #endif	     
 		}
 
-#if CONFIG_SHOW_MIGRATE_MSG
+#if CONFIG_SHOW_VMMMGRT_MSG
 		printk(INFO, "%s: pid %d, tid %d, cpu %d: Asked to migrate page (vaddr %x) from cluster %d to cluster %d, err %d\n",
 		       __FUNCTION__,
 		       current_task->pid,

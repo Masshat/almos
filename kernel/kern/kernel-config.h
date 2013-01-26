@@ -112,6 +112,7 @@
 #define CONFIG_SHOW_VMM_ERROR_MSG        no
 #define CONFIG_SHOW_SPURIOUS_PGFAULT     no
 #define CONFIG_SHOW_MIGRATE_MSG          yes
+#define CONFIG_SHOW_VMMMGRT_MSG          no
 #define CONFIG_SHOW_SYSMGRT_MSG          no
 #define CONFIG_SHOW_REMOTE_PGALLOC       no
 #define CONFIG_SHOW_LOCAL_EVENTS         no
