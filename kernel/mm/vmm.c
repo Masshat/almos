@@ -425,6 +425,7 @@ error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len)
 	return 0;
 }
 
+/* TODO: we should be able to apply this strategy on VM_REG_SHARED */
 error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags)
 {
 	struct list_entry *entry;
@@ -442,7 +443,7 @@ error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags)
 		region = list_element(entry, struct vm_region_s, vm_list);
         
 		if(((region->vm_flags & VM_REG_STACK) && !(flags & MGRT_STACK))  ||
-		   (region->vm_flags  & VM_REG_SHARED))
+		   (region->vm_flags  & VM_REG_SHARED) || (region->vm_flags & VM_REG_DEV))
 			goto skip_current_region;
 
 		vmm_madvise_migrate(vmm, region->vm_start, region->vm_limit - region->vm_start);
@@ -592,7 +593,8 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 VMM_MIGRATE_ERR:
   
 	page_unlock(page);
-  
+
+/* TODO: we should differ the kmem_free call */
 	if(err)
 	{
 		if(newpage != NULL)
