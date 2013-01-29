@@ -565,7 +565,7 @@ DQDT_SELECT_HELPER(dqdt_select_by_T_M)
 		    T, N,
 		    attr->m_threshold,M);
 
-	return ((T < N) || (M < attr->m_threshold)) ? true : false;
+	return ((T < N) || (M > attr->m_threshold)) ? true : false;
 }
 
 DQDT_SELECT_HELPER(dqdt_sort_by_U_T_D)
