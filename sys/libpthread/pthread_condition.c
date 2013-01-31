@@ -87,7 +87,7 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
 
 	tls = cpu_get_tls();
 	shared = (struct __shared_s*)__pthread_tls_get(tls, __PT_TLS_SHARED);
-	
+
 	list_add_last(&cond->queue, &shared->list);
 #if 0
 	(void)pthread_spin_unlock(&cond->lock);
@@ -193,7 +193,7 @@ int pthread_cond_destroy(pthread_cond_t *cond)
 
 	if(cond->count != 0)
 		err = EBUSY;
- 
+
 	//(void)pthread_spin_unlock(&cond->lock);
 	return err;
 }

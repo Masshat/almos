@@ -38,9 +38,10 @@ void __attribute__ ((section(".boot"))) reset(void)
     ".set noreorder                    \n"
     "li     $8,    0                   \n"
     "mtc0   $8,    $12	               \n"                    // Init. status Register
-    "mfc0   $4,    $0	               \n"                    // $4  <->  CPU ID
+    "mfc0   $4,    $15,   1	       \n"                    // $4  <->  CPU ID
     "lui    $8,    ("TO_STR(ARCH_BIB_BASE)") >> 16        \n"      
     "ori    $8,    $8, ("TO_STR(ARCH_BIB_BASE)") & 0xFFFF \n" // $8  <->  arch_info
+    "andi   $4,    $4,    0x1FF        \n"                    // mask all but CPU ID
     "lw     $5,    0($8)               \n"                    // $5  <->  BSP CPU_ID
     "lw     $9,    4($8)               \n"                    // $9  <->  rsrvd_limit
     "la     $31,   boot_entry          \n"	              // $31 <->  boot_entry

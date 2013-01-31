@@ -234,7 +234,7 @@ int pthread_attr_getforkcpuid_np(int *cpu_id)
 {
 	register __pthread_tls_t *tls;
 	register uint_t flags;
-	
+
 	if(cpu_id == NULL) 
 		return EINVAL;
 

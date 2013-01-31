@@ -207,7 +207,7 @@ int pthread_mutex_lock (pthread_mutex_t *mutex)
 	(void)cpu_syscall(NULL, NULL, NULL, NULL, SYS_SLEEP);
 
 	cpu_wbflush();
-	
+
 	return 0;
 }
 

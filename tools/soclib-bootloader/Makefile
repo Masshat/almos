@@ -6,10 +6,10 @@
 CPU=$(ALMOS_CPU)
 
 # ARCH type
-ARCH=$(ALMOS_ARCH_CLASS)
+ARCH=$(ALMOS_ARCH)
 
 # Kernel bin directory
-TARGET_DIR= $(ALMOS_TOP)/
+TARGET_DIR=$(ALMOS_TOP)/tools/soclib-bootloader
 
 # CPU directory
 CPU_DIR=$(CPU)
@@ -133,7 +133,7 @@ endif
 clean:
 	@$(RM) $(foreach DIR,$(DIRS),$(BUILD_DIR)/$(DIR)/*.d $(BUILD_DIR)/$(DIR)/*.o)
 	@$(RM) $(BUILD_DIR)/ldscript 
-	@$(RM) $(TARGET)
+	@$(RM) $(TARGET) $(TARGET).nm
 
 realclean: clean
 	@$(RM) -r $(BUILD_DIR)

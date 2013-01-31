@@ -66,6 +66,7 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 	{
 		dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x EDEADLK\n", 
 		       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
+
 		return EDEADLK;
 	}
 
@@ -79,8 +80,10 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 		if(cntr > limit)
 		{
 			pthread_yield();
+
 			dmsg_r(stderr, "%s: pid %d, tid %d, val %d, 0x%x, yielded\n", 
 			       __FUNCTION__, (int)getpid(), (unsigned)this, (unsigned)lock->val, (unsigned)lock);
+
 			cpu_invalid_dcache_line(lock);
 			limit = 2000;
 			cntr  = 0;
@@ -89,6 +92,7 @@ int pthread_spin_lock (pthread_spinlock_t *lock)
 
 	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x locked\n", 
 	       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
+
 	return 0;
 }
 
@@ -139,8 +143,10 @@ int pthread_spin_unlock (pthread_spinlock_t *lock)
 	lock->val = __PTHREAD_OBJECT_FREE;
 	cpu_wbflush();
 	cpu_invalid_dcache_line(lock);
+
 	dmsg_r(stderr, "%s: pid %d, tid %d, 0x%x unlocked\n", 
 	       __FUNCTION__, (int)getpid(), (unsigned)pthread_self(), (unsigned)lock);
+
 	return 0;
 }
 

@@ -101,9 +101,9 @@ static inline uint_t cpu_get_id(void)
 {
 	register uint_t proc_id;
 
-	__asm__ volatile ("mfc0    %0,  $0" : "=&r" (proc_id));
+	__asm__ volatile ("mfc0    %0,  $15, 1" : "=&r" (proc_id));
   
-	return proc_id;
+	return (proc_id & 0x1FF);
 }
 
 

@@ -5,10 +5,10 @@ export ALMOS_CPU=mipsel
 export ALMOS_ARCH=tsar
 
 # Project Top Directory
-export ALMOS_TOP=$HOME/almOS-v2
+export ALMOS_TOP=$(TO_BE_SET)
 
 # Binutils Directory
-export CCTOOLS=/home/almaless/linux/linux/crosstools/$ALMOS_CPU-unknown-elf
+export CCTOOLS=$(TO_BE_SET)
 
 # Plateform Simulators & Executabls 
 export PATH=$PATH:$CCTOOLS/bin:$ALMOS_TOP/platform/bin

@@ -122,8 +122,9 @@ UNIFIED_MODE:
 	sw	$14,	(LO*4)($27)		# save LO
 	beq	$8,	$1,	cause_sys	
 	sw	$15,	(HI*4)($27)		# save HI
-	mfc0	$5,	$0			# second arg is cpu_id	
+	mfc0	$5,	$15,	1		# second arg is cpu_id	
 	or	$4,	$0,	$26		# first arg is this
+	andi    $5,     $5,     0x1FF           # mask all but CPUnum
 	beq     $1,    	$0,	cause_int
 	or	$6,	$0,	$27		# 3th arg is regs_tbl
 	
