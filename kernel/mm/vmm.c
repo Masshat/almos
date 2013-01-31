@@ -529,7 +529,7 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 		{
 			req.type  = KMEM_PAGE;
 			req.size  = 0;
-			req.flags = AF_USR | AF_PRIO | AF_TTL_AVRG;
+			req.flags = AF_PGFAULT;
 
 			newpage = kmem_alloc(&req);
       
@@ -686,7 +686,7 @@ error_t vmm_do_cow(struct vm_region_s *region, struct page_s *page, pmm_page_inf
 	{    
 		req.type  = KMEM_PAGE;
 		req.size  = 0;
-		req.flags = AF_USER;
+		req.flags = AF_PGFAULT;
   
 		if((newpage = kmem_alloc(&req)) == NULL)
 		{
@@ -724,7 +724,6 @@ VMM_COW_END:
 	{
 		req.type  = KMEM_PAGE;
 		req.size  = 0;
-		req.flags = AF_USER;
 		req.ptr   = page;
 
 		kmem_free(&req);
@@ -844,7 +843,7 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 
 	req.type  = KMEM_PAGE;
 	req.size  = 0;
-	req.flags = AF_USER | AF_ZERO;
+	req.flags = AF_PGFAULT | AF_ZERO;
 
 	if((page = kmem_alloc(&req)) == NULL)
 	{

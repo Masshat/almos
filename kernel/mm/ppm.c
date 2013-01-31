@@ -139,96 +139,70 @@ error_t ppm_init(struct ppm_s *ppm,
 	return 0;
 }
 
-static uint_t ppm_compute_prio(uint_t order, uint_t flags)
-{
-	uint_t onln_clstrs;
-	uint_t threads_nr;
-
-	if(flags & AF_SYS)
-		return flags;
-
-	onln_clstrs = arch_onln_cluster_nr();
-	threads_nr  = current_task->threads_nr;
-  
-	if((onln_clstrs > 1) && (threads_nr == 1))
-	{
-		if(flags & AF_NORMAL)
-			flags = AF_SETHINT(flags, AF_TTL_HIGH);
-
-		return flags;
-	}
-
-	flags &= ~(AF_NORMAL);
-	flags |= AF_PRIO;
-	return flags;
-}
-
-#if (CONFIG_PPM_USE_PRIO && CONFIG_PPM_USE_INTERLEAVE)
-#perror you cannot use PRIO and INTERLEAVE strategies togother
-#endif
-
-/** 
- * TODO: make the ppm target choice to be dynamic upon 
- * a per-thread policy: First-Touch, Interleave, 
- * SEQ-Cluster, Rand-Cluster
- **/
 struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
 {
+	register struct ppm_s *current_ppm;
 	register struct page_s *ptr;
 	register uint_t cntr;
 	register uint_t threshold;
 	register error_t err;
 	register uint_t cid;
-  
+	register bool_t isInterleave;
+	register bool_t isSeqNextCID;
+	register bool_t isUseUPRIO;
+	struct thread_s *this;
+	uint_t onln_clstrs;
+
 	ptr  = NULL;
 	cid  = ppm_get_cluster(ppm)->id;
-	cntr = AF_GETHINT(flags);
+	cntr = AF_GETTTL(flags);
+	this = current_thread;
+	current_ppm = ppm;
+	onln_clstrs = arch_onln_cluster_nr();
 
-#if CONFIG_PPM_USE_INTERLEAVE
-	struct thread_s *this;
-	uint_t online_clusters;
-	bool_t isSeq;
+	if(flags & AF_AFFINITY)
+	{
+		isInterleave = (this->info.attr.flags & PT_ATTR_INTERLEAVE_ALL);
+		isSeqNextCID = (this->info.attr.flags & PT_ATTR_MEM_CID_RR);
+		isUseUPRIO   = (this->info.attr.flags & PT_ATTR_MEM_PRIO);
 
-	this            = current_thread;
-	online_clusters = arch_onln_cluster_nr();
-	isSeq = ((online_clusters != 1) && (this->task->threads_count == 1)) ? true : false;
+		if(!isInterleave && (this->info.attr.flags & PT_ATTR_INTERLEAVE_SEQ))
+			isInterleave = true;
 
-#if CONFIG_PPM_USE_INTERLEAVE_ALL
-	isSeq = true;
-#endif
+		if(isUseUPRIO)
+			cntr = AF_GETTTL(AF_TTL_HIGH);
+	}
+	else
+	{
+		isInterleave = false;
+		isSeqNextCID = false;
+		isUseUPRIO   = false;
+	}
 
-#endif	/* CONFIG_PPM_USE_INTERLEAVE */
-
-
-	if(cntr == 0) cntr ++;
+	cntr = (cntr == 0) ? 1 : cntr;
 
 	while(cntr != 0)
 	{
 		cntr = cntr - 1;
 
-		flags = ppm_compute_prio(order, AF_SETHINT(flags, cntr));
-
-#if CONFIG_PPM_USE_PRIO
-		if(flags & AF_NORMAL)
+		if(isUseUPRIO)
 		{
+			/* Assuming the same value of pages_min on all nodes */
 			threshold = ppm->uprio_pages_min;
 			goto do_alloc;
 		}
-#endif	/* CONFIG_PPM_USE_PRIO */
 
 		if(flags & AF_USR)
 		{
 			threshold = ppm->kprio_pages_min;
-			
-#if CONFIG_PPM_USE_INTERLEAVE
 
-			if(isSeq)
+			if(isInterleave)
 			{
-				cid = this->info.ppm_last_cid % arch_onln_cluster_nr();
+				cid = this->info.ppm_last_cid % onln_clstrs;
 				this->info.ppm_last_cid ++;
-				ppm = &clusters_tbl[cid].cluster->ppm;
+				current_ppm = &clusters_tbl[cid].cluster->ppm;
 			}
-#endif
+
 			goto do_alloc;
 		}
 
@@ -243,26 +217,23 @@ struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
 	do_alloc:
 
 		if(ppm->free_pages_nr > threshold)
-			ptr = ppm_do_alloc_pages(ppm, order, flags);
+			ptr = ppm_do_alloc_pages(current_ppm, order, flags);
 
 		if(ptr != NULL) return ptr;
-    
-		if((cntr == 0) && (flags & AF_NORMAL))
+
+		if((cntr == 0) && isUseUPRIO)
 		{
-			flags &= ~(AF_NORMAL);
-			flags |= AF_PRIO;
-			flags  = AF_SETHINT(flags, AF_TTL_LOW);
-			cntr   = AF_TTL_LOW;
-			cid    = rand() % arch_onln_cluster_nr();
-			ppm    = &clusters_tbl[cid].cluster->ppm;
+			cntr        = AF_TTL_LOW;
+			cid         = ppm_get_cluster(ppm)->id;
+			current_ppm = ppm;
+			isUseUPRIO  = false;
+		}
+		else if(isSeqNextCID)
+		{
+			cid         = (cid + 1) % onln_clstrs;
+			current_ppm = &clusters_tbl[cid].cluster->ppm;
 		}
 		else
-#if CONFIG_PPM_USE_SEQ_NEXT_CID
-		{
-			cid = (cid + 1) % arch_onln_cluster_nr();
-			ppm = &clusters_tbl[cid].cluster->ppm;
-		}
-#else
 		{
 			struct dqdt_attr_s attr;
 			struct ppm_dqdt_req_s req;
@@ -272,19 +243,20 @@ struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
       
 			dqdt_attr_init(&attr, &req);
       
-			err = dqdt_mem_request(ppm_get_cluster(ppm)->levels_tbl[0], &attr);
+			err = dqdt_mem_request(ppm_get_cluster(current_ppm)->levels_tbl[0], &attr);
 
 			if(err == 0)
 			{
-				ppm = &attr.cluster->ppm;
+				current_ppm = &attr.cluster->ppm;
+				cid         = attr.cluster->id;
 			}
 			else
 			{
-				cid = (cid + 1) % arch_onln_cluster_nr();
-				ppm = &clusters_tbl[cid].cluster->ppm;
+				isUseUPRIO  = false;
+				cid         = (cid + 1) % onln_clstrs;
+				current_ppm = &clusters_tbl[cid].cluster->ppm;
 			}
 		}
-#endif	/* CONFIG_PMM_USE_SEQ_NEXT_CID */
 
 #if CONFIG_SHOW_PPM_PGALLOC_MSG
 		printk(INFO, "INFO: PPM %d [ %d, %d, %d, %d, %d ]\n", 

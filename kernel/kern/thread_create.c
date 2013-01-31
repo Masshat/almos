@@ -72,20 +72,19 @@ error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s
 	page      = kmem_alloc(&req);
 
 	if(page == NULL) return EAGAIN;
-  
+
 	thread = (struct thread_s*) ppm_page2addr(page);
-  
+
 	// Initialize new thread
 	spinlock_init(&thread->lock, "Thread");
 
-	thread_set_current_cpu(thread, 
-			       &clusters_tbl[attr->cid].cluster->cpu_tbl[attr->cpu_lid]);
+	thread_set_current_cpu(thread, &clusters_tbl[attr->cid].cluster->cpu_tbl[attr->cpu_lid]);
 
 	sched_setpolicy(thread, attr->sched_policy);
 	thread->task = task;
 	thread->type = PTHREAD;
 
-	if(attr->isDetached)
+	if(attr->flags & PT_ATTR_DETACH)
 		thread_clear_joinable(thread);
 	else
 		thread_set_joinable(thread);
@@ -97,13 +96,9 @@ error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s
 	thread->info.kstack_addr = thread;
 	thread->info.kstack_size = PMM_PAGE_SIZE << ARCH_THREAD_PAGE_ORDER;
 	thread->info.page = page;
-
-#if CONFIG_PPM_USE_INTERLEAVE
 	thread->info.ppm_last_cid = attr->cid;
-#endif
-
 	thread->signature = THREAD_ID;
-  
+
 	wait_queue_init(&thread->info.wait_queue, "Join/Exit Sync");
 	cpu_context_init(&thread->pws, thread); 
 

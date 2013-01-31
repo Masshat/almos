@@ -46,8 +46,9 @@ typedef struct
 	struct event_s    event;
 	struct thread_s  *child_thread;
 	struct task_s    *child_task;
+	uint_t           flags;
 	uint_t           tm_event;
-	bool_t isPinned;
+	bool_t           isPinned;
 
 #if CONFIG_FORK_LOCAL_ALLOC
 	struct cluster_s *current_clstr;
@@ -79,6 +80,7 @@ EVENT_HANDLER(fork_event_handler)
 	linfo.child_thread = NULL;
 	linfo.child_task   = NULL;
 	linfo.isPinned     = rinfo->isPinned;
+	linfo.flags        = rinfo->flags;
 
 	err = do_fork(&linfo);
 
@@ -146,6 +148,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	info.isDone      = false;
 	info.this_thread = this_thread;
 	info.this_task   = this_task;
+	info.flags       = flags;
 
 	cpu_disable_all_irq(&irq_state);
 	cpu_restore_irq(irq_state);
@@ -156,7 +159,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 		cpu_fpu_context_save(&this_thread->uzone);
 	}
 
-	if(flags & TASK_TARGET_CPU)
+	if(flags & PT_FORK_USE_TARGET_CPU)
 	{
 		cpu_gid       = cpu_gid % arch_onln_cpu_nr();
 		cpu_lid       = arch_cpu_lid(cpu_gid, current_cluster->cpu_nr);
@@ -354,13 +357,28 @@ error_t do_fork(fork_info_t *info)
 	/* Set the child page before calling thread_dup */
 	child_thread->info.page = page;
 
-	err = thread_dup(child_task, 
-			 child_thread, 
-			 info->cpu, 
-			 info->cpu->cluster, 
+	err = thread_dup(child_task,
+			 child_thread,
+			 info->cpu,
+			 info->cpu->cluster,
 			 info->this_thread);
-  
+
 	if(err) goto fail_thread_dup;
+
+	/* Adjust child_thread attributes */
+	if(info->flags & PT_FORK_USE_AFFINITY)
+	{
+		child_thread->info.attr.flags |= (info->flags & ~(PT_ATTR_LEGACY_MASK));
+
+		if(!(info->flags & PT_ATTR_MEM_PRIO))
+			child_thread->info.attr.flags &= ~(PT_ATTR_MEM_PRIO);
+
+		if(!(info->flags & PT_ATTR_AUTO_MGRT))
+			child_thread->info.attr.flags &= ~(PT_ATTR_AUTO_MGRT);
+
+		if(!(info->flags & PT_ATTR_AUTO_NXTT))
+			child_thread->info.attr.flags &= ~(PT_ATTR_AUTO_NXTT);
+	}
 
 	fork_dmsg(1, "%s: parent current thread has been duplicated, tid %x [%d]\n", 
 		  __FUNCTION__, 

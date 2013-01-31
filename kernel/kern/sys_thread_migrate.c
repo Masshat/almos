@@ -68,6 +68,9 @@ int sys_thread_migrate(pthread_attr_t *thread_attr)
 
 	cpu_gid = (attr.cpu_gid < 0) ? -1 : (attr.cpu_gid % arch_onln_cpu_nr());
 
+	if(attr.flags & PT_ATTR_AUTO_MGRT)
+		this->info.attr.flags |= PT_ATTR_AUTO_MGRT;
+
 #if CONFIG_SHOW_SYSMGRT_MSG
 	printk(INFO, "INFO: %s: pid %d, tid %d (%x), cpu %d: asked to migrate to cpu %d [%u]\n",
 	       __FUNCTION__,

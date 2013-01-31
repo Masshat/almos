@@ -99,6 +99,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	uint_t tm_end;
 	uint_t tm_bRemote;
 	uint_t tm_aRemote;
+	uint_t online_clusters;
 
 	tm_start = cpu_time_stamp();
 	this     = current_thread;
@@ -139,6 +140,9 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 		err = EAGAIN;
 		goto fail_threads_limit;
 	}
+
+	if(this->info.attr.flags & PT_ATTR_INTERLEAVE_ALL)
+		attr.flags |= PT_ATTR_INTERLEAVE_ALL;
 
 	spinlock_lock(&task->th_lock);
 
@@ -236,6 +240,20 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 
 	if(err) goto fail_tid;
 
+	online_clusters = arch_onln_cluster_nr();
+
+	if(online_clusters == 1)
+	{
+		this->info.attr.flags &= ~(PT_ATTR_MEM_PRIO | PT_ATTR_INTERLEAVE_SEQ);
+	}
+	else if(task->threads_count == 2)
+	{
+		this->info.attr.flags &= ~(PT_ATTR_MEM_PRIO | PT_ATTR_INTERLEAVE_SEQ);
+
+		if(this->info.attr.flags & PT_ATTR_AUTO_NXTT)
+			vmm_set_auto_migrate(&task->vmm, task->vmm.data_start, MGRT_DEFAULT);
+	}
+
 	sched_event = sched_event_make(info.new_thread, SCHED_OP_ADD_CREATED);
 	sched_event_send(info.sched_listner, sched_event);
 	tm_end = cpu_time_stamp();
@@ -276,6 +294,12 @@ fail_inval:
 	return err;
 }
 
+#if CONFIG_SHOW_THREAD_CREATE_MSG
+#define TIME_STAMP(x) (x) = cpu_time_stamp()
+#else
+#define TIME_STAMP(x)
+#endif
+
 error_t do_thread_create(thread_info_t *info)
 {
 	register uint_t online_clusters;
@@ -283,14 +307,17 @@ error_t do_thread_create(thread_info_t *info)
 	struct task_s *task;
 	pthread_attr_t *attr;
 	error_t err;
+
+#if CONFIG_SHOW_THREAD_CREATE_MSG
 	uint_t tm_start;
 	uint_t tm_end;
 	uint_t tm_astep1;
 	uint_t tm_astep2;
 	uint_t tm_astep3;
 	uint_t tm_astep4;
+#endif
 
-	tm_start = cpu_time_stamp();
+	TIME_STAMP(tm_start);
 
 	task = info->task;
 	attr = info->attr;
@@ -316,7 +343,7 @@ error_t do_thread_create(thread_info_t *info)
 		attr->sigstack_size = SIG_DEFAULT_STACK_SIZE;
 	}
 
-	tm_astep1 = cpu_time_stamp();
+	TIME_STAMP(tm_astep1);
 
 	// Determinate New Thread Attributes (default values)
 	attr->sched_policy = SCHED_RR;
@@ -330,15 +357,10 @@ error_t do_thread_create(thread_info_t *info)
 	else
 		thread_migration_enabled(new_thread);
 
-	tm_astep2       = cpu_time_stamp();
 	online_clusters = arch_onln_cluster_nr();
 
-#if CONFIG_AUTO_NEXT_TOUCH
-	if((online_clusters != 1) && (task->threads_count == 1))
-		vmm_set_auto_migrate(&task->vmm, task->vmm.data_start, MGRT_DEFAULT);
-#endif
-
-	tm_astep3 = cpu_time_stamp();
+	if((online_clusters == 1) || (task->threads_count == 2))
+		new_thread->info.attr.flags &= ~(PT_ATTR_MEM_PRIO | PT_ATTR_INTERLEAVE_SEQ);
 
 	// Add the new thread to the set of created threads
 	new_thread->info.order    = info->key;
@@ -355,7 +377,7 @@ error_t do_thread_create(thread_info_t *info)
 	task->th_tbl[new_thread->info.order] = new_thread;
 	spinlock_unlock(&task->th_lock);
 
-	tm_astep4 = cpu_time_stamp();
+	TIME_STAMP(tm_astep4);
 	
 	// Register the new thread 
 	err = sched_register(new_thread);
@@ -364,7 +386,8 @@ error_t do_thread_create(thread_info_t *info)
 	tm_create_compute(new_thread);
 	info->sched_listner = sched_get_listner(new_thread,SCHED_OP_ADD_CREATED);
 	info->new_thread    = new_thread;
-	tm_end              = cpu_time_stamp();
+	
+	TIME_STAMP(tm_end);
 
 #if CONFIG_SHOW_THREAD_CREATE_MSG
 	// m: mmap, 

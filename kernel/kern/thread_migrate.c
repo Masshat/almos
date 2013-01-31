@@ -156,14 +156,16 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 	cpu_restore_irq(state);
 
 	err = cpu_context_save(&this->info.pss);
-	
+
 	if(err != 0) /* DONE */
 	{
-
-#if CONFIG_AUTO_NEXT_TOUCH_MGRT
-		if((current_cluster->id != cpu->cluster->id) && (task->threads_count == 1))
+		if((task->threads_count == 1) &&
+		   (current_cluster->id != cpu->cluster->id) &&
+		   (this->info.attr.flags & PT_ATTR_AUTO_MGRT))
+		{
 			vmm_set_auto_migrate(&task->vmm, task->vmm.data_start, MGRT_STACK);
-#endif
+		}
+
 		return 0;
 	}
 
@@ -256,7 +258,7 @@ error_t do_migrate(th_migrate_info_t *info)
 	 * or by returning EAGIN so caller can redo
 	 * the whole action.*/
 	assert(err == 0);
-  
+
 	list_add_last(&task->th_root, &new->rope);
 	list_unlink(&victim->rope);
 	task->th_tbl[new->info.order] = new;
@@ -276,7 +278,7 @@ error_t do_migrate(th_migrate_info_t *info)
 
 	cpu_context_set_tid(&new->info.pss, (reg_t)new);
 	cpu_context_dup_finlize(&new->pws, &new->info.pss);
-	
+
 	thread_set_imported(new);
 	thread_clear_exported(new);
 	/* TODO: put a threshold on the migration number to prevent against permanent migration */

@@ -44,10 +44,6 @@ struct cpu_s;
 #define TASK_READY      2
 #define TASK_ZOMBIE     3
 
-/* fork related flags */
-#define TASK_WILL_EXEC    1
-#define TASK_TARGET_CPU   2
-
 struct task_s
 {
 	/* Various Locks */

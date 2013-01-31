@@ -82,12 +82,6 @@
 #define CONFIG_BARRIER_ACTIVE_WAIT       no
 #define CONFIG_BARRIER_BORADCAST_UREAD   no
 #define CONFIG_MONO_CPU                  no
-#define CONFIG_PPM_USE_PRIO              yes
-#define CONFIG_PPM_USE_SEQ_NEXT_CID      no
-#define CONFIG_PPM_USE_INTERLEAVE        no
-#define CONFIG_PPM_USE_INTERLEAVE_ALL    no
-#define CONFIG_AUTO_NEXT_TOUCH           yes
-#define CONFIG_AUTO_NEXT_TOUCH_MGRT      yes
 #define CONFIG_CPU_LOAD_BALANCING        yes
 #define CONFIG_PTHREAD_THREADS_MAX       2048
 #define CONFIG_PTHREAD_STACK_SIZE        512*1024
