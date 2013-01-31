@@ -390,7 +390,6 @@ error_t vmm_sbrk(struct vmm_s *vmm, uint_t current, uint_t size)
 	return err;
 }
 
-
 error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len)
 {
 	register error_t err;
@@ -431,7 +430,9 @@ error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags)
 	struct list_entry *entry;
 	struct vm_region_s *region;
 
+	rwlock_rdlock(&vmm->rwlock);
 	region = vm_region_find(vmm, start);
+	rwlock_unlock(&vmm->rwlock);
   
 	if((region == NULL) || (region->vm_start < start))
 		return ESRCH;
@@ -442,14 +443,18 @@ error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags)
 	{
 		region = list_element(entry, struct vm_region_s, vm_list);
         
-		if(((region->vm_flags & VM_REG_STACK) && !(flags & MGRT_STACK))  ||
-		   (region->vm_flags  & VM_REG_SHARED) || (region->vm_flags & VM_REG_DEV))
+		if ((region->vm_flags & VM_REG_INIT)                            ||
+		   ((region->vm_flags & VM_REG_STACK) && !(flags & MGRT_STACK)) ||
+		    (region->vm_flags & VM_REG_SHARED)                          ||
+		    (region->vm_flags & VM_REG_DEV))
 			goto skip_current_region;
 
 		vmm_madvise_migrate(vmm, region->vm_start, region->vm_limit - region->vm_start);
-  
+
 	skip_current_region:
+		rwlock_rdlock(&vmm->rwlock);
 		entry = list_next(&vmm->regions_root, entry);
+		rwlock_unlock(&vmm->rwlock);
 	}
 
 	return 0;
