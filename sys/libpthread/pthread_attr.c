@@ -26,9 +26,11 @@
 
 #include <pthread.h>
 
+#define PT_DEFAULT_ATTRS (PT_ATTR_AUTO_NXTT | PT_ATTR_AUTO_MGRT | PT_ATTR_MEM_PRIO)
+
 int pthread_attr_init (pthread_attr_t *attr)
 {
-	attr->isDetached                 = 0;
+	attr->flags                      = PT_DEFAULT_ATTRS;
 	attr->sched_policy               = SCHED_RR;
 	attr->inheritsched               = PTHREAD_EXPLICIT_SCHED;
 	attr->stack_addr                 = NULL;
@@ -48,7 +50,7 @@ int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate)
 	if(attr == NULL)
 		return EINVAL;
   
-	attr->isDetached = (detachstate == PTHREAD_CREATE_DETACHED) ? 1 : 0;
+	attr->flags = (detachstate == PTHREAD_CREATE_DETACHED) ? __PT_ATTR_DETACH : attr->flags;
 	return 0;
 }
 
@@ -57,7 +59,7 @@ int pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate)
 	if((attr == NULL) || (detachstate == NULL))
 		return EINVAL;
   
-	*detachstate = (attr->isDetached) ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE;
+	*detachstate = (attr->flags & __PT_ATTR_DETACH) ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE;
 	return 0;
 }
 
@@ -170,6 +172,18 @@ int pthread_attr_getstack(pthread_attr_t *attr, void **stackaddr, size_t *stacks
 
 	*stackaddr = attr->stack_addr;
 	*stacksize = attr->stack_size;
+	return 0;
+}
+
+int pthread_attr_setflags_np(pthread_attr_t *attr, unsigned int flags, unsigned int *old)
+{
+	if(attr == NULL)
+		return EINVAL;
+
+	if(old != NULL)
+		*old = attr->flags;
+
+	attr->flags = flags;
 	return 0;
 }
 
