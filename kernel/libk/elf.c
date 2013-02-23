@@ -235,7 +235,7 @@ static error_t elf_segments_load(struct vfs_file_s *file,
 		if(task->vmm.text_start == 0)
 		{
 			proto                = VM_REG_RD | VM_REG_EX;
-			flags                = VM_REG_SHARED | VM_REG_FIXED;
+			flags                = VM_REG_SHARED | VM_REG_FIXED | VM_REG_INST;
 			task->vmm.text_start = start;
 			task->vmm.text_end   = limit;
 
