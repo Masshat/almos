@@ -81,13 +81,20 @@ VFS_MMAP_FILE(vfs_default_mmap_file)
 {
 	region->vm_mapper = file->f_node->n_mapper;
 	region->vm_file   = file;
-  
+
 	if(region->vm_flags & VM_REG_PRIVATE)
 	{
 		region->vm_pgprot &= ~(PMM_WRITE);
 		region->vm_pgprot |= PMM_COW;
 	}
 
+#if CONFIG_USE_COA
+	if((region->vm_flags & VM_REG_SHARED) && (region->vm_flags & VM_REG_INST))
+	{
+		region->vm_pgprot &= ~(PMM_PRESENT);
+		region->vm_pgprot |= PMM_MIGRATE;
+	}
+#endif
 	region->vm_flags |= VM_REG_FILE;
 
 	printk(INFO, 

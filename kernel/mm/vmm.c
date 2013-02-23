@@ -93,9 +93,9 @@ error_t vmm_dup(struct vmm_s *dst, struct vmm_s *src)
 #endif
 
 	memcpy(dst, src, sizeof(*dst));
-  
+
 	err = vmm_init(dst);
-  
+
 	if(err) return err;
 
 #if CONFIG_FORK_LOCAL_ALLOC
@@ -107,12 +107,12 @@ error_t vmm_dup(struct vmm_s *dst, struct vmm_s *src)
 	if(err) return err;
 
 	err = pmm_dup(&dst->pmm, &ktask->vmm.pmm);
-  
+
 	if(err) return err;
 
 	dst_reg = NULL;
 	rwlock_wrlock(&src->rwlock);
-  
+
 	list_foreach_forward(&src->regions_root, iter)
 	{
 		src_reg = list_element(iter, struct vm_region_s, vm_list);
@@ -275,7 +275,9 @@ void *vmm_mmap(struct task_s *task,
 	asked_addr = (uint_t)addr;
 	vmm        = &task->vmm;
 
-	vmm_dmsg(1, "%s: Cycle: %x, cpu %d, pid %d, tid %x, addr %x, len %d, proto %x, flags %x, file %x, offset %d\n",
+	vmm_dmsg(1, 
+		 "%s: Cycle: %x, cpu %d, pid %d, tid %x, addr %x,"
+		 "len %d, proto %x, flags %x, file %x, offset %d\n",
 		 __FUNCTION__, 
 		 cpu_time_stamp(),
 		 current_cpu->gid,
@@ -577,7 +579,7 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 			       cluster->id,
 			       newpage->cid,
 			       vaddr);
-#endif	     
+#endif
 		}
 
 #if CONFIG_SHOW_VMMMGRT_MSG
@@ -594,9 +596,8 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 	}
 	else
 		current_thread->info.spurious_pgfault_cntr ++;
- 
+
 VMM_MIGRATE_ERR:
-  
 	page_unlock(page);
 
 /* TODO: we should differ the kmem_free call */
@@ -610,7 +611,12 @@ VMM_MIGRATE_ERR:
 	}
 	else
 	{
+
+#if CONFIG_USE_COA
+		if((newpage != NULL) && !(region->vm_flags & VM_REG_INST))
+#else
 		if(newpage != NULL)
+#endif
 		{
 			req.ptr = page;
 			kmem_free(&req);
@@ -755,7 +761,7 @@ static inline error_t vmm_do_mapped(struct vm_region_s *region, uint_t vaddr, ui
 	pmm_page_info_t current;
 
 	index = ((vaddr - region->vm_start) + region->vm_offset) >> PMM_PAGE_SHIFT;
-    
+
 	page = mapper_get_page(region->vm_mapper, 
 			       index, 
 			       MAPPER_SYNC_OP,
@@ -763,17 +769,17 @@ static inline error_t vmm_do_mapped(struct vm_region_s *region, uint_t vaddr, ui
 
 	if(page == NULL)
 		return (region->vm_file == NULL) ? EIO : ENOMEM;
-  
+
 	info.attr    = region->vm_pgprot;
 	info.ppn     = ppm_page2ppn(page);
 	info.cluster = NULL;
-  
+
 	current.attr = 1;
 	current.ppn  = 1;
 	isDone       = false;
-  
+
 	page_lock(page);
-  
+
 	err = pmm_get_page(&region->vmm->pmm, vaddr, &current);
 
 	if(err == 0)
@@ -785,7 +791,7 @@ static inline error_t vmm_do_mapped(struct vm_region_s *region, uint_t vaddr, ui
 		else
 		{
 			isDone = true;
-			current_thread->info.spurious_pgfault_cntr ++;      
+			current_thread->info.spurious_pgfault_cntr ++;
 
 #if CONFIG_SHOW_SPURIOUS_PGFAULT
 			printk(INFO, "%s: pid %d, tid %d, cpu %d, nothing to do for vaddr %x, attr %x, ppn %x, flags %x)\n", 
@@ -798,12 +804,12 @@ static inline error_t vmm_do_mapped(struct vm_region_s *region, uint_t vaddr, ui
 			       current.ppn, 
 			       flags);
 #endif
-      
+
 #if CONFIG_SHOW_SPURIOUS_PGFAULT
 			struct page_s *old;
 
 			old = ppm_ppn2page(pmm_ppn2ppm(current.ppn), current.ppn);
-      
+
 			if(old != page)
 			{
 				printk(WARNING, "WARNING: %s: spurious pgfault on vaddr %x, with old %x, page %x\n", 
@@ -817,7 +823,7 @@ static inline error_t vmm_do_mapped(struct vm_region_s *region, uint_t vaddr, ui
 	}
 
 	page_unlock(page);
-     
+
 	return err;
 }
 
@@ -1048,9 +1054,11 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 #endif
 
 		//rwlock_rdlock(&task->vmm.rwlock);
+#if CONFIG_USE_KEYSDB
 		region = keysdb_lookup(&vmm->regions_db, bad_vaddr >> CONFIG_VM_REGION_KEYWIDTH);
-  
+
 		if(region == NULL)
+#endif
 		{
 			rwlock_rdlock(&task->vmm.rwlock);
 			region = vm_region_find(vmm, bad_vaddr);
@@ -1097,9 +1105,11 @@ error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags)
 			 bad_vaddr);
 	}
 
+#if CONFIG_USE_KEYSDB
 	if(isMiss)
 		vmm_keysdb_update(vmm, region, bad_vaddr);
-    
+#endif
+
 	//atomic_add(&region->vm_refcount, 1);
 	//rwlock_unlock(&task->vmm.rwlock);
 

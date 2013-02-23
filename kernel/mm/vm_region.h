@@ -31,19 +31,20 @@
 struct vmm_s;
 struct vm_region_s;
 
-#define VM_REG_SHARED   0x001
-#define VM_REG_PRIVATE  0x002
-#define VM_REG_PVSH     0x003
-#define VM_REG_ANON     0x004
-#define VM_REG_STACK    0x008
-#define VM_REG_LOCKED   0x010
-#define VM_REG_HUGETLB  0x020
-#define VM_REG_FIXED    0x040
-#define VM_REG_DEV      0x080
-#define VM_REG_FILE     0x100
-#define VM_REG_LAZY     0x200
-#define VM_REG_INIT     0x400
-#define VM_REG_HEAP     0x800
+#define VM_REG_SHARED   0x0001
+#define VM_REG_PRIVATE  0x0002
+#define VM_REG_PVSH     0x0003
+#define VM_REG_ANON     0x0004
+#define VM_REG_STACK    0x0008
+#define VM_REG_LOCKED   0x0010
+#define VM_REG_HUGETLB  0x0020
+#define VM_REG_FIXED    0x0040
+#define VM_REG_DEV      0x0080
+#define VM_REG_FILE     0x0100
+#define VM_REG_LAZY     0x0200
+#define VM_REG_INIT     0x0400
+#define VM_REG_HEAP     0x0800
+#define VM_REG_INST     0x1000
 
 #define VM_REG_NON      0x00
 #define VM_REG_RD       0x01

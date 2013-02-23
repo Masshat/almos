@@ -60,10 +60,12 @@
 ////////////////////////////////////////////////////
 #define CONFIG_DEV_VERSION               yes
 #define CONFIG_KERNEL_REPLICATE          yes
+#define CONFIG_USE_COA                   yes
 #define CONFIG_FORK_LOCAL_ALLOC          no
 #define CONFIG_REMOTE_FORK               yes
 #define CONFIG_THREAD_LOCAL_ALLOC        no
 #define CONFIG_REMOTE_THREAD_CREATE      yes
+#define CONFIG_USE_KEYSDB                yes
 #define CONFIG_SHOW_BOOT_BANNER          yes
 #define CONFIG_MAX_CLUSTER_NR            256
 #define CONFIG_MAX_CLUSTER_ROOT          16
