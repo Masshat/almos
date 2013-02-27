@@ -46,7 +46,13 @@ int sys_mcntl(int op, uint_t vaddr, size_t len, minfo_t *pinfo)
 	if(err) goto SYS_MCNTL_ERR;
 #endif
 
-	if((vaddr == 0) || (op != MCNTL_READ) || (pinfo == NULL))
+	if(op == MCNTL_L1_iFLUSH)
+	{
+		pmm_cache_flush(PMM_TEXT);
+		return 0;
+	}
+
+	if((vaddr == 0) || (op >= MCNTL_OPS_NR) || (pinfo == NULL))
 	{
 		err = EINVAL;
 		goto SYS_MCNTL_ERR;
@@ -62,11 +68,11 @@ int sys_mcntl(int op, uint_t vaddr, size_t len, minfo_t *pinfo)
 	}
 
 	err = pmm_get_page(&current_task->vmm.pmm, vaddr, &info);
-  
+
 	if(err) goto SYS_MCNTL_ERR;
 
 	ppm = pmm_ppn2ppm(info.ppn);
-  
+
 	if(ppm->signature != PPM_ID)
 	{
 		err = EIO;
@@ -74,7 +80,7 @@ int sys_mcntl(int op, uint_t vaddr, size_t len, minfo_t *pinfo)
 	}
 
 	cluster = ppm_get_cluster(ppm);
-  
+
 	uinfo.mi_cid = cluster->id;
 	uinfo.mi_cx  = cluster->x_coord;
 	uinfo.mi_cy  = cluster->y_coord;
@@ -88,7 +94,7 @@ int sys_mcntl(int op, uint_t vaddr, size_t len, minfo_t *pinfo)
 	       uinfo.mi_cz);
 
 	err = cpu_uspace_copy(pinfo, &uinfo, sizeof(*pinfo));
-  
+
 	if(err) 
 	{ 
 		printk(INFO, "%s: error copying result to userland, err %d\n", 
