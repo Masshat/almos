@@ -41,6 +41,7 @@ extern mcs_barrier_t boot_sync;
 
 void* thread_idle(void *arg)
 {
+	extern uint_t __ktext_start;
 	register uint_t id;
 	register uint_t cpu_nr;
 	register struct thread_s *this;
@@ -49,19 +50,24 @@ void* thread_idle(void *arg)
 	register struct page_s *reserved_pg;
 	register uint_t reserved;
 	kthread_args_t *args;
+	bool_t isBSCPU;
 	uint_t tm_now;
 	uint_t count;
 	uint_t event;
 	void *listner;
 	error_t err;
-	
-	this   = current_thread;
-	cpu    = current_cpu;
-	id     = cpu->gid;
-	cpu_nr = arch_onln_cpu_nr();
-	args   = (kthread_args_t*) arg;
+
+	this    = current_thread;
+	cpu     = current_cpu;
+	id      = cpu->gid;
+	cpu_nr  = arch_onln_cpu_nr();
+	args    = (kthread_args_t*) arg;
+	isBSCPU = (cpu == cpu->cluster->bscpu);
 
 	cpu_trace_write(cpu, thread_idle_func);
+
+	if(isBSCPU)
+		pmm_tlb_flush_vaddr((vma_t)&__ktext_start, PMM_UNKNOWN);
 
 	cpu_set_state(cpu, CPU_ACTIVE);
 	rt_timer_read(&tm_now);
@@ -73,9 +79,9 @@ void* thread_idle(void *arg)
 
 	mcs_barrier_wait(&boot_sync);
 
-	printk(INFO, "INFO: Starting Thread Idle (%x)\tOK\n", this); 
+	printk(INFO, "INFO: Starting Thread Idle On Core %d\tOK\n", cpu->gid);
 
-	if((cpu == cpu->cluster->bscpu) && (id == args->val[2]))
+	if(isBSCPU && (id == args->val[2]))
 	{
 		for(reserved = args->val[0]; reserved < args->val[1]; reserved += PMM_PAGE_SIZE)
 		{
@@ -113,7 +119,7 @@ void* thread_idle(void *arg)
 	event   = sched_event_make(thread, SCHED_OP_ADD_CREATED);
 	sched_event_send(listner,event);
 
-	if(cpu == cpu->cluster->bscpu)
+	if(isBSCPU)
 	{    
 		dqdt_update();
 #if 0
