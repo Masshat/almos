@@ -263,14 +263,6 @@ error_t vm_region_unmap(struct vm_region_s *region)
 		vaddr += PMM_PAGE_SIZE;
 		count --;
 	}
-
-	if((region->vm_mapper != NULL) && (region->vm_flags & VM_REG_ANON))
-	{
-		count = atomic_add(&region->vm_mapper->m_refcount, -1);
-      
-		if(count == 1)
-			mapper_destroy(region->vm_mapper, false);
-	}
   
 	return 0;
 }
@@ -285,6 +277,9 @@ error_t vm_region_detach(struct vmm_s *vmm, struct vm_region_s *region)
 	uint_t regsize;
 	uint_t key_start;
 	uint_t count;
+	uint_t mapper_count;
+	uint_t irq_state;
+	bool_t isSharedAnon;
 
 	list_unlink(&region->vm_list);
 
@@ -296,6 +291,17 @@ error_t vm_region_detach(struct vmm_s *vmm, struct vm_region_s *region)
 	}
 	rwlock_unlock(&vmm->rwlock);
 
+	isSharedAnon = ((region->vm_flags & VM_REG_SHARED) && (region->vm_flags & VM_REG_ANON));
+	mapper_count = 0;
+
+	if(isSharedAnon)
+	{
+		mapper_count = atomic_add(&region->vm_mapper->m_refcount, -1);
+		mcs_lock(&region->vm_mapper->m_reg_lock, &irq_state);
+		list_unlink(&region->vm_mlist);
+		mcs_unlock(&region->vm_mapper->m_reg_lock, irq_state);
+	}
+
 	while((count = atomic_get(&region->vm_refcount)) > 1)
 		sched_yield(current_thread);
 
@@ -304,10 +310,13 @@ error_t vm_region_detach(struct vmm_s *vmm, struct vm_region_s *region)
 	if(file != NULL)
 	{
 		file->f_op->munmap(file, region);
-		vfs_close(file, &count);
+		vfs_close(file, NULL);
 	}
 
 	vm_region_unmap(region);
+
+	if((isSharedAnon) && (mapper_count == 1))
+		mapper_destroy(region->vm_mapper, false);
 
 	req.type = KMEM_VM_REGION;
 	req.ptr  = region;
@@ -333,6 +342,7 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	struct ppm_s *ppm;
 	struct task_s *task;
 	pmm_page_info_t info;
+	uint_t irq_state;
 	error_t err;
 
 	atomic_init(&dst->vm_refcount, 1);
@@ -352,9 +362,12 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	if(src->vm_file != NULL)
 		atomic_add(&src->vm_file->f_count, 1);
   
-	if(src->vm_flags & VM_REG_SHARED)
+	if(dst->vm_flags & VM_REG_SHARED)
 	{
-		atomic_add(&src->vm_mapper->m_refcount, 1);
+		mcs_lock(&dst->vm_mapper->m_reg_lock, &irq_state);
+		list_add_last(&dst->vm_mapper->m_reg_root, &dst->vm_mlist);
+		mcs_unlock(&dst->vm_mapper->m_reg_lock, irq_state);
+		(void)atomic_add(&dst->vm_mapper->m_refcount, 1);
 		return 0;
 	}
 
@@ -468,9 +481,9 @@ error_t vm_region_update(struct vm_region_s *region, uint_t vaddr, uint_t flags)
 
 	if(isTraced)
 	{
-		printk(DEBUG, 
+		printk(DEBUG,
 		       "DEBUG: %s: cpu %d, pid %d, vaddr %x, flags %x, region [%x,%x]\n",
-		       __FUNCTION__, 
+		       __FUNCTION__,
 		       cpu_get_id(),
 		       this->task->pid,
 		       vaddr,
