@@ -171,12 +171,13 @@ static void page_to_free(struct page_s *page)
 
 	if(page_refcount_get(page) != 0)
 	{
-		printk(ERROR, "ERROR: %s: cpu %d, pid %d, tid %x, page %x, count %d [%d]\n",
+		printk(ERROR, "ERROR: %s: cpu %d, pid %d, tid %x, page %x, state %x, count %d [%d]\n",
 		       __FUNCTION__,
 		       cpu_get_id(),
 		       current_task->pid,
 		       current_thread,
 		       page,
+		       page->state,
 		       page_refcount_get(page),
 		       cpu_time_stamp());
 	}

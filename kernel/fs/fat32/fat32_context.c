@@ -117,30 +117,24 @@ VFS_CREATE_CONTEXT(vfat_create_context)
 
 	if(mapper == NULL)
 	{
-		req.type = KMEM_VFAT_CTX;
-		req.ptr  = vfat_ctx;
-		kmem_free(&req);
-		return VFS_ENOMEM;
+		err = ENOMEM;
+		goto fail_mapper;
 	}
 
-	mapper->m_node = NULL;
-	mapper->m_ops  = &vfat_node_mapper_op;
-	mapper->m_data = vfat_ctx;
+	err = mapper_init(mapper, &vfat_node_mapper_op, NULL, vfat_ctx);
+
+	if(err)
+	{
+		printk(ERROR, "ERROR: %s: failed to init mapper, err %d\n", __FUNCTION__, err);
+		goto fail_mapper_init;
+	}
 
 	vfat_ctx->mapper = mapper;
 
 	if ((err = vfat_context_init(vfat_ctx)))
 	{
 		printk(ERROR, "ERROR: vfat_create_context: INITIALIZING VFAT CONTEXT err %d\n",err);
-		mapper_destroy(mapper, false);
-		req.type = KMEM_MAPPER;
-		req.ptr  = mapper;
-		kmem_free(&req);
-		req.type = KMEM_VFAT_CTX;
-		req.ptr  = vfat_ctx;
-		kmem_free(&req);
-		rwlock_destroy(&vfat_ctx->lock);
-		return VFS_EUNKNOWN;
+		goto fail_ctx_init;
 	}
 
 	context->ctx_type    = VFS_VFAT_TYPE;
@@ -149,6 +143,21 @@ VFS_CREATE_CONTEXT(vfat_create_context)
 	context->ctx_file_op = (struct vfs_file_op_s *) &vfat_f_op;
 	context->ctx_pv      = (void *) vfat_ctx;
 	return 0;
+
+fail_ctx_init:
+fail_mapper_init:
+	mapper_destroy(mapper, false);
+	req.type = KMEM_MAPPER;
+	req.ptr  = mapper;
+	kmem_free(&req);
+
+fail_mapper:
+	req.type = KMEM_VFAT_CTX;
+	req.ptr  = vfat_ctx;
+	kmem_free(&req);
+
+	rwlock_destroy(&vfat_ctx->lock);
+	return err;
 }
 
 VFS_DESTROY_CONTEXT(vfat_destroy_context)

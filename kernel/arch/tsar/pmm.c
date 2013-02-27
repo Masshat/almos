@@ -553,7 +553,6 @@ void pmm_tlb_flush_vaddr(vma_t vaddr, uint_t flags)
 		mips_set_cp2(MMU_DTLB_INVAL,vaddr,0);
 #endif
 	}
-
 }
 
 /* CPU cache flush */
@@ -596,9 +595,11 @@ void pmm_print(struct pmm_s *pmm)
 {
 	uint_t i;
 	uint_t *pgdir = pmm->pgdir;
-  
+	uint_t cpu = cpu_get_id();
+
 	for(i=0; i < 2048; i++)
 	{
-		printk(INFO, "[%d] = %x\n", i, pgdir[i]);
+		if(pgdir[i] != 0)
+			printk(INFO, "cpu %d: pgdir[%d] = %x\n", cpu, i, pgdir[i]);
 	}
 }

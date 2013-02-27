@@ -167,9 +167,9 @@ VFS_CREATE_CONTEXT(ext2_create_context)
 	if(mapper == NULL)
 		goto fail_mapper;
   
-	mapper->m_node = NULL;
-	mapper->m_ops  = &ext2_node_mapper_op;
-	mapper->m_data = ctx;
+	err = mapper_init(mapper, &ext2_node_mapper_op, NULL, ctx);
+
+	if(err) goto fail_mapper_init;
 
 	err = ext2_context_init(ctx,context->ctx_dev,mapper);
 
@@ -185,6 +185,7 @@ VFS_CREATE_CONTEXT(ext2_create_context)
 	return 0;
 
 fail_init:
+fail_mapper_init:
 	req.type = KMEM_MAPPER;
 	req.ptr  = mapper;
 	kmem_free(&req);

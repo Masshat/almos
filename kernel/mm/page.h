@@ -39,6 +39,7 @@
 #define PG_DIRTY	0x080
 #define PG_LOCKED       0x100
 #define PG_PINNED       0x200
+#define PG_MIGRATE      0x400
 
 typedef enum
 {
@@ -135,7 +136,9 @@ static inline uint_t page_shared_down(struct page_s *page);
 void page_print(struct page_s *page);
 
 #define MCNTL_READ           0x0
-#define MCNTL_MOVE           0x1 /* this operation is not implemented in this version */
+#define MCNTL_L1_iFLUSH      0x1
+#define MCNTL_MOVE           0x2 /* this operation is not implemented in this version */
+#define MCNTL_OPS_NR         MCNTL_MOVE //(MCNTL_MOVE + 1)
 
 struct minfo_s
 {

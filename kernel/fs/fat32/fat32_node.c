@@ -82,10 +82,11 @@ static inline void vfat_convert_name(char *str1, char *str2) {
 	}
 }
 
-VFS_INIT_NODE(vfat_init_node) 
+VFS_INIT_NODE(vfat_init_node)
 {
 	struct vfat_node_s *node_info;
 	kmem_req_t req;
+	error_t err;
 
 	if(node->n_type != VFS_VFAT_TYPE)
 		return EINVAL;
@@ -97,6 +98,11 @@ VFS_INIT_NODE(vfat_init_node)
   
 	if(node->n_mapper == NULL)
 		return VFS_ENOMEM;
+
+	err = mapper_init(node->n_mapper, NULL, NULL, NULL);
+
+	if(err)
+		return err;
 
 	if(node->n_pv != NULL)
 		node_info = (struct vfat_node_s*)node->n_pv;

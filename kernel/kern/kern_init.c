@@ -161,8 +161,12 @@ void kern_init (boot_info_t *info)
 			       cpu_time_stamp());
 		}
 		else
-			printk(INFO, "INFO: kernel replication done on cid %d [%d]\n", cluster_id, cpu_time_stamp() - tm_start);
-#endif
+		{
+			printk(INFO,
+			       "INFO: kernel replication done on cid %d [%d]\n",
+			       cluster_id, cpu_time_stamp() - tm_start);
+		}
+#endif	/* CONFIG_KERNEL_REPLICATE */
 
 		mcs_barrier_wait(&kmem_sync);
 
