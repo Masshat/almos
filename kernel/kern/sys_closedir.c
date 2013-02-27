@@ -31,7 +31,6 @@ int sys_closedir (uint_t fd)
 	register struct thread_s *this;
 	register struct task_s *task;
 	error_t err;
-	uint_t count;
 
 	this = current_thread;
 	task = current_task;
@@ -43,7 +42,7 @@ int sys_closedir (uint_t fd)
 	}
 
 	file = task_fd_lookup(task,fd);     
-	err  = vfs_closedir(file, &count);
+	err  = vfs_closedir(file, NULL);
 
 	if(err)
 	{

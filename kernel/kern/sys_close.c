@@ -35,7 +35,6 @@ int sys_close (uint_t fd)
 	register struct thread_s *this;
 	register struct vfs_file_s *file;
 	error_t err;
-	uint_t count;
   
 	this = current_thread;
 	task = current_task;
@@ -48,7 +47,7 @@ int sys_close (uint_t fd)
 
 	file = task_fd_lookup(task,fd);
   
-	if((err = vfs_close(file, &count)))
+	if((err = vfs_close(file, NULL)))
 	{
 		this->info.errno = err;
 		return -1;

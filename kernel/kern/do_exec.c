@@ -417,7 +417,6 @@ error_t task_load_init(struct task_s *task)
 	error_t err;
 	error_t err1;
 	error_t err2;
-	uint_t count;
 	uint_t isFatal;
 	char *environ[] = {"ALMOS_VERSION="CONFIG_ALMOS_VERSION, NULL};
 	char *argv[]    = {INIT_PATH, "init", NULL};
@@ -464,9 +463,9 @@ error_t task_load_init(struct task_s *task)
 
 	if(err || err1 || err2)
 	{
-		if(!err)  vfs_close(init->fd_info->tbl[STDIN],  &count);
-		if(!err1) vfs_close(init->fd_info->tbl[STDOUT], &count);
-		if(!err2) vfs_close(init->fd_info->tbl[STDERR], &count);
+		if(!err)  vfs_close(init->fd_info->tbl[STDIN],  NULL);
+		if(!err1) vfs_close(init->fd_info->tbl[STDOUT], NULL);
+		if(!err2) vfs_close(init->fd_info->tbl[STDERR], NULL);
     
 		printk(ERROR,"ERROR: do_exec: connot open fds [%d, %d, %d]\n", err, err1, err2);
 		err = ENOMEM;

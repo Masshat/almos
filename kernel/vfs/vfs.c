@@ -498,7 +498,9 @@ error_t vfs_close(struct vfs_file_s *file, uint_t *refcount)
 #endif
 
 	count = atomic_add(&file->f_count, -1);
-	*refcount = count;
+
+	if(refcount != NULL)
+		*refcount = count;
   
 	if(count > 1) return 0;
 
