@@ -305,6 +305,7 @@ error_t task_replicate_do_next_stage(struct task_s *task, struct task_s *src)
 	if(info.attr & PMM_HUGE)
 		return EINVAL;
 
+	info.ppn     = 0;
 	info.attr    = PMM_HUGE | PMM_CLEAR;
 	info.cluster = NULL;
 
@@ -320,11 +321,11 @@ error_t task_replicate_do_next_stage(struct task_s *task, struct task_s *src)
 	{
 		vaddr = ktext_start + (i*PMM_PAGE_SIZE);
 		err   = pmm_get_page(&src->vmm.pmm, vaddr, &info);
-    
+
 		if(err) return err;
 
 		if(vaddr < ktext_end)
-		{  
+		{
 			page = kmem_alloc(&req);
 
 			if(page == NULL)
@@ -333,9 +334,9 @@ error_t task_replicate_do_next_stage(struct task_s *task, struct task_s *src)
 			page_copy(page, ppm_ppn2page(pmm_ppn2ppm(info.ppn), info.ppn));
 			info.ppn  = ppm_page2ppn(page);
 		}
-    
+
 		err = pmm_set_page(&task->vmm.pmm, vaddr, &info);
-    
+
 		if(err) return err;
 	}
 
@@ -349,6 +350,7 @@ error_t task_bootstrap_replicate(struct boot_info_s *binfo)
 	struct task_s *src;
 	struct cluster_s *cluster;
 	struct dqdt_cluster_s *logical;
+	bool_t isFirstStage;
 	uint_t flags;
 	error_t err;
 
@@ -373,7 +375,13 @@ error_t task_bootstrap_replicate(struct boot_info_s *binfo)
 		return 0;
 	}
 
-	if(logical == NULL)
+	isFirstStage = (logical != NULL) ? true : false;
+
+	if(isFirstStage)
+	{
+		src = &task0;
+	}
+	else
 	{
 		logical = cluster->levels_tbl[0]->parent;
 		flags   = 0;
@@ -381,11 +389,8 @@ error_t task_bootstrap_replicate(struct boot_info_s *binfo)
 		while((flags & DQDT_CLUSTER_READY) == 0)
 			flags = cpu_load_word(&logical->flags);
 
-		src     = logical->home->task;
-		logical = NULL;
+		src = logical->home->task;
 	}
-	else
-		src = &task0;
 
 	task = cluster->task;
 	err  = task_bootstrap_dup(task,src);
@@ -401,7 +406,7 @@ error_t task_bootstrap_replicate(struct boot_info_s *binfo)
 		goto REPLICATE_ERR;
 	}
 
-	if(logical != NULL)
+	if((isFirstStage) || (logical->home->id == binfo->boot_cluster_id))
 		err = task_replicate_do_first_stage(task,src);
 	else
 		err = task_replicate_do_next_stage(task,src);
@@ -414,7 +419,7 @@ REPLICATE_ERR:
 		cpu_wbflush();
 	}
 
-	if(logical != NULL)
+	if(isFirstStage)
 	{ 
 		logical->flags |= DQDT_CLUSTER_READY;
 		cpu_wbflush();
@@ -595,7 +600,6 @@ void task_destroy(struct task_s *task)
 	uint_t remote_pages_nr;
 	uint_t u_err_nr;
 	uint_t m_err_nr;
-	uint_t count;
 
 	assert(task->threads_nr == 0 && 
 	       "Unexpected task destruction, One or more Threads still active\n");
@@ -610,11 +614,11 @@ void task_destroy(struct task_s *task)
 	for(i=0; i < (CONFIG_TASK_FILE_MAX_NR); i++)
 	{
 		if(task->fd_info->tbl[i] != NULL)
-			vfs_close(task->fd_info->tbl[i], &count);
+			vfs_close(task->fd_info->tbl[i], NULL);
 	}
 
 	if(task->bin != NULL)
-		vfs_close(task->bin, &count);
+		vfs_close(task->bin, NULL);
 
 	vfs_node_down_atomic(task->vfs_root);
 	vfs_node_down_atomic(task->vfs_cwd);
