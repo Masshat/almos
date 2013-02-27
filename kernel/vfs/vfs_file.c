@@ -79,6 +79,8 @@ struct vfs_file_s* vfs_file_get(struct vfs_node_s *node)
 
 VFS_MMAP_FILE(vfs_default_mmap_file)
 {
+	uint_t irq_state;
+
 	region->vm_mapper = file->f_node->n_mapper;
 	region->vm_file   = file;
 
@@ -97,9 +99,17 @@ VFS_MMAP_FILE(vfs_default_mmap_file)
 #endif
 	region->vm_flags |= VM_REG_FILE;
 
-	printk(INFO, 
-	       "INFO: Region [%x,%x] has been mapped [%s, size %d]\n", 
-	       region->vm_start, 
+	if(region->vm_flags & VM_REG_SHARED)
+	{
+		mcs_lock(&region->vm_mapper->m_reg_lock, &irq_state);
+		list_add_last(&region->vm_mapper->m_reg_root, &region->vm_mlist);
+		mcs_unlock(&region->vm_mapper->m_reg_lock, irq_state);
+		(void)atomic_add(&region->vm_mapper->m_refcount, 1);
+	}
+
+	printk(INFO,
+	       "INFO: Region [%x,%x] has been mapped [%s, size %d]\n",
+	       region->vm_start,
 	       region->vm_limit,
 	       file->f_node->n_name,
 	       (uint32_t)file->f_node->n_size);
@@ -109,6 +119,16 @@ VFS_MMAP_FILE(vfs_default_mmap_file)
 
 VFS_MUNMAP_FILE(vfs_default_munmap_file)
 {
+	uint_t irq_state;
+
+	if(region->vm_flags & VM_REG_SHARED)
+	{
+		(void)atomic_add(&region->vm_mapper->m_refcount, -1);
+		mcs_lock(&region->vm_mapper->m_reg_lock, &irq_state);
+		list_unlink(&region->vm_mlist);
+		mcs_unlock(&region->vm_mapper->m_reg_lock, irq_state);
+	}
+
 	return 0;
 }
 
