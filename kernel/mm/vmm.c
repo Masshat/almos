@@ -226,6 +226,7 @@ error_t vmm_do_shared_anon_mapping(struct vm_region_s *region)
 	struct mapper_s *mapper;
 	kmem_req_t req;
 	error_t err;
+	uint_t irq_state;
 
 	req.type  = KMEM_MAPPER;
 	req.flags = AF_KERNEL;
@@ -242,6 +243,11 @@ error_t vmm_do_shared_anon_mapping(struct vm_region_s *region)
 
 	region->vm_mapper = mapper;
 	region->vm_file   = NULL;
+
+	mcs_lock(&mapper->m_reg_lock, &irq_state);
+	list_add_last(&mapper->m_reg_root, &region->vm_mlist);
+	mcs_unlock(&mapper->m_reg_lock, irq_state);
+
 	return 0;
 
 fail_mapper_init:
@@ -794,14 +800,16 @@ static inline error_t vmm_do_mapped(struct vm_region_s *region, uint_t vaddr, ui
 			current_thread->info.spurious_pgfault_cntr ++;
 
 #if CONFIG_SHOW_SPURIOUS_PGFAULT
-			printk(INFO, "%s: pid %d, tid %d, cpu %d, nothing to do for vaddr %x, attr %x, ppn %x, flags %x)\n", 
-			       __FUNCTION__, 
+			printk(INFO,
+			       "%s: pid %d, tid %d, cpu %d, nothing to do for vaddr %x, "
+			       "attr %x, ppn %x, flags %x)\n",
+			       __FUNCTION__,
 			       current_task->pid,
 			       current_thread->info.order,
-			       cpu_get_id(), 
-			       vaddr, 
-			       current.attr, 
-			       current.ppn, 
+			       cpu_get_id(),
+			       vaddr,
+			       current.attr,
+			       current.ppn,
 			       flags);
 #endif
 
