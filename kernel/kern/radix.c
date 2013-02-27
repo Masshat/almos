@@ -34,7 +34,6 @@
 #define ENOTFOUND 42
 
 #if 0
-
 #include <mapper.h>
 #define radix_dmsg(x,msg, ...)				\
 	do{						\
@@ -512,7 +511,6 @@ unsigned int radix_tree_gang_lookup(struct radix_s*	root,
 		next_child = (next_child < 0) ? 64 : next_child;
 	}
 
-	results[out] = NULL;
 	return out;
 }
 
@@ -726,7 +724,6 @@ unsigned int radix_tree_gang_lookup_tag(struct radix_s*	root,
 		}
 	}
 
-	results[out] = NULL;
 	return out;
 }
 
@@ -806,7 +803,6 @@ unsigned int radix_tree_gang_lookup_tag_slot(struct radix_s*	root,
 		}
 	}
 
-	results[out] = NULL;
 	return out;
 }
 
