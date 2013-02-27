@@ -58,13 +58,13 @@ struct mapper_op_s
 	mapper_write_page_t	    *writepage;
 
 	/* sync page if it's dirty */
-	mapper_sync_page_t        *sync_page;
+	mapper_sync_page_t          *sync_page;
   
 	/* set page dirty attribute, return true if this dirtied it */
-	mapper_set_page_dirty_t   *set_page_dirty;
+	mapper_set_page_dirty_t     *set_page_dirty;
 
 	/* clear page's dirty attribute, return true if this cleared it */
-	mapper_clear_page_dirty_t *clear_page_dirty;
+	mapper_clear_page_dirty_t   *clear_page_dirty;
 
 	/* Release a page from mapper */
 	mapper_release_page_t	    *releasepage;
@@ -72,13 +72,15 @@ struct mapper_op_s
 
 struct mapper_s 
 {
-	atomic_t                      m_refcount;
-	//spinlock_t			m_lock;
-	mcs_lock_t			m_lock;
-	radix_t			m_radix;    // pages depot
-	const struct mapper_op_s*     m_ops;	    // operations
-	struct vfs_node_s*		m_node;	    // owner
-	void*                         m_data;	    // private data
+	atomic_t                     m_refcount;
+	//spinlock_t		     m_lock;
+	mcs_lock_t	             m_lock;
+	radix_t			     m_radix;    // pages depot
+	const struct mapper_op_s*    m_ops;	    // operations
+	struct vfs_node_s*           m_node;	    // owner
+	void*                        m_data;	    // private data
+	mcs_lock_t	             m_reg_lock;
+	struct list_entry            m_reg_root;
 };
 
 
