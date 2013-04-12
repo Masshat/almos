@@ -380,7 +380,7 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 	{
 		thread_clear_cap_migrate(this);
 		cpu_enable_all_irq(&state);
-		ret = thread_migrate(this);
+		ret = thread_migrate(this,-1);
 		cpu_restore_irq(state);
 		
 		if(ret == 0)

@@ -390,7 +390,6 @@ error_t vmm_sbrk(struct vmm_s *vmm, uint_t current, uint_t size)
 	return err;
 }
 
-
 error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len)
 {
 	register error_t err;
@@ -425,12 +424,15 @@ error_t vmm_madvise_migrate(struct vmm_s *vmm, uint_t start, uint_t len)
 	return 0;
 }
 
-error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start)
+/* TODO: we should be able to apply this strategy on VM_REG_SHARED */
+error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags)
 {
 	struct list_entry *entry;
 	struct vm_region_s *region;
 
+	rwlock_rdlock(&vmm->rwlock);
 	region = vm_region_find(vmm, start);
+	rwlock_unlock(&vmm->rwlock);
   
 	if((region == NULL) || (region->vm_start < start))
 		return ESRCH;
@@ -441,14 +443,18 @@ error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start)
 	{
 		region = list_element(entry, struct vm_region_s, vm_list);
         
-		if((region->vm_flags & VM_REG_STACK)  ||
-		   (region->vm_flags & VM_REG_SHARED))
-			goto AUTO_MIGRATE_NEXT_REGION;
+		if ((region->vm_flags & VM_REG_INIT)                            ||
+		   ((region->vm_flags & VM_REG_STACK) && !(flags & MGRT_STACK)) ||
+		    (region->vm_flags & VM_REG_SHARED)                          ||
+		    (region->vm_flags & VM_REG_DEV))
+			goto skip_current_region;
 
 		vmm_madvise_migrate(vmm, region->vm_start, region->vm_limit - region->vm_start);
-  
-	AUTO_MIGRATE_NEXT_REGION:
+
+	skip_current_region:
+		rwlock_rdlock(&vmm->rwlock);
 		entry = list_next(&vmm->regions_root, entry);
+		rwlock_unlock(&vmm->rwlock);
 	}
 
 	return 0;
@@ -528,7 +534,7 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 		{
 			req.type  = KMEM_PAGE;
 			req.size  = 0;
-			req.flags = AF_USR | AF_PRIO | AF_TTL_AVRG;
+			req.flags = AF_PGFAULT;
 
 			newpage = kmem_alloc(&req);
       
@@ -574,7 +580,7 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 #endif	     
 		}
 
-#if CONFIG_SHOW_MIGRATE_MSG
+#if CONFIG_SHOW_VMMMGRT_MSG
 		printk(INFO, "%s: pid %d, tid %d, cpu %d: Asked to migrate page (vaddr %x) from cluster %d to cluster %d, err %d\n",
 		       __FUNCTION__,
 		       current_task->pid,
@@ -592,7 +598,8 @@ static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t
 VMM_MIGRATE_ERR:
   
 	page_unlock(page);
-  
+
+/* TODO: we should differ the kmem_free call */
 	if(err)
 	{
 		if(newpage != NULL)
@@ -684,7 +691,7 @@ error_t vmm_do_cow(struct vm_region_s *region, struct page_s *page, pmm_page_inf
 	{    
 		req.type  = KMEM_PAGE;
 		req.size  = 0;
-		req.flags = AF_USER;
+		req.flags = AF_PGFAULT;
   
 		if((newpage = kmem_alloc(&req)) == NULL)
 		{
@@ -722,7 +729,6 @@ VMM_COW_END:
 	{
 		req.type  = KMEM_PAGE;
 		req.size  = 0;
-		req.flags = AF_USER;
 		req.ptr   = page;
 
 		kmem_free(&req);
@@ -842,7 +848,7 @@ static inline error_t vmm_do_aod(struct vm_region_s *region, uint_t vaddr)
 
 	req.type  = KMEM_PAGE;
 	req.size  = 0;
-	req.flags = AF_USER | AF_ZERO;
+	req.flags = AF_PGFAULT | AF_ZERO;
 
 	if((page = kmem_alloc(&req)) == NULL)
 	{

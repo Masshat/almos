@@ -119,7 +119,7 @@ reg_t do_syscall (reg_t arg0,
 	if(thread_migration_isActivated(this))
 	{
 		cpu_enable_all_irq(NULL);
-		ret = thread_migrate(this);
+		ret = thread_migrate(this,-1);
 		cpu_disable_all_irq(NULL);
 
                 /* this pointer is expired */
@@ -197,7 +197,7 @@ END_DO_SYSCALL:
 	{
 		thread_clear_cap_migrate(this);
 		cpu_enable_all_irq(NULL);
-		ret = thread_migrate(this);
+		ret = thread_migrate(this,-1);
 		cpu_disable_all_irq(NULL);
 
                 /* this pointer is expired */

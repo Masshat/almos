@@ -30,10 +30,24 @@
 #define USE_USER_MUTEX 1
 
 /* START COPYING FROM KERNEL HEADER */
+#define __PT_ATTR_DEFAULT             0x000
+#define __PT_ATTR_DETACH              0x001 /* for compatiblity */
+#define __PT_FORK_WILL_EXEC           0x001 /* for compatiblity */
+#define __PT_FORK_USE_TARGET_CPU      0x002 /* for compatiblity */
+#define __PT_ATTR_LEGACY_MASK         0x003 /* TODO: remove legacy attr issue*/
+
+#define __PT_FORK_USE_AFFINITY        0x004
+#define __PT_ATTR_MEM_PRIO            0x008
+#define __PT_ATTR_INTERLEAVE_SEQ      0x010
+#define __PT_ATTR_INTERLEAVE_ALL      0x020
+#define __PT_ATTR_AUTO_MGRT           0x040
+#define __PT_ATTR_AUTO_NXTT           0x080
+#define __PT_ATTR_MEM_CID_RR          0x100
+
 typedef struct
 {
 	uint_t key;
-	uint_t isDetached;
+	uint_t flags;
 	uint_t sched_policy;
 	uint_t inheritsched;
 	void *stack_addr;
@@ -276,17 +290,26 @@ int pthread_barrier_wait (pthread_barrier_t *barrier);
 int pthread_barrier_destroy(pthread_barrier_t *barrier);
 
 
-/** POSIX-Like Additional operations */
-#define PT_TRACE_OFF       0
-#define PT_TRACE_ON        1
-#define PT_SHOW_STATE      2
+/** POSIX-Like, Not Protable, Additional Operations */
+#define PT_TRACE_OFF              0
+#define PT_TRACE_ON               1
+#define PT_SHOW_STATE             2
 
-#define PT_FORK_DEFAULT    0
-#define PT_FORK_WILL_EXEC  1
-#define PT_FORK_TARGET_CPU 2
+#define PT_FORK_DEFAULT           __PT_ATTR_DEFAULT
+#define PT_FORK_WILL_EXEC         __PT_FORK_WILL_EXEC
+#define PT_FORK_TARGET_CPU        __PT_FORK_USE_TARGET_CPU
+#define PT_FORK_SET_AFFINITY      __PT_FORK_USE_AFFINITY
+#define PT_ATTR_MEM_PRIO          __PT_ATTR_MEM_PRIO
+#define PT_ATTR_AUTO_MGRT         __PT_ATTR_AUTO_MGRT
+#define PT_ATTR_AUTO_NXTT         __PT_ATTR_AUTO_NXTT
+#define PT_ATTR_INTERLEAVE_SEQ    __PT_ATTR_INTERLEAVE_SEQ
+#define PT_ATTR_INTERLEAVE_ALL    __PT_ATTR_INTERLEAVE_ALL
+#define PT_ATTR_MEM_CID_RR        __PT_ATTR_MEM_CID_RR
 
-int pthread_migrate_np(void);
+
+int pthread_migrate_np(pthread_attr_t *attr);
 int pthread_profiling_np(int cmd, pid_t pid, pthread_t tid);
+int pthread_attr_setflags_np(pthread_attr_t *attr, unsigned int flags, unsigned int *old);
 int pthread_attr_setcpuid_np(pthread_attr_t *attr, int cpu_id, int *old_cpu_id);
 int pthread_attr_getcpuid_np(int *cpu_id);
 int pthread_attr_setforkinfo_np(int flags);

@@ -565,7 +565,7 @@ DQDT_SELECT_HELPER(dqdt_select_by_T_M)
 		    T, N,
 		    attr->m_threshold,M);
 
-	return ((T < N) || (M < attr->m_threshold)) ? true : false;
+	return ((T < N) || (M > attr->m_threshold)) ? true : false;
 }
 
 DQDT_SELECT_HELPER(dqdt_sort_by_U_T_D)
@@ -892,7 +892,7 @@ error_t dqdt_do_placement(struct dqdt_cluster_s *logical,
 	err = dqdt_up_traversal(logical,
 				attr,
 				(attr->flags & DQDT_FORK_OP) ? dqdt_select_by_T_M : dqdt_select_by_T,
-				(attr->flags & DQDT_FORK_OP) ? dqdt_sort_by_T_D : dqdt_sort_by_rT_D,
+				(attr->flags & (DQDT_FORK_OP || DQDT_MIGRATE_OP)) ? dqdt_sort_by_T_D : dqdt_sort_by_rT_D,
 				(attr->flags & DQDT_FORK_OP) ? dqdt_select_by_T_M : dqdt_select_by_T,
 				dqdt_core_min_threads_select,
 				depth,

@@ -57,6 +57,20 @@ struct list_entry;
 struct task_s;
 struct event_s;
 
+#define PT_ATTR_DEFAULT             0x000
+#define PT_ATTR_DETACH              0x001 /* for compatiblity */
+#define PT_FORK_WILL_EXEC           0x001 /* for compatiblity */
+#define PT_FORK_USE_TARGET_CPU      0x002 /* for compatiblity */
+#define PT_ATTR_LEGACY_MASK         0x003 /* TODO: remove legacy attr issue*/
+
+#define PT_FORK_USE_AFFINITY        0x004
+#define PT_ATTR_MEM_PRIO            0x008
+#define PT_ATTR_INTERLEAVE_SEQ      0x010
+#define PT_ATTR_INTERLEAVE_ALL      0x020
+#define PT_ATTR_AUTO_MGRT           0x040
+#define PT_ATTR_AUTO_NXTT           0x080
+#define PT_ATTR_MEM_CID_RR          0x100
+
 /** 
  * Pthread attributes
  * Mandatory members must be set before 
@@ -65,7 +79,7 @@ struct event_s;
 typedef struct
 {
 	uint_t key;
-	uint_t isDetached;
+	uint_t flags;
 	uint_t sched_policy;
 	uint_t inheritsched;
 	void *stack_addr;
@@ -95,6 +109,7 @@ struct thread_info
 	uint_t remote_pages_cntr;
 	uint_t spurious_pgfault_cntr;
 	uint_t sched_nr;
+	uint_t ppm_last_cid;
 	uint_t migration_fail_cntr;
 	uint_t migration_cntr;
 	bool_t isTraced;
@@ -128,10 +143,6 @@ struct thread_info
 	uint_t kstack_size;
 	struct event_s *e_info;
 	struct page_s *page;
-
-#if CONFIG_PPM_USE_INTERLEAVE
-	uint_t ppm_last_cid;
-#endif
 };
 
 
@@ -235,7 +246,7 @@ int sys_thread_join (pthread_t tid, void **thread_return);
 int sys_thread_detach (pthread_t tid);
 int sys_thread_getattr(pthread_attr_t *attr);
 int sys_thread_exit (void *exit_val);
-int sys_thread_migrate();
+int sys_thread_migrate(pthread_attr_t *thread_attr);
 int sys_thread_yield();
 int sys_thread_sleep();
 int sys_thread_wakeup(pthread_t tid, pthread_t *tid_tbl, uint_t count);
@@ -259,7 +270,7 @@ error_t thread_dup(struct task_s *task,
 		   struct cluster_s *dst_clstr,
 		   struct thread_s *src);
 
-error_t thread_migrate(struct thread_s *thread);
+error_t thread_migrate(struct thread_s *thread, sint_t cpu_gid);
 error_t thread_destroy(struct thread_s *thread);
 
 EVENT_HANDLER(thread_destroy_handler);

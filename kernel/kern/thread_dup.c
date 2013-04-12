@@ -66,6 +66,7 @@ error_t thread_dup(struct task_s *task,
 	dst->task                            = task;
 	dst->type                            = PTHREAD;
 	dst->info.sched_nr                   = 0;
+	dst->info.ppm_last_cid               = cid;
 	dst->info.migration_cntr             = 0;
 	dst->info.migration_fail_cntr        = 0;
 	dst->info.tm_exec                    = 0;
@@ -85,10 +86,6 @@ error_t thread_dup(struct task_s *task,
 	dst->info.attr.pid                   = task->pid;
 	dst->info.kstack_addr                = (uint_t*)dst;
 	dst->info.page                       = page;
-
-#if CONFIG_PPM_USE_INTERLEAVE
-	dst->info.ppm_last_cid               = cid;
-#endif
 	dst->signature                       = THREAD_ID;
 	
 	return 0;

@@ -99,10 +99,13 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	uint_t tm_end;
 	uint_t tm_bRemote;
 	uint_t tm_aRemote;
+	uint_t online_clusters;
+	uint_t threads_count;
 
-	tm_start = cpu_time_stamp();
-	this     = current_thread;
-	task     = this->task;
+	tm_start      = cpu_time_stamp();
+	this          = current_thread;
+	task          = this->task;
+	threads_count = task->threads_count;
 
 	if((tid == NULL) || (thread_attr == NULL))
 	{
@@ -139,6 +142,11 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 		err = EAGAIN;
 		goto fail_threads_limit;
 	}
+
+	if(this->info.attr.flags & PT_ATTR_INTERLEAVE_ALL)
+		attr.flags |= PT_ATTR_INTERLEAVE_ALL;
+
+	attr.flags &= ~(PT_ATTR_MEM_PRIO | PT_ATTR_INTERLEAVE_SEQ);
 
 	spinlock_lock(&task->th_lock);
 
@@ -210,11 +218,23 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	cpu     = &cluster->cpu_tbl[attr.cpu_lid];
 
 	event_send(&info.event, &cpu->re_listner);
-
-	tm_bRemote = cpu_time_stamp();
 	cpu_wbflush();
 
-	/* TODO: replace this active wait be a passive one */
+#endif // CONFIG_REMOTE_THREAD_CREATE
+
+        /* While awaiting for the remote thread creation, let's prepare the process page tables */
+	if(threads_count == 1)
+	{
+		online_clusters = arch_onln_cluster_nr();
+
+		/* Speculative: the remote thread creation may fail */
+		if((online_clusters > 1) && (this->info.attr.flags & PT_ATTR_AUTO_NXTT))
+			vmm_set_auto_migrate(&task->vmm, task->vmm.data_start, MGRT_DEFAULT);
+	}
+
+#if CONFIG_REMOTE_THREAD_CREATE
+	tm_bRemote = cpu_time_stamp();
+
 	while(info.isDone == false)
 	{
 		if(thread_sched_isActivated((volatile struct thread_s*)this))
@@ -223,11 +243,12 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 
 	err        = info.err;
 	tm_aRemote = cpu_time_stamp();
-
 #else
+
 	tm_bRemote = cpu_time_stamp();
 	err        = do_thread_create(&info);
 	tm_aRemote = cpu_time_stamp();
+
 #endif	/* CONFIG_REMOTE_THREAD_CREATE */
 
 	if(err) goto fail_remote;
@@ -238,6 +259,10 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 
 	sched_event = sched_event_make(info.new_thread, SCHED_OP_ADD_CREATED);
 	sched_event_send(info.sched_listner, sched_event);
+
+	/* Disable any sequential-phase affinity strategy */
+	this->info.attr.flags &= ~(PT_ATTR_MEM_PRIO | PT_ATTR_INTERLEAVE_SEQ);
+
 	tm_end = cpu_time_stamp();
 
 	printk(INFO,
@@ -276,21 +301,29 @@ fail_inval:
 	return err;
 }
 
+#if CONFIG_SHOW_THREAD_CREATE_MSG
+#define TIME_STAMP(x) (x) = cpu_time_stamp()
+#else
+#define TIME_STAMP(x)
+#endif
+
 error_t do_thread_create(thread_info_t *info)
 {
-	register uint_t online_clusters;
 	struct thread_s *new_thread;
 	struct task_s *task;
 	pthread_attr_t *attr;
 	error_t err;
+
+#if CONFIG_SHOW_THREAD_CREATE_MSG
 	uint_t tm_start;
 	uint_t tm_end;
 	uint_t tm_astep1;
 	uint_t tm_astep2;
 	uint_t tm_astep3;
 	uint_t tm_astep4;
+#endif
 
-	tm_start = cpu_time_stamp();
+	TIME_STAMP(tm_start);
 
 	task = info->task;
 	attr = info->attr;
@@ -316,7 +349,7 @@ error_t do_thread_create(thread_info_t *info)
 		attr->sigstack_size = SIG_DEFAULT_STACK_SIZE;
 	}
 
-	tm_astep1 = cpu_time_stamp();
+	TIME_STAMP(tm_astep1);
 
 	// Determinate New Thread Attributes (default values)
 	attr->sched_policy = SCHED_RR;
@@ -329,16 +362,6 @@ error_t do_thread_create(thread_info_t *info)
 		thread_migration_disabled(new_thread);
 	else
 		thread_migration_enabled(new_thread);
-
-	tm_astep2       = cpu_time_stamp();
-	online_clusters = arch_onln_cluster_nr();
-
-#if CONFIG_AUTO_NEXT_TOUCH
-	if((online_clusters != 1) && (task->threads_count == 1))
-		vmm_set_auto_migrate(&task->vmm, task->vmm.data_start);
-#endif
-
-	tm_astep3 = cpu_time_stamp();
 
 	// Add the new thread to the set of created threads
 	new_thread->info.order    = info->key;
@@ -355,7 +378,7 @@ error_t do_thread_create(thread_info_t *info)
 	task->th_tbl[new_thread->info.order] = new_thread;
 	spinlock_unlock(&task->th_lock);
 
-	tm_astep4 = cpu_time_stamp();
+	TIME_STAMP(tm_astep4);
 	
 	// Register the new thread 
 	err = sched_register(new_thread);
@@ -364,7 +387,8 @@ error_t do_thread_create(thread_info_t *info)
 	tm_create_compute(new_thread);
 	info->sched_listner = sched_get_listner(new_thread,SCHED_OP_ADD_CREATED);
 	info->new_thread    = new_thread;
-	tm_end              = cpu_time_stamp();
+	
+	TIME_STAMP(tm_end);
 
 #if CONFIG_SHOW_THREAD_CREATE_MSG
 	// m: mmap, 

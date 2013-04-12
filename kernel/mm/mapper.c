@@ -191,7 +191,6 @@ void mapper_remove_page(struct page_s *page)
 
 	mapper    = page->mapper;
 	req.type  = KMEM_PAGE;
-	req.flags = AF_USER;
 	req.ptr   = page;
 
 	mcs_lock(&mapper->m_lock, &irq_state);

@@ -84,8 +84,8 @@ error_t args_len(char **vect, uint_t pages_max, uint_t *pages_nr, uint_t *entrie
 			return err;
 		}
     
-		cntr ++;
-		len ++;
+		cntr  ++;
+		len   ++;
 		count += (ARROUND_UP(len, 8));
 		pgnr   = ARROUND_UP(count, PMM_PAGE_SIZE);
     
@@ -352,7 +352,7 @@ error_t do_exec(struct task_s *task,
 
 	task->vmm.heap_current += TASK_DEFAULT_HEAP_SIZE;
 
-	attr.isDetached = 1;
+	attr.flags = (current_thread->info.attr.flags | PT_ATTR_DETACH);
 	attr.sched_policy = SCHED_RR;
 	attr.cid = task->cluster->id;
 	attr.cpu_lid = task->cpu->lid;
@@ -366,8 +366,13 @@ error_t do_exec(struct task_s *task,
 
 	if((err = thread_create(task, &attr, &main_thread)))
 	{
-		printk(INFO, "INFO: %s: kernel has encountered an error while creating main thread of task [pid %d, err %d]\n",
-		       __FUNCTION__, task->pid, err);
+		printk(INFO,
+		       "INFO: %s: kernel has encountered an error while "
+		       "creating main thread of task [pid %d, err %d]\n",
+		       __FUNCTION__,
+		       task->pid,
+		       err);
+
 		goto DO_EXEC_ERR;
 	}
   
@@ -468,6 +473,8 @@ error_t task_load_init(struct task_s *task)
     
 		goto INIT_ERR;
 	}
+
+	current_thread->info.attr.flags = PT_ATTR_AUTO_NXTT | PT_ATTR_MEM_PRIO | PT_ATTR_AUTO_MGRT;
 
 	err = do_exec(init, INIT_PATH, &argv[0], &environ[0], &isFatal, &main_thread);
   

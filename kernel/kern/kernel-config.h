@@ -82,11 +82,6 @@
 #define CONFIG_BARRIER_ACTIVE_WAIT       no
 #define CONFIG_BARRIER_BORADCAST_UREAD   no
 #define CONFIG_MONO_CPU                  no
-#define CONFIG_PPM_USE_PRIO              yes
-#define CONFIG_PPM_USE_SEQ_NEXT_CID      no
-#define CONFIG_PPM_USE_INTERLEAVE        no
-#define CONFIG_PPM_USE_INTERLEAVE_ALL    no
-#define CONFIG_AUTO_NEXT_TOUCH           yes
 #define CONFIG_CPU_LOAD_BALANCING        yes
 #define CONFIG_PTHREAD_THREADS_MAX       2048
 #define CONFIG_PTHREAD_STACK_SIZE        512*1024
@@ -110,7 +105,9 @@
 #define CONFIG_SHOW_VMM_LOOKUP_TM        no
 #define CONFIG_SHOW_VMM_ERROR_MSG        no
 #define CONFIG_SHOW_SPURIOUS_PGFAULT     no
-#define CONFIG_SHOW_MIGRATE_MSG          no
+#define CONFIG_SHOW_MIGRATE_MSG          yes
+#define CONFIG_SHOW_VMMMGRT_MSG          no
+#define CONFIG_SHOW_SYSMGRT_MSG          no
 #define CONFIG_SHOW_REMOTE_PGALLOC       no
 #define CONFIG_SHOW_LOCAL_EVENTS         no
 #define CONFIG_SCHED_SHOW_NOTIFICATIONS  no

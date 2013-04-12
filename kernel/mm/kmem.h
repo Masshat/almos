@@ -87,11 +87,11 @@ struct kmem_objattr_s
 
 /* Allocation Hints */
 #define AF_HINT_MASK  0x0000FFFF
+#define AF_TTL_MASK   0x000000FF
 #define AF_TTL_LOW    0x00000008
 #define AF_TTL_NORM   0x00000020
 #define AF_TTL_AVRG   0x00000040
 #define AF_TTL_HIGH   0x00000080
-
 
 /* Allocation Flags */
 #define AF_NONE       0x00000000
@@ -102,21 +102,18 @@ struct kmem_objattr_s
 #define AF_PRIO       0x00100000
 #define AF_NORMAL     0x00200000
 #define AF_REMOTE     0x00400000
-
+#define AF_AFFINITY   0x00800000
 
 /* Predefined Allocation Flags */
 #define AF_BOOT      (AF_SYS | AF_URGENT)
-#define AF_EXCEPT    (AF_SYS | AF_URGENT | AF_TTL_LOW)
-#define AF_KERNEL    (AF_SYS | AF_PRIO   | AF_TTL_NORM)
-#define AF_USER      (AF_USR | AF_NORMAL | AF_TTL_AVRG)
+#define AF_EXCEPT    (AF_SYS | AF_URGENT   | AF_TTL_LOW)
+#define AF_KERNEL    (AF_SYS | AF_PRIO     | AF_TTL_NORM)
+#define AF_PGFAULT   (AF_USR | AF_AFFINITY | AF_TTL_AVRG)
+#define AF_USER      (AF_USR | AF_NORMAL   | AF_TTL_AVRG)
 
 
 /* Hints GET/SET Macros */
-#define AF_GETHINT(_FLAGS)         ((_FLAGS) & AF_HINT_MASK)
-#define AF_SETHINT(_FLAGS,_HINT)   (((_FLAGS) & ~(AF_HINT_MASK)) | ((_HINT) & AF_HINT_MASK))
-#define AF_MKHINT(_CID,_TLL)       (((_CID) << 0x8) | (_TTL & 0x7))
-#define AF_GETTTL(_HINT)           (((_HINT) & 0x7))
-#define AF_GETCID(_HINT)           ((((_HINT) >> 0x8) & 0x7))
+#define AF_GETTTL(_FLAGS)           (((_FLAGS) & AF_TTL_MASK))
 
 /* Kernel Memory Request */
 typedef struct kmem_req_s

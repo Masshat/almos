@@ -92,37 +92,56 @@ EVENT_HANDLER(migrate_event_handler)
  *
  * TODO: verify the compatiblity with !CONFIG_REMOTE_THREAD_CREATE
 */
-error_t thread_migrate(struct thread_s *this)
+error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 {
-	th_migrate_info_t info;
+	register uint_t cid, lid;
 	register uint_t tm_start;
 	register uint_t tm_end;
+	struct dqdt_cluster_s *logical;
+	struct cluster_s *cluster;
 	struct dqdt_attr_s attr;
 	struct task_s *task;
 	struct cpu_s *cpu;
+	th_migrate_info_t info;
 	uint_t tid,pid;
 	uint_t state;
 	error_t err;
 
-	task = this->task;
-	cpu  = current_cpu;
-	tid  = this->info.order;
-	pid  = task->pid;
+	task    = this->task;
+	cpu     = current_cpu;
+	tid     = this->info.order;
+	pid     = task->pid;
 
 	tm_start = cpu_time_stamp();
 
-	dqdt_attr_init(&attr, NULL);
-
-	err = dqdt_thread_migrate(dqdt_root, &attr);
-
-	if((err) || (attr.cpu == cpu))
+	if(target_gid < 0)
 	{
-		this->info.migration_fail_cntr ++;
+		dqdt_attr_init(&attr, NULL);
 
-		if(err == 0)
-			dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
+		logical = cpu->cluster->levels_tbl[0];
 
-		return EAGAIN;
+		err = dqdt_thread_migrate(logical, &attr);
+
+		if((err) || (attr.cpu == cpu))
+		{
+			this->info.migration_fail_cntr ++;
+
+			if(err == 0)
+				dqdt_update_threads_number(logical, cpu->lid, -1);
+
+			return EAGAIN;
+		}
+	}
+	else
+	{
+		lid             = arch_cpu_lid(target_gid, current_cluster->cpu_nr);
+		cid             = arch_cpu_cid(target_gid, current_cluster->cpu_nr);
+		cluster         = clusters_tbl[cid].cluster;
+		attr.cpu        = &cluster->cpu_tbl[lid];
+		attr.cluster    = cluster;
+		attr.tm_request = (uint_t)-1;
+
+		dqdt_update_threads_number(cluster->levels_tbl[0], lid, 1);
 	}
 
 	cpu_disable_all_irq(&state);
@@ -137,8 +156,18 @@ error_t thread_migrate(struct thread_s *this)
 	cpu_restore_irq(state);
 
 	err = cpu_context_save(&this->info.pss);
-	
-	if(err != 0) return 0;	   /* DONE */
+
+	if(err != 0) /* DONE */
+	{
+		if((task->threads_count == 1) &&
+		   (current_cluster->id != cpu->cluster->id) &&
+		   (this->info.attr.flags & PT_ATTR_AUTO_MGRT))
+		{
+			vmm_set_auto_migrate(&task->vmm, task->vmm.data_start, MGRT_STACK);
+		}
+
+		return 0;
+	}
 
 	info.victim        = this;
 	info.task          = task;
@@ -170,6 +199,7 @@ error_t thread_migrate(struct thread_s *this)
 
 	tm_end = cpu_time_stamp();
 
+#if CONFIG_SHOW_MIGRATE_MSG
 	printk(INFO,
 	       "INFO: pid %d, tid %d has been migrated from "
 	       "[cid %d, cpu %d] to [cid %d, cpu %d] [e:%u, d:%u, t:%u, r:%u]\n",
@@ -183,6 +213,7 @@ error_t thread_migrate(struct thread_s *this)
 	       attr.tm_request,
 	       tm_end - tm_start,
 	       info.event_tm);
+#endif
 
 	sched_remove(this);
 	return 0;
@@ -227,7 +258,7 @@ error_t do_migrate(th_migrate_info_t *info)
 	 * or by returning EAGIN so caller can redo
 	 * the whole action.*/
 	assert(err == 0);
-  
+
 	list_add_last(&task->th_root, &new->rope);
 	list_unlink(&victim->rope);
 	task->th_tbl[new->info.order] = new;
@@ -247,7 +278,7 @@ error_t do_migrate(th_migrate_info_t *info)
 
 	cpu_context_set_tid(&new->info.pss, (reg_t)new);
 	cpu_context_dup_finlize(&new->pws, &new->info.pss);
-	
+
 	thread_set_imported(new);
 	thread_clear_exported(new);
 	/* TODO: put a threshold on the migration number to prevent against permanent migration */
