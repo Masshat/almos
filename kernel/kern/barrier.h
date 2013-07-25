@@ -23,15 +23,16 @@
 #ifndef _BARRIER_H_
 #define _BARRIER_H_
 
+#include <config.h>
 #include <types.h>
 #include <mcs_sync.h>
 
 typedef enum
 {
-  BARRIER_INIT_PRIVATE,
-  BARRIER_WAIT,
-  BARRIER_DESTROY,
-  BARRIER_INIT_SHARED
+	BARRIER_INIT_PRIVATE,
+	BARRIER_WAIT,
+	BARRIER_DESTROY,
+	BARRIER_INIT_SHARED
 } barrier_operation_t;
 
 struct task_s;
@@ -42,38 +43,25 @@ struct cluster_s;
 
 struct barrier_s
 {
-  union
-  {
-    atomic_t waiting;
-    mcs_lock_t lock;
-  };
-
-  uint_t signature;
-  uint_t count;
-
-  union
-  {
-    uint_t hwid;
-    uint_t cntr;
-    cacheline_t pad;
-  };
-
-  uint_t state[2];
-  uint_t phase;
-  uint_t tm_first;
-  uint_t tm_last;
-  struct cluster_s *cluster;
-  error_t (*wait)(struct barrier_s *barrier);
-  struct wait_queue_db_s *wqdb_tbl[BARRIER_WQDB_NR];
-  struct page_s *pages_tbl[BARRIER_WQDB_NR];
-  uint_t scope;
-  struct task_s *owner;
-  const char *name;
-  struct event_s event;
+	atomic_t waiting;
+	uint_t signature;
+	struct task_s *owner;
+	uint_t count;
+	uint_t hwid;
+	uint_t state[2];
+	uint_t phase;
+	uint_t tm_first;
+	uint_t tm_last;
+	struct cluster_s *cluster;
+	struct wait_queue_db_s *wqdb_tbl[BARRIER_WQDB_NR];
+	struct page_s *pages_tbl[BARRIER_WQDB_NR];
+	const char *name;
+	struct event_s event;
 };
 
 error_t barrier_init(struct barrier_s *barrier, uint_t count, uint_t scope);
 error_t barrier_destroy(struct barrier_s *barrier);
+error_t barrier_wait(struct barrier_s *barrier);
 int sys_barrier(struct barrier_s **barrier, uint_t operation, uint_t count);
 
 KMEM_OBJATTR_INIT(wqdb_kmem_init);

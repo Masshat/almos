@@ -69,15 +69,14 @@ static void barrier_do_broadcast(struct barrier_s *barrier)
 	tm_start = cpu_time_stamp();
 	tm_first = barrier->tm_first;
 	tm_last  = barrier->tm_last;
+	wqdbsz   = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
 	ticket   = 0;
 
 #if ARCH_HAS_BARRIERS
-	count  = barrier->count; 
+	count    = barrier->count;
 #else
-	count  = barrier->count - 1;	/* last don't sleep */
+	count    = barrier->count - 1;	/* last don't sleep */
 #endif
-
-	wqdbsz = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
 
 	for(index = 0; ((index < BARRIER_WQDB_NR) && (ticket < count)); index++)
 	{
@@ -94,10 +93,14 @@ static void barrier_do_broadcast(struct barrier_s *barrier)
 			listner = wqdb->tbl[i].listner;
 #endif
 
-			if(event != 0)
+			if(listner != NULL)
 			{
-				wqdb->tbl[i].event = 0;
+				wqdb->tbl[i].listner = NULL;
+#if CONFIG_USE_SCHED_LOCKS
+				sched_wakeup((struct thread_s*) listner);
+#else
 				sched_event_send(listner, event);
+#endif
 				ticket ++;
 			}
 		}
@@ -135,7 +138,7 @@ static EVENT_HANDLER(barrier_broadcast_event)
 	return 0;
 }
 
-static error_t barrier_hw_wait(struct barrier_s *barrier)
+error_t barrier_wait(struct barrier_s *barrier)
 {
 	register uint_t event;
 	register void *listner;
@@ -151,13 +154,18 @@ static error_t barrier_hw_wait(struct barrier_s *barrier)
 	this   = current_thread;
 	index  = this->info.order;
   
-	if((barrier->signature != BARRIER_ID) || (barrier->owner != this->task))
+	if((barrier->signature != BARRIER_ID) || ((barrier->owner != NULL) && (barrier->owner != this->task)))
 		return EINVAL;
 
 	wqdbsz  = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
 	wqdb    = barrier->wqdb_tbl[index / wqdbsz];
+
+#if !(CONFIG_USE_SCHED_LOCKS)
 	event   = sched_event_make (this, SCHED_OP_WAKEUP);
 	listner = sched_get_listner(this, SCHED_OP_WAKEUP);
+#else
+	listenr = (void*)this;
+#endif
 
 	wqdb->tbl[index % wqdbsz].event   = event;
 	wqdb->tbl[index % wqdbsz].listner = listner;
@@ -177,6 +185,7 @@ static error_t barrier_hw_wait(struct barrier_s *barrier)
 
 	if(ticket == barrier->count)
 		barrier->tm_first = tm_now;
+
 	else if(ticket == 1)
 		barrier->tm_last  = tm_now;
   
@@ -192,7 +201,7 @@ static error_t barrier_hw_wait(struct barrier_s *barrier)
 
 #else  /* ! ARCH_HAS_BARRIERS */
 
-static error_t barrier_private_wait(struct barrier_s *barrier)
+error_t barrier_wait(struct barrier_s *barrier)
 {
 	register uint_t ticket;
 	register uint_t index;
@@ -205,76 +214,47 @@ static error_t barrier_private_wait(struct barrier_s *barrier)
 	this   = current_thread;
 	index  = this->info.order;
 
-	if((barrier->signature != BARRIER_ID) || (barrier->owner != this->task))
+	if((barrier->signature != BARRIER_ID) || ((barrier->owner != NULL) && (barrier->owner != this->task)))
 		return EINVAL;
 
 	wqdbsz = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
 	wqdb   = barrier->wqdb_tbl[index / wqdbsz];
 
+#if CONFIG_USE_SCHED_LOCKS
+	wqdb->tbl[index % wqdbsz].listner = (void*)this;
+#else
+	uint_t irq_state;
+	cpu_disable_all_irq(&irq_state); /* To prevent against any scheduler intervention */
 	wqdb->tbl[index % wqdbsz].event   = sched_event_make (this, SCHED_OP_WAKEUP);
 	wqdb->tbl[index % wqdbsz].listner = sched_get_listner(this, SCHED_OP_WAKEUP);
-  
+#endif
+
 	ticket = atomic_add(&barrier->waiting, -1);
-  
+
 	if(ticket == 1)
 	{
+#if !(CONFIG_USE_SCHED_LOCKS)
+		cpu_restore_irq(irq_state);
+#endif
 		barrier->tm_last = tm_now;
+		wqdb->tbl[index % wqdbsz].listner = NULL;
 		atomic_init(&barrier->waiting, barrier->count);
 		barrier_do_broadcast(barrier);
-    
 		return PTHREAD_BARRIER_SERIAL_THREAD;
 	}
 
 	if(ticket == barrier->count)
 		barrier->tm_first = tm_now;
-  
+
 	sched_sleep(this);
+
+#if !(CONFIG_USE_SCHED_LOCKS)
+	cpu_restore_irq(irq_state);
+#endif
 	return 0;
 }
 
 #endif	/* ARCH_HAS_BARRIERS */
-
-static error_t barrier_shared_wait(struct barrier_s *barrier)
-{
-	register uint_t ticket;
-	register uint_t wqdbsz;
-	register wqdb_t *wqdb;
-	struct thread_s *this;
-	uint_t irq_state;
-	uint_t tm_now;
-  
-	tm_now = cpu_time_stamp();
-  
-	if(barrier->signature != BARRIER_ID)
-		return EINVAL;
-
-	this   = current_thread;
-	wqdbsz = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
-
-	mcs_lock(&barrier->lock, &irq_state);
-	ticket = barrier->cntr ++;
-	wqdb   = barrier->wqdb_tbl[ticket / wqdbsz];
-
-	if(barrier->cntr == barrier->count)
-	{
-		barrier->tm_last = tm_now;
-		barrier_do_broadcast(barrier);
-		barrier->cntr = 0;
-		mcs_unlock(&barrier->lock, irq_state);
-		return PTHREAD_BARRIER_SERIAL_THREAD;
-	}
-
-	if(ticket == 0)
-		barrier->tm_first = tm_now;
-
-	wqdb->tbl[ticket % wqdbsz].event   = sched_event_make (this, SCHED_OP_WAKEUP);
-	wqdb->tbl[ticket % wqdbsz].listner = sched_get_listner(this, SCHED_OP_WAKEUP);
-  
-	mcs_unlock(&barrier->lock, irq_state);
-	sched_sleep(this);
-
-	return 0;
-}
 
 KMEM_OBJATTR_INIT(wqdb_kmem_init)
 {
@@ -315,32 +295,20 @@ error_t barrier_init(struct barrier_s *barrier, uint_t count, uint_t scope)
     
 	if(count > BARRIER_WQDB_NR*wqdbsz) 
 		return ENOMEM;
-    
-	if(scope == BARRIER_INIT_PRIVATE)
-	{
-		barrier->owner = current_task;
+
+	barrier->owner = (scope == BARRIER_INIT_PRIVATE) ? current_task : NULL;
 
 #if ARCH_HAS_BARRIERS
-		barrier->cluster = current_cluster;
-		event_set_handler(&barrier->event, &barrier_broadcast_event);
-		event_set_argument(&barrier->event, barrier);
-		barrier->hwid = arch_barrier_init(barrier->cluster, &barrier->event, count);
+	barrier->cluster = current_cluster;
+	event_set_handler(&barrier->event, &barrier_broadcast_event);
+	event_set_argument(&barrier->event, barrier);
+	barrier->hwid = arch_barrier_init(barrier->cluster, &barrier->event, count);
     
-		if(barrier->hwid < 0) 
-			return ENOMEM;		/* TODO: we can use software barrier instead */
-    
-		barrier->wait = &barrier_hw_wait;
+	if(barrier->hwid < 0)
+		return ENOMEM;		/* TODO: we can use software barrier instead */
 #else
-		atomic_init(&barrier->waiting, count);
-		barrier->wait = &barrier_private_wait;
+	atomic_init(&barrier->waiting, count);
 #endif	/* ARCH_HAS_BARRIERS */
-	}
-	else
-	{
-		mcs_lock_init(&barrier->lock, "Barrier-Lock");
-		barrier->cntr = 0;
-		barrier->wait = &barrier_shared_wait;
-	}
 
 	req.type  = KMEM_PAGE;
 	req.size  = 0;
@@ -379,7 +347,6 @@ error_t barrier_init(struct barrier_s *barrier, uint_t count, uint_t scope)
 	barrier->state[0]  = 0;
 	barrier->state[1]  = 0;
 	barrier->phase     = 0;
-	barrier->scope     = scope;
 	barrier->name      = "Barrier-Sync";
   
 	return 0;
@@ -393,25 +360,17 @@ error_t barrier_destroy(struct barrier_s *barrier)
 	if(barrier->signature != BARRIER_ID)
 		return EINVAL;
 
-	if((barrier->scope == BARRIER_INIT_PRIVATE) && (barrier->owner != current_task))
+	if((barrier->owner != NULL) && (barrier->owner != current_task))
 		return EINVAL;
 
 	req.type = KMEM_PAGE;
 
-	if (barrier->scope == BARRIER_INIT_PRIVATE)
-	{
 #if ARCH_HAS_BARRIERS
-		(void) arch_barrier_destroy(barrier->cluster, barrier->hwid);
+	(void) arch_barrier_destroy(barrier->cluster, barrier->hwid);
 #else
-		cntr = atomic_get(&barrier->waiting);
-		if(cntr != 0) return EBUSY;
+	cntr = atomic_get(&barrier->waiting);
+	if(cntr != 0) return EBUSY;
 #endif	/* ARCH_HAS_BARRIERS */
-	}
-	else
-	{
-		if(barrier->cntr != 0)
-			return EBUSY;
-	}
 
 	barrier->signature = 0;
 	cpu_wbflush();
