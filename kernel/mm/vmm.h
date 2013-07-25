@@ -137,6 +137,12 @@ error_t vmm_madvise_willneed(struct vmm_s *vmm, uint_t start, uint_t len);
 
 error_t vmm_set_auto_migrate(struct vmm_s *vmm, uint_t start, uint_t flags);
 
+/* Hypothesis: the region is shared-anon, mapper list is rdlocked, page is locked */
+error_t vmm_broadcast_inval(struct vm_region_s *region, struct page_s *page, struct page_s **new);
+
+/* Hypothesis: the region is shared-anon, mapper list is rdlocked, page is locked */
+error_t vmm_migrate_shared_page_seq(struct vm_region_s *region, struct page_s *page, struct page_s **new);
+
 /** Page Fault Handler */
 error_t vmm_fault_handler(uint_t bad_vaddr, uint_t flags);
 

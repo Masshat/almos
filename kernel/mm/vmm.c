@@ -226,7 +226,6 @@ error_t vmm_do_shared_anon_mapping(struct vm_region_s *region)
 	struct mapper_s *mapper;
 	kmem_req_t req;
 	error_t err;
-	uint_t irq_state;
 
 	req.type  = KMEM_MAPPER;
 	req.flags = AF_KERNEL;
@@ -244,9 +243,9 @@ error_t vmm_do_shared_anon_mapping(struct vm_region_s *region)
 	region->vm_mapper = mapper;
 	region->vm_file   = NULL;
 
-	mcs_lock(&mapper->m_reg_lock, &irq_state);
-	list_add_last(&mapper->m_reg_root, &region->vm_mlist);
-	mcs_unlock(&mapper->m_reg_lock, irq_state);
+	rwlock_wrlock(&mapper->m_reg_lock);
+	list_add_last(&mapper->m_reg_root, &region->vm_shared_list);
+	rwlock_unlock(&mapper->m_reg_lock);
 
 	return 0;
 
@@ -510,6 +509,319 @@ error_t vmm_madvise_willneed(struct vmm_s *vmm, uint_t start, uint_t len)
 	return 0;
 }
 
+error_t vmm_inval_shared_page(struct vm_region_s *region, vma_t vaddr, ppn_t ppn)
+{
+	pmm_page_info_t current;
+	error_t err;
+
+	err = pmm_get_page(&region->vmm->pmm, vaddr, &current);
+
+	if((err) || (current.ppn != ppn))
+		goto ended;
+
+	current.ppn     = 0;
+	current.attr    = 0;
+	current.cluster = NULL;	/* PTE exist */
+
+	err = pmm_set_page(&region->vmm->pmm, vaddr, &current);
+
+ended:
+	return err;
+}
+
+error_t vmm_update_shared_page(struct vm_region_s *region, vma_t vaddr, ppn_t ppn)
+{
+	pmm_page_info_t current;
+	error_t err;
+
+	err = pmm_get_page(&region->vmm->pmm, vaddr, &current);
+
+	if((err) || (current.attr != 0))
+		goto ended;
+
+	current.ppn     = ppn;
+	current.attr    = region->vm_pgprot;
+	current.cluster = NULL;	/* this function is called after invalidate one */
+
+	err = pmm_set_page(&region->vmm->pmm, vaddr , &current);
+
+ended:
+	return err;
+}
+
+typedef struct vmm_event_info_s
+{
+	struct event_s event;
+	volatile struct page_s *page;
+} vmm_event_info_t;
+
+EVENT_HANDLER(vmm_inval_page_event_handler)
+{
+	vmm_event_info_t *info;
+	struct page_s *page;
+	struct vm_region_s *region;
+	error_t err;
+	vma_t vaddr;
+	ppn_t ppn;
+
+	region = event_get_senderId(event);
+	info   = event_get_argument(event);
+	err    = event_get_error(event);
+	page   = (struct page_s*) info->page;
+	vaddr  = (page->index << PMM_PAGE_SHIFT) + region->vm_start + region->vm_offset;
+	ppn    = ppm_page2ppn(page);
+
+#if 0
+	printk(INFO, "%s: cpu %d, region <%x,%x>, page index %d, err %d: STARTED\n",
+	       __FUNCTION__,
+	       cpu_get_id(),
+	       region->vm_start,
+	       region->vm_limit,
+	       page->index,
+	       err);
+#endif
+
+	if(page == NULL)
+	{
+		printk(INFO, "%s: cpu %d, region <%x,%x> page is null\n",
+		       __FUNCTION__,
+		       cpu_get_id(),
+		       region->vm_start,
+		       region->vm_limit);
+
+		return 0;
+	}
+
+	if(err == EAGAIN)
+		err = vmm_broadcast_inval(region, page, NULL);
+	else
+		err = vmm_inval_shared_page(region, vaddr, ppn);
+
+	event_set_error(event, err);
+
+	cpu_wbflush();
+
+	info->page = NULL;
+
+	cpu_wbflush();
+
+#if 0
+	printk(INFO, "%s: cpu %d, region <%x,%x>, page index %d, err %d: ENDED\n",
+	       __FUNCTION__,
+	       cpu_get_id(),
+	       region->vm_start,
+	       region->vm_limit,
+	       page->index,
+	       err);
+#endif
+
+	return 0;
+}
+
+/* Hypothesis: region is shared-anon, mapper list is rdlocked, page is locked */
+error_t vmm_broadcast_inval(struct vm_region_s *region, struct page_s *page, struct page_s **new)
+{
+	register struct vm_region_s *reg;
+	register struct task_s *task;
+	register struct task_s *this_task;
+	register uint_t i, entries_nr;
+	register uint_t my_gid;
+	struct page_s *tmp_pg;
+	struct list_entry *iter;
+	vmm_event_info_t *tbl;
+	kmem_req_t req;
+	uint_t count;
+	sint_t last;
+	vma_t vaddr;
+	ppn_t ppn;
+	error_t err;
+
+	vaddr      = (page->index << PMM_PAGE_SHIFT) + region->vm_start + region->vm_offset;
+	ppn        = ppm_page2ppn(page);
+	this_task  = (new == NULL) ? NULL : current_task;
+	my_gid     = cpu_get_id();
+	entries_nr = PMM_PAGE_SIZE / sizeof(*tbl);
+	req.type   = KMEM_PAGE;
+	req.size   = 0;
+	req.flags  = AF_USER;
+
+	tmp_pg = kmem_alloc(&req);
+
+	if(tmp_pg == NULL)
+		return ENOMEM;
+
+	last = -1;
+	i    = 0;
+	iter = &region->vm_shared_list;
+	tbl  = ppm_page2addr(tmp_pg);
+
+	do
+	{
+		reg  = list_element(iter, struct vm_region_s, vm_shared_list);
+
+		task = vmm_get_task(reg->vmm);
+
+		event_set_senderId(&tbl[i].event, reg);
+
+		if(task == this_task)
+		{
+			tbl[i].page = NULL;
+		}else if(task->cpu->gid == my_gid)
+		{
+			last = i;
+			tbl[i].page = (struct page_s*) 1;
+		}
+		else
+		{
+			tbl[i].page = page;
+			event_set_argument(&tbl[i].event, &tbl[i]);
+			event_set_error(&tbl[i].event, (i == (entries_nr - 1)) ? EAGAIN : 0);
+			event_set_priority(&tbl[i].event, E_TLB);
+			event_set_handler(&tbl[i].event, vmm_inval_page_event_handler);
+
+			cpu_wbflush();
+
+			event_send(&tbl[i].event, &task->cpu->re_listner);
+		}
+
+		iter = list_next(&region->vm_mapper->m_reg_root, iter);
+		i ++;
+
+	}while((i < entries_nr) && (iter != NULL));
+
+	count = i;
+
+	for(i = 0; i <= last; i++)
+	{
+		if(tbl[i].page == (struct page_s*) 1)
+		{
+			err = vmm_inval_shared_page(event_get_senderId(&tbl[i].event), vaddr, ppn);
+			event_set_error(&tbl[i].event, err);
+			tbl[i].page = NULL;
+		}
+	}
+
+	if(new != NULL)
+	{
+		*new = kmem_alloc(&req);
+
+		if(*new != NULL)
+		{
+			page_copy(*new, page);
+
+			(*new)->mapper = page->mapper;
+			(*new)->index  = page->index;
+
+			if(PAGE_IS(page, PG_DIRTY))
+				PAGE_SET(*new, PG_DIRTY);
+		}
+	}
+
+	for(err = 0, i = 0; i < count; i++)
+	{
+		while(tbl[i].page != NULL)
+			sched_yield(current_thread);
+
+		err = (event_get_error(&tbl[i].event) != 0) ? ECANCELED : err;
+	}
+
+	if((err) && (new != NULL) && (*new != NULL))
+	{
+		/* TODO: differs this kmem_free */
+		req.ptr = *new;
+		kmem_free(&req);
+		*new = NULL;
+	}
+
+	req.ptr = tmp_pg;
+	kmem_free(&req);
+	return err;
+}
+
+/* Hypothesis: the region is shared-anon, mapper list is rdlocked, page is locked */
+error_t vmm_migrate_shared_page_seq(struct vm_region_s *region, struct page_s *page, struct page_s **new)
+{
+	register struct vm_region_s *reg;
+	register struct task_s *task;
+	register struct task_s *this_task;
+	struct page_s *new_pg;
+	struct list_entry *iter;
+	kmem_req_t req;
+	vma_t vaddr;
+	ppn_t ppn;
+	error_t err;
+
+	vaddr     = (page->index << PMM_PAGE_SHIFT) + region->vm_start + region->vm_offset;
+	ppn       = ppm_page2ppn(page);
+	this_task = (new == NULL) ? NULL : current_task;
+	iter      = &region->vm_shared_list;
+	err       = ECANCELED;
+
+	/* Invalidate All */
+	do
+	{
+		reg  = list_element(iter, struct vm_region_s, vm_shared_list);
+
+		task = vmm_get_task(reg->vmm);
+
+		if(task != this_task)
+		{
+			err = vmm_inval_shared_page(reg, vaddr, ppn);
+
+			if(err) goto fail_inval;
+		}
+
+		iter = list_next(&region->vm_mapper->m_reg_root, iter);
+
+	}while(iter != NULL);
+
+	req.type  = KMEM_PAGE;
+	req.size  = 0;
+	req.flags = AF_USER;
+
+	new_pg    = kmem_alloc(&req);
+	*new      = new_pg;
+
+	if(new_pg == NULL)
+	{
+		err = ENOMEM;
+		goto fail_alloc;
+	}
+
+	page_copy(new_pg, page);
+
+	page_lock(new_pg);
+
+	new_pg->mapper = page->mapper;
+	new_pg->index  = page->index;
+
+	/* TODO: do the complet job regading dirty page */
+	if(PAGE_IS(page, PG_DIRTY))
+		PAGE_SET(new_pg, PG_DIRTY);
+
+	ppn  = ppm_page2ppn(new_pg);
+	iter = &region->vm_shared_list;
+
+	/* Update All */
+	do
+	{
+		reg  = list_element(iter, struct vm_region_s, vm_shared_list);
+
+		task = vmm_get_task(reg->vmm);
+
+		if(task != this_task)
+			(void) vmm_update_shared_page(reg, vaddr, ppn);
+
+		iter = list_next(&region->vm_mapper->m_reg_root, iter);
+
+	}while(iter != NULL);
+
+	page_unlock(new_pg);
+
+fail_alloc:
+fail_inval:
+	return err;
+}
 
 static inline error_t vmm_do_migrate(struct vm_region_s *region, pmm_page_info_t *pinfo, uint_t vaddr)
 {
