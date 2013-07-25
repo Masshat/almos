@@ -205,11 +205,6 @@ error_t pmm_set_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info)
       
 		*pde = (attr ^ PMM_HUGE) | (ppn >> 9);
 		cpu_wbflush();
-
-#if CONFIG_MONO_CPU
-		pmm_tlb_flush_vaddr(vaddr, PMM_UNKNOWN);
-#endif
-
 		return 0;
 	}
 
@@ -244,10 +239,6 @@ error_t pmm_set_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info)
 	pte[0] = attr;
 	pte[1] = ppn;
 	cpu_wbflush();
-
-#if CONFIG_MONO_CPU
-	pmm_tlb_flush_vaddr(vaddr, PMM_UNKNOWN);
-#endif
 	return 0;
 }
 
