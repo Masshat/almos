@@ -62,13 +62,10 @@ int pthread_mutexattr_init(pthread_mutexattr_t *attr)
 
 int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr, int pshared)
 {
-	if(attr == NULL)
+	if((attr == NULL) || ((pshared != PTHREAD_PROCESS_SHARED) && (pshared != PTHREAD_PROCESS_PRIVATE)))
 		return EINVAL;
   
-	if(pshared == PTHREAD_PROCESS_SHARED)
-		return ENOSYS;
-
-	attr->scope = PTHREAD_PROCESS_PRIVATE;
+	attr->scope = attr->scope;
 	return 0;
 }
 
@@ -123,14 +120,17 @@ int pthread_mutex_init (pthread_mutex_t *mutex, const pthread_mutexattr_t * attr
 	}
 
 	err = pthread_spin_init(&mutex->lock, 0);
-  
+
 	if(err) return err;
-  
+
 	mutex->value      = __PTHREAD_OBJECT_FREE;
 	mutex->waiting    = 0;
 	mutex->attr.type  = attr->type;
 	mutex->attr.scope = attr->scope;
 	mutex->attr.cntr  = attr->cntr;
+
+	if(mutex->attr.scope == PTHREAD_PROCESS_SHARED)
+		return sem_init(&mutex->sem, PTHREAD_PROCESS_SHARED, 1);
 
 	return 0;
 }
@@ -156,12 +156,15 @@ int pthread_mutex_lock (pthread_mutex_t *mutex)
 
 	if((mutex->attr.type == PTHREAD_MUTEX_RECURSIVE) && (mutex->value == this))
 	{
-		mutex->attr.cntr += 1;	
+		mutex->attr.cntr += 1;
 		return 0;
 	}
 
 	if(mutex->value == this)
 		return EDEADLK;
+
+	if(mutex->attr.scope == PTHREAD_PROCESS_SHARED)
+		return sem_wait(&mutex->sem);
 
 	for(cntr = 0; ((cntr < limit2) && (mutex->value != __PTHREAD_OBJECT_FREE)); cntr++)
 	{
@@ -232,6 +235,16 @@ int pthread_mutex_unlock (pthread_mutex_t *mutex)
 		return 0;
 	}
 
+	if(mutex->attr.scope == PTHREAD_PROCESS_SHARED)
+	{
+		if(mutex->value != this)
+			err = EPERM;
+		else
+			err = sem_post(&mutex->sem);
+
+		return err;
+	}
+
 #if USE_PTSPINLOCK 
 	err = pthread_spin_lock(&mutex->lock);
 	if(err) return err;
@@ -299,9 +312,12 @@ int pthread_mutex_trylock (pthread_mutex_t *mutex)
 	if(mutex->value == this)
 		return EDEADLK;
 
+	if(mutex->attr.scope == PTHREAD_PROCESS_SHARED)
+		return sem_trywait(&mutex->sem);
+
 	if(mutex->value != __PTHREAD_OBJECT_FREE)
 		return EBUSY;
-  
+
 #if USE_PTSPINLOCK
 	err = pthread_spin_lock(&mutex->lock);
 	if(err) return err;
@@ -330,6 +346,9 @@ int pthread_mutex_destroy (pthread_mutex_t *mutex)
 
 	if(mutex == NULL)
 		return EINVAL;
+
+	if(mutex->attr.scope == PTHREAD_PROCESS_SHARED)
+		return sem_destroy(&mutex->sem);
 
 	print_mutex(mutex);
 

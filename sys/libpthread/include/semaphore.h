@@ -23,7 +23,7 @@
 #ifndef _SEMAPHORE_H_
 #define _SEMAPHORE_H_
 
-#include <sys/types.h>
+typedef unsigned long sem_t;
 
 int sem_init(sem_t *sem, int pshared, unsigned int value);
 int sem_getvalue(sem_t *sem, int *value);

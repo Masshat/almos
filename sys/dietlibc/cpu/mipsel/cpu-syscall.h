@@ -33,7 +33,7 @@ static inline void cpu_set_tls(void *ptr)
 static inline void* cpu_get_tls(void)
 {
   register unsigned long ptr;
-  asm volatile ("or   %0,  $0,  $27" :"=r" (ptr));
+  asm volatile ("or   %0,  $0,  $27" :"=&r" (ptr));
   return (void*) ptr;
 }
 
@@ -65,7 +65,7 @@ static inline bool_t cpu_atomic_cas(void *ptr, sint_t old, sint_t new)
      "sync                               \n"
      ".set reorder                       \n"
      "1:                                 \n"
-     : "=r" (isAtomic): "r" (ptr), "r" (old) , "r" (new) : "$3", "$8"
+     : "=&r" (isAtomic): "r" (ptr), "r" (old) , "r" (new) : "$3", "$8"
      );
 
   return isAtomic;
@@ -126,7 +126,7 @@ static inline uint_t cpu_load_word(void *ptr)
   
   __asm__ volatile
     ("lw      %0,      0(%1)             \n"
-     : "=r" (val) : "r"(ptr));
+     : "=&r" (val) : "r"(ptr));
 
   return val;
 }
@@ -169,7 +169,7 @@ static inline bool_t cpu_spinlock_trylock (void *lock)
      "sync                               \n"
      "3:                                 \n"
      ".set reorder                       \n"
-     : "=r" (state) : "r" (lock) : "$2","$3"
+     : "=&r" (state) : "r" (lock) : "$2","$3"
      );
   
   return state;

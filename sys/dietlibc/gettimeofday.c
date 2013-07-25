@@ -27,6 +27,7 @@
 int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
   tv->tv_sec = clock();
+  tv->tv_usec = 0;
   return 0;
 }
 

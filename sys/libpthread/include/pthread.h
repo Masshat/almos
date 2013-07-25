@@ -26,8 +26,7 @@
 #include <sys/types.h>
 #include <sched.h>
 #include <sys/list.h>
-
-#define USE_USER_MUTEX 1
+#include <semaphore.h>
 
 /* START COPYING FROM KERNEL HEADER */
 #define __PT_ATTR_DEFAULT             0x000
@@ -77,8 +76,8 @@ typedef struct
 #define PTHREAD_INHERIT_SCHED         1
 #define PTHREAD_SCOPE_SYSTEM          0
 #define PTHREAD_SCOPE_PROCESS         1
-#define PTHREAD_PROCESS_SHARED        0
-#define PTHREAD_PROCESS_PRIVATE       1
+#define PTHREAD_PROCESS_PRIVATE       0
+#define PTHREAD_PROCESS_SHARED        1
 #define SEM_VALUE_MAX                 PTHREAD_THREADS_MAX
 
 struct __shared_s
@@ -128,6 +127,11 @@ void __pthread_barrier_init(void);
 #define __PTHREAD_OBJECT_BUSY      0x5A5A5A5A
 #define __PTHREAD_OBJECT_FREE      0xC0A5C0A5
 
+typedef unsigned long pthread_t;
+typedef unsigned long pthread_rwlock_t;
+typedef unsigned long pthread_rwlockattr_t;
+typedef unsigned long pthread_key_t;
+
 typedef struct
 { 
 	uint_t val __CACHELINE;
@@ -140,14 +144,14 @@ typedef struct
 
 typedef struct
 {
+	int  scope;
 	uint_t  type;
-	uint_t  scope;
 	uint_t  cntr;
 }pthread_mutexattr_t;
 
-#if USE_USER_MUTEX
 typedef struct 
 {
+	sem_t sem;
 	pthread_spinlock_t lock;
 	volatile uint_t value    __CACHELINE;
 	uint_t waiting           __CACHELINE;
@@ -156,7 +160,8 @@ typedef struct
 }pthread_mutex_t;
 
 #define __MUTEX_INITIALIZER(_t)						\
-	{								\
+	{							        \
+		.sem     = 0,						\
 		.lock    = {.val = __PTHREAD_OBJECT_FREE},		\
 		.value   = __PTHREAD_OBJECT_FREE,		        \
 		.waiting = 0,				                \
@@ -167,21 +172,23 @@ typedef struct
 #define PTHREAD_MUTEX_INITIALIZER               __MUTEX_INITIALIZER(PTHREAD_MUTEX_DEFAULT)
 #define PTHREAD_RECURSIVE_MUTEX_INITIALIZER     __MUTEX_INITIALIZER(PTHREAD_MUTEX_RECURSIVE)
 #define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER    __MUTEX_INITIALIZER(PTHREAD_MUTEX_ERRORCHECK)
-#else
-typedef struct
-{
-	sem_t sem;
-}pthread_mutex_t;
-#endif
 
 typedef struct
 {
+	int scope;
+	void *sysid;
 	pthread_spinlock_t lock;
 	uint_t count             __CACHELINE;
 	struct list_entry queue  __CACHELINE;
 }pthread_cond_t;
 
-#define PTHREAD_COND_INITIALIZER  {.lock = {.val = __PTHREAD_OBJECT_FREE}, .count = 0, .queue = {.next = 0, .pred = 0}}
+#define PTHREAD_COND_INITIALIZER					\
+	{								\
+		.scope = PTHREAD_PROCESS_PRIVATE,			\
+		.lock  = {.val = __PTHREAD_OBJECT_FREE},		\
+		.count = 0,     					\
+		.queue = {.next = 0, .pred = 0}         		\
+	}
 
 typedef struct
 {
@@ -191,15 +198,20 @@ typedef struct
 
 #define PTHREAD_BARRIER_SERIAL_THREAD 1
 
-#if CONFIG_BARRIER_USE_KERNEL_SUPPORT
-typedef unsigned long pthread_barrier_t;
-#else
+typedef struct
+{
+	sint_t scope;
+}pthread_barrierattr_t;
+
+typedef struct
+{
+	sint_t scope;
+}pthread_condattr_t;
+
 typedef struct 
 {
-	union {
-		uint_t signature;
-		__cacheline_t pading;
-	};
+	int scope;
+	void *sysid;
    
 	__cacheline_t cntr;
 	__cacheline_t count;
@@ -211,7 +223,6 @@ typedef struct
 		__cacheline_t pading;
 	};
 }pthread_barrier_t;
-#endif	/* CONFIG_BARRIER_USE_KERNEL_SUPPORT */
 
 #define PTHREAD_ONCE_INIT {.lock = 0, .state = 0}
 
@@ -270,6 +281,8 @@ int  pthread_mutex_destroy(pthread_mutex_t *mutex);
 
 /** Condition Variable Sync Object */
 int pthread_cond_init(pthread_cond_t *cond, pthread_condattr_t *cond_attr);
+int pthread_condattr_setpshared(pthread_condattr_t *attr, int pshared);
+int pthread_condattr_getpshared(pthread_condattr_t *attr, int *pshared);
 int pthread_cond_signal(pthread_cond_t *cond);
 int pthread_cond_broadcast(pthread_cond_t *cond);
 int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
@@ -285,6 +298,10 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock);
 
 /** Barrier Sync Object */
+int pthread_barrierattr_destroy(pthread_barrierattr_t *attr);
+int pthread_barrierattr_init(pthread_barrierattr_t *attr);
+int pthread_barrierattr_getpshared(pthread_barrierattr_t *attr, int *scope);
+int pthread_barrierattr_setpshared(pthread_barrierattr_t *attr, int scope);
 int pthread_barrier_init (pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned count);
 int pthread_barrier_wait (pthread_barrier_t *barrier);
 int pthread_barrier_destroy(pthread_barrier_t *barrier);

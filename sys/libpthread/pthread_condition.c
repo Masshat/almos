@@ -36,12 +36,48 @@ typedef enum
 	CV_DESTROY
 } cv_operation_t;
 
-static int __sys_cond_var(pthread_cond_t *cv, int operation, sem_t *sem)
+static int __sys_cond_var(void *sysid, int operation, sem_t *sem)
 {
 	register int retval;
   
-	retval = (int)cpu_syscall((void*)cv,(void*)operation,(void*)sem,NULL,SYS_COND_VAR);
+	retval = (int)cpu_syscall(sysid,(void*)operation,(void*)sem,NULL,SYS_COND_VAR);
 	return retval;
+}
+
+int pthread_condattr_init(pthread_condattr_t *attr)
+{
+	if(attr == NULL)
+		return EINVAL;
+
+	attr->scope = PTHREAD_PROCESS_PRIVATE;
+	return 0;
+}
+
+int pthread_condattr_destroy(pthread_condattr_t *attr)
+{
+	if(attr == NULL)
+		return EINVAL;
+
+	attr->scope = -1;
+	return 0;
+}
+
+int pthread_condattr_getpshared(pthread_condattr_t *attr, int *scope)
+{
+	if((attr == NULL) || (attr->scope < 0) || (scope == NULL))
+		return EINVAL;
+
+	*scope = attr->scope;
+	return 0;
+}
+
+int pthread_condattr_setpshared(pthread_condattr_t *attr, int scope)
+{
+	if((attr == NULL) || ((scope != PTHREAD_PROCESS_PRIVATE) && (scope != PTHREAD_PROCESS_SHARED)))
+		return EINVAL;
+
+	attr->scope = scope;
+	return 0;
 }
 
 int pthread_cond_init(pthread_cond_t *cond, pthread_condattr_t *cond_attr)
@@ -49,6 +85,14 @@ int pthread_cond_init(pthread_cond_t *cond, pthread_condattr_t *cond_attr)
 	int err;
 
 	if(cond == NULL) return EINVAL;
+
+	if((cond_attr != NULL) && (cond_attr->scope == PTHREAD_PROCESS_SHARED))
+	{
+		cond->scope = PTHREAD_PROCESS_SHARED;
+		return __sys_cond_var(&cond->sysid, CV_INIT, NULL);
+	}
+
+	cond->scope = PTHREAD_PROCESS_PRIVATE;
 
 	err = pthread_spin_init(&cond->lock, 0);
 
@@ -58,28 +102,18 @@ int pthread_cond_init(pthread_cond_t *cond, pthread_condattr_t *cond_attr)
 	return 0;
 }
 
-
 int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
 {
 	register __pthread_tls_t *tls;
 	register struct __shared_s *shared;
 	int err;
 
-	if(cond == NULL) return EINVAL;
+	if((cond == NULL) || (mutex == NULL) || (mutex->attr.scope != cond->scope))
+		return EINVAL;
 
-#if 0
-	err = pthread_spin_lock(&cond->lock);
-  
-	if(err) return err;
+	if(cond->scope == PTHREAD_PROCESS_SHARED)
+		return __sys_cond_var(&cond->sysid, CV_WAIT, &mutex->sem);
 
-	err = pthread_mutex_unlock(mutex);
-
-	if(err)
-	{
-		(void)pthread_spin_unlock(&cond->lock);
-		return err;
-	}
-#endif
 	if(cond->count == 0)
 		list_root_init(&cond->queue);
   
@@ -89,11 +123,8 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
 	shared = (struct __shared_s*)__pthread_tls_get(tls, __PT_TLS_SHARED);
 
 	list_add_last(&cond->queue, &shared->list);
-#if 0
-	(void)pthread_spin_unlock(&cond->lock);
-#else
+
 	(void)pthread_mutex_unlock(mutex);
-#endif
 
 	/* TODO: compute syscall return value (signals treatment) */
 	(void)cpu_syscall(NULL, NULL, NULL, NULL, SYS_SLEEP);
@@ -109,22 +140,18 @@ int pthread_cond_signal(pthread_cond_t *cond)
 
 	if(cond == NULL) return EINVAL;
 
-#if 0
-	err = pthread_spin_lock(&cond->lock);
-
-	if(err) return err;
-#endif
+	if(cond->scope == PTHREAD_PROCESS_SHARED)
+		return __sys_cond_var(&cond->sysid, CV_SIGNAL, NULL);
 
 	if(cond->count == 0)
-		return 0;//pthread_spin_unlock(&cond->lock);
+		return 0;
 
 	next = list_first(&cond->queue, struct __shared_s, list);
 	list_unlink(&next->list);
 	cond->count --;
 
-	//err = pthread_spin_unlock(&cond->lock);
 	(void)cpu_syscall((void*)next->tid, NULL, NULL, NULL, SYS_WAKEUP);
-	return 0;//err;
+	return 0;
 }
 
 int pthread_cond_broadcast(pthread_cond_t *cond)
@@ -137,20 +164,18 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
 	int err = 0;
   
 	if(cond == NULL) return EINVAL;
-
-	//err = pthread_spin_lock(&cond->lock);
-
-	//if(err) return err;
   
+	if(cond->scope == PTHREAD_PROCESS_SHARED)
+		return __sys_cond_var(&cond->sysid, CV_BROADCAST, NULL);
+
 	if(cond->count == 0)
 	{
-		return 0;//pthread_spin_unlock(&cond->lock);
+		return 0;
 	}
 
 	count       = cond->count;
 	cond->count = 0;
 	list_replace(&cond->queue, &root);
-	//err         = pthread_spin_unlock(&cond->lock);
 
 	uint_t tbl[100];
 
@@ -180,7 +205,6 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
 	return err;
 }
 
-
 int pthread_cond_destroy(pthread_cond_t *cond)
 {
 	int err = 0;
@@ -188,12 +212,11 @@ int pthread_cond_destroy(pthread_cond_t *cond)
 	if(cond == NULL)
 		return EINVAL;
 
-	//err = pthread_spin_lock(&cond->lock);
-	//if(err) return err;
+	if(cond->scope == PTHREAD_PROCESS_SHARED)
+		return __sys_cond_var(&cond->sysid, CV_DESTROY, NULL);
 
 	if(cond->count != 0)
 		err = EBUSY;
 
-	//(void)pthread_spin_unlock(&cond->lock);
 	return err;
 }

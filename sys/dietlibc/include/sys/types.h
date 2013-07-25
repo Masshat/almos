@@ -24,7 +24,8 @@
 
 #include <stdint.h>
 
-#define __CONFIG_CACHE_LINE_LENGTH 64
+#define __CONFIG_CACHE_LINE_LENGTH 16
+#define __CONFIG_CACHE_LINE_SIZE   64
 
 /* General constants and return values */
 #ifndef NULL
@@ -38,15 +39,6 @@
 #define EXIT_SUCCESS        0
 #define EXIT_FAILURE        1
 
-/* Pthread related types */
-typedef unsigned long pthread_t;
-typedef unsigned long pthread_barrierattr_t;
-typedef unsigned long sem_t;
-//typedef unsigned long pthread_cond_t;
-typedef unsigned long pthread_condattr_t;
-typedef unsigned long pthread_rwlock_t;
-typedef unsigned long pthread_rwlockattr_t;
-typedef unsigned long pthread_key_t;
 typedef unsigned long uint_t;
 typedef signed long sint_t;
 typedef unsigned long bool_t;
@@ -76,12 +68,12 @@ typedef uint64_t clock_t;
 /* Aligned Variable */
 struct __cache_line_s
 {
-  uint_t value;
-  uint_t values[__CONFIG_CACHE_LINE_LENGTH - 1];
+  uint32_t value;
+  uint32_t values[__CONFIG_CACHE_LINE_LENGTH - 1];
 }__attribute__((packed));
 
 typedef struct __cache_line_s __cacheline_t;
 
-#define __CACHELINE __attribute__((aligned(__CONFIG_CACHE_LINE_LENGTH)))
+#define __CACHELINE __attribute__((aligned(__CONFIG_CACHE_LINE_SIZE)))
 
 #endif	/* _TYPES_H_ */

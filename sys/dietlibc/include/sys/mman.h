@@ -65,10 +65,11 @@ typedef struct
 
 /* Commands used by mcntl */
 #define MCNTL_READ           0x0
-#define MCNTL_MOVE           0x1 /* this operation is not implemented in this version */
+#define MCNTL_L1_iFLUSH      0x1
+#define MCNTL_MOVE           0x2 /* this operation is not implemented in this version */
 
 /**
- * Control of process virtual address
+ * Control of process virtual address & core caches
  *
  * @op       : (in) one of MCNTL_XXX operations
  * @addr     : (in) virtual address (will be arround to page base address)
