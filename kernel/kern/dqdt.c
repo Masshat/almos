@@ -234,25 +234,25 @@ error_t dqdt_update(void)
 	struct dqdt_cluster_s *logical;
 	struct dqdt_cluster_s *parent;
 	struct cluster_s *cluster;
-	register uint_t i,j,p;
+	register uint_t i,j,p,t;
 	register uint_t usage;
 	register uint_t threads;
 	register uint_t free_pages;
 	uint_t pages_tbl[PPM_MAX_ORDER];
-  
+
 	cluster = current_cluster;
 	usage   = 0;
 	threads = 0;
-	uint_t t = 0;
+	t       = 0;
 
 	update_dmsg(1, "%s: cluster %d, started, onln_cpu_nr %d\n", 
-		    __FUNCTION__, 
-		    cluster->id, 
+		    __FUNCTION__,
+		    cluster->id,
 		    cluster->onln_cpu_nr);
 
 	for(i = 0; i < cluster->onln_cpu_nr; i++)
 	{
-		cpu_compute_stats(&cluster->cpu_tbl[i], CONFIG_DQDT_MGR_PERIOD);
+		cpu_compute_stats(&cluster->cpu_tbl[i], CONFIG_CPU_LOAD_PERIOD);
 		usage   += cluster->cpu_tbl[i].busy_percent;//cluster->cpu_tbl[i].usage;
 		//threads += cluster->cpu_tbl[i].scheduler.user_nr;
 		t += atomic_get(&cluster->levels_tbl[0]->info.tbl[i].T);
@@ -292,9 +292,9 @@ error_t dqdt_update(void)
 		if(logical == NULL)
 			continue;  /* TODO: verify that we can break here instead of continue */
    
-		update_dmsg(1, "%s: cluster %d, level %d, logical level %d\n", 
-			    __FUNCTION__, 
-			    cluster->id, 
+		update_dmsg(1, "%s: cluster %d, level %d, logical level %d\n",
+			    __FUNCTION__,
+			    cluster->id,
 			    i,logical->level);
     
 		free_pages = 0;
@@ -316,11 +316,11 @@ error_t dqdt_update(void)
 		}
 
 		usage = usage / logical->childs_nr;
-    
-		update_dmsg(1, "%s: cluster %d, level %d, usage %d, T %d, M %d (j=%d,p=%d)\n", 
+
+		update_dmsg(1, "%s: cluster %d, level %d, usage %d, T %d, M %d (j=%d,p=%d)\n",
 			    __FUNCTION__,
 			    cluster->id,
-			    i, 
+			    i,
 			    usage,
 			    threads,
 			    free_pages,j,p);
@@ -332,7 +332,7 @@ error_t dqdt_update(void)
 				       pages_tbl);
 
 		parent = logical->parent;
-    
+
 		if(parent != NULL)
 		{
 			dqdt_indicators_update(&parent->info.tbl[logical->index],
@@ -340,10 +340,10 @@ error_t dqdt_update(void)
 					       threads,
 					       usage,
 					       pages_tbl);
-			
-			update_dmsg(1, "%s: cluster %d, level %d to level %d, propagated\n", 
-				    __FUNCTION__, 
-				    cluster->id, 
+
+			update_dmsg(1, "%s: cluster %d, level %d to level %d, propagated\n",
+				    __FUNCTION__,
+				    cluster->id,
 				    i, i+1);
 		}
 		else
@@ -355,15 +355,13 @@ error_t dqdt_update(void)
 #endif
 		}
 	}
-  
+
 	return 0;
 }
 
 void dqdt_update_threads_number(struct dqdt_cluster_s *logical, uint_t core_index, sint_t count)
 {
-	register bool_t isEmpty;
 	register uint_t index;
-	sint_t old;
 
 	index = core_index;
 	
@@ -376,6 +374,10 @@ void dqdt_update_threads_number(struct dqdt_cluster_s *logical, uint_t core_inde
 		logical = logical->parent;
 	}
 
+#if CONFIG_DQDT_WAIT_FOR_UPDATE
+	register bool_t isEmpty;
+	sint_t old;
+
 	if((count < 0) && ((old = atomic_get(&dqdt_waiting_cntr)) != 0))
 	{
 		spinlock_lock(&dqdt_lock);
@@ -387,6 +389,7 @@ void dqdt_update_threads_number(struct dqdt_cluster_s *logical, uint_t core_inde
 
 		spinlock_unlock(&dqdt_lock);
 	}
+#endif
 }
 
 void dqdt_primary_table_sort1(sint_t *values_tbl, sint_t *aux_tbl, uint_t count)
@@ -783,7 +786,7 @@ error_t dqdt_up_traversal(struct dqdt_cluster_s *logical,
 				 logical->index);
 }
 
-DQDT_SELECT_HELPER(dqdt_core_min_threads_select)
+DQDT_SELECT_HELPER(dqdt_core_min_threads_select_old)
 {
 	register struct cluster_s *cluster;
 	register struct cpu_s *cpu;
@@ -839,6 +842,36 @@ DQDT_SELECT_HELPER(dqdt_core_min_threads_select)
 	return isDone;
 }
 
+DQDT_SELECT_HELPER(dqdt_core_min_threads_select)
+{
+	register struct cluster_s *cluster;
+	register struct cpu_s *cpu;
+	register uint_t i, min, indx, val;
+
+	min  = (uint_t) -1;
+	indx = 0;
+
+	for(i = 0; i < 4; i++)
+	{
+		val = atomic_get(&logical->info.tbl[i].T);
+
+		if(val < min)
+		{
+			min  = val;
+			indx = i;
+		}
+	}
+
+	cluster       = logical->home;
+	cpu           = &cluster->cpu_tbl[indx];
+	attr->cluster = cluster;
+	attr->cpu     = cpu;
+
+	val = atomic_get(&logical->info.summary.T);
+
+	return ((attr->flags & DQDT_SELECT_LTCN) && (val >= logical->cores_nr)) ? true : false;
+}
+
 DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 {
 	register struct cluster_s *cluster;
@@ -867,8 +900,6 @@ DQDT_SELECT_HELPER(dqdt_cpu_min_usage_select)
 	cluster->cpu_tbl[min].usage = 100;
 	cpu_wbflush();
 	pmm_cache_flush_vaddr((vma_t)&cluster->cpu_tbl[min].usage, PMM_DATA);
-
-	dqdt_update_threads_number(logical, min, 1);
 
 	attr->cluster = cluster;
 	attr->cpu     = cpu;
@@ -938,7 +969,11 @@ error_t dqdt_thread_placement(struct dqdt_cluster_s *logical, struct dqdt_attr_s
 	register error_t err;
 	register uint_t tm_start, tm_end;
 
-	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n", __FUNCTION__, cpu_get_id(),logical->level);
+	select_dmsg(1, "%s: cpu %d, Started, logical level %d\n",
+		    __FUNCTION__,
+		    cpu_get_id(),
+		    logical->level);
+
 	attr->flags = DQDT_THREAD_OP;
 
 	tm_start = cpu_time_stamp();
