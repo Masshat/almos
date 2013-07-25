@@ -306,7 +306,8 @@ void arch_init(struct boot_info_s *info)
 		if((entry = drvdb_locate_byId(dev_tbl[i].id)) == NULL)
 			die("ERROR: Unknown Device [Cluster %d, Dev %d, Devid %d]\n",cid,i,dev_tbl[i].id);
 
-		driver = drvdb_entry_get_driver(entry);
+		dev->base_paddr = (void*)dev_tbl[i].base;
+		driver          = drvdb_entry_get_driver(entry);
 
 		if((err=driver->init(dev, (void*)dev_base, dev_tbl[i].size, dev_tbl[i].irq)))
 			die("ERROR: Failed To Initialize Device %s [Cluster %d, Dev %d, Err %d]\n",
