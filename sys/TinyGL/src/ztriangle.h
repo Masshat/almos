@@ -33,6 +33,24 @@
   float tz1,dtzdx,dtzdy,dtzdl_min,dtzdl_max;
 #endif
 
+  t = pr1 = pr2 = l1 = l2 = NULL;
+  x1 = dxdy_min = dxdy_max = error = derror = 0;
+  x2 = dx2dy2 = 0;
+
+#ifdef INTERP_Z
+  z1 = dzdl_min = dzdl_max = 0;
+#endif
+#ifdef INTERP_RGB
+  r1 = drdl_min = drdl_max = g1 = b1 = dgdl_min = dgdl_max = 0;
+  dbdl_min = dbdl_max = 0;
+#endif
+#ifdef INTERP_ST
+  s1 = t1 = dsdl_min = dtdl_min = dsdl_max = dtdl_max = 0;
+#endif
+#ifdef INTERP_STZ
+  sz1 = tz1 = dszdl_max = dszdl_min = dtzdl_min = dtzdl_max = 0;
+#endif
+
   /* we sort the vertex with increasing y */
   if (p1->y < p0->y) {
     t = p0;
