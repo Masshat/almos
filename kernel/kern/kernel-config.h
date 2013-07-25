@@ -61,7 +61,9 @@
 #define CONFIG_DEV_VERSION               yes
 #define CONFIG_KERNEL_REPLICATE          yes
 #define CONFIG_USE_COA                   yes
+#define CONFIG_MAPPER_AUTO_MGRT          yes
 #define CONFIG_FORK_LOCAL_ALLOC          no
+#define CONFIG_USE_SCHED_LOCKS           no
 #define CONFIG_REMOTE_FORK               yes
 #define CONFIG_THREAD_LOCAL_ALLOC        no
 #define CONFIG_REMOTE_THREAD_CREATE      yes
@@ -70,12 +72,15 @@
 #define CONFIG_MAX_CLUSTER_NR            256
 #define CONFIG_MAX_CLUSTER_ROOT          16
 #define CONFIG_MAX_CPU_PER_CLUSTER_NR    4
+#define CONFIG_GLOBAL_CLUSTERS_ORDER     0
+#define CONFIG_GLOBAL_CORES_ORDER        0
 #define CONFIG_MAX_DQDT_DEPTH            4
 #define CONFIG_DQDT_LEVELS_NR            5
-#define CONFIG_DQDT_MGR_PERIOD           4
+#define CONFIG_DQDT_MGR_PERIOD           1
 #define CONFIG_DQDT_ROOTMGR_PERIOD       4
 #define CONFIG_DQDT_WAIT_FOR_UPDATE      no
 #define CONFIG_CPU_BALANCING_PERIOD      4
+#define CONFIG_CPU_LOAD_PERIOD           4
 #define CONFIG_CLUSTER_KEYS_NR           8
 #define CONFIG_REL_KFIFO_SIZE            32
 #define CONFIG_VFS_NODES_PER_CLUSTER     40
@@ -83,7 +88,6 @@
 #define CONFIG_BARRIER_WQDB_NR           4
 #define CONFIG_BARRIER_ACTIVE_WAIT       no
 #define CONFIG_BARRIER_BORADCAST_UREAD   no
-#define CONFIG_MONO_CPU                  no
 #define CONFIG_CPU_LOAD_BALANCING        yes
 #define CONFIG_PTHREAD_THREADS_MAX       2048
 #define CONFIG_PTHREAD_STACK_SIZE        512*1024
@@ -100,6 +104,7 @@
 #define CONFIG_ENABEL_THREAD_TRACE       no
 #define CONFIG_SHOW_PAGEFAULT            no
 #define CONFIG_SHOW_CPU_USAGE            no
+#define CONFIG_SHOW_CPU_IPI_MSG          no
 #define CONFIG_SHOW_FPU_MSG              no
 #define CONFIG_SHOW_THREAD_DESTROY_MSG   yes
 #define CONFIG_SHOW_THREAD_CREATE_MSG    no
