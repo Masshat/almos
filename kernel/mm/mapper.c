@@ -32,7 +32,7 @@
 #include <blkio.h>
 #include <cluster.h>
 #include <vfs.h>
-
+#include <vm_region.h>
 
 static void mapper_ctor(struct kcm_s *kcm, void *ptr) 
 {
@@ -41,6 +41,8 @@ static void mapper_ctor(struct kcm_s *kcm, void *ptr)
 	mapper = (struct mapper_s *)ptr;
 	radix_tree_init(&mapper->m_radix);
 	mcs_lock_init(&mapper->m_lock, "Mapper Object");
+	rwlock_init(&mapper->m_reg_lock);
+	list_root_init(&mapper->m_reg_root);
 }
 
 KMEM_OBJATTR_INIT(mapper_kmem_init)
@@ -101,6 +103,37 @@ uint_t mapper_find_pages(struct mapper_s* mapper,
 	return pages_nr;
 }
 
+uint_t mapper_set_auto_migrate(struct mapper_s* mapper)
+{
+	uint_t count;
+	uint_t pages_nr;
+	uint_t irq_state;
+	uint_t index, i;
+	struct page_s *pgtbl[10];
+
+	index    = 0;
+	pages_nr = 0;
+
+	mcs_lock(&mapper->m_lock, &irq_state);
+
+	do
+	{
+		count  = radix_tree_gang_lookup(&mapper->m_radix, (void**)pgtbl, index, 10);
+		index += count;
+
+		for(i = 0; ((i < count) && (pgtbl[i] != NULL)); i++)
+		{
+			PAGE_SET(pgtbl[i], PG_MIGRATE);
+			pages_nr ++;
+		}
+
+	}while(count > 0);
+
+	mcs_unlock(&mapper->m_lock, irq_state);
+	return pages_nr;
+}
+
+
 /* FIXME: check dummy pages inserted by mapper_get */
 uint_t mapper_find_pages_contig(struct mapper_s* mapper, 
 				uint_t start, 
@@ -120,7 +153,7 @@ uint_t mapper_find_pages_contig(struct mapper_s* mapper,
 
 	for(i = 0; i < pages_nr; i++) 
 	{
-		if(pages[i]->index != nr_pages+i)
+		if(pages[i]->index != (nr_pages+i))
 			break;
 	}
 
@@ -201,6 +234,7 @@ void mapper_remove_page(struct page_s *page)
 
 MAPPER_RELEASE_PAGE(mapper_default_release_page)
 {
+#if 0
 	struct mapper_s *mapper;
 	uint_t irq_state;
 
@@ -209,7 +243,7 @@ MAPPER_RELEASE_PAGE(mapper_default_release_page)
 	mcs_lock(&mapper->m_lock, &irq_state);
 	__mapper_remove_page(mapper, page);
 	mcs_unlock(&mapper->m_lock, irq_state);
-
+#endif
 	return 0;
 }
 
@@ -217,12 +251,15 @@ struct page_s* mapper_get_page(struct mapper_s*	mapper, uint_t index, uint_t fla
 {
 	kmem_req_t req;
 	struct page_s dummy;
-	struct page_s* page;
+	struct page_s *page;
+	struct page_s *new;
+	struct vm_region_s *reg;
 	radix_item_info_t info;
 	uint_t irq_state;
 	bool_t found;
 	error_t err;
-  
+	error_t err2;
+
 	req.type  = KMEM_PAGE;
 	req.size  = 0;
 	req.flags = AF_USER;
@@ -313,7 +350,83 @@ struct page_s* mapper_get_page(struct mapper_s*	mapper, uint_t index, uint_t fla
 			sched_sleep(current_thread);
 			continue;
 		}
-    
+
+		if(PAGE_IS(page, PG_MIGRATE))
+		{
+			PAGE_CLEAR(page, PG_MIGRATE);
+
+			if((mapper->m_node == NULL) && (current_cluster->id != page->cid))
+			{
+				page_init(&dummy, CLUSTER_NR);
+				PAGE_CLEAR(&dummy, PG_INIT);
+				PAGE_SET(&dummy, PG_INLOAD);
+				page_refcount_up(&dummy);
+				dummy.mapper = mapper;
+				dummy.index  = index;
+
+				err = radix_item_info_apply(&mapper->m_radix, &info, RADIX_INFO_SET, &dummy);
+
+				if(err)
+					continue;
+			}
+			else
+			{
+				mcs_unlock(&mapper->m_lock, irq_state);
+				return page;
+			}
+
+			mcs_unlock(&mapper->m_lock, irq_state);
+
+			new = NULL;
+			err = 0;
+			reg = NULL;
+
+			rwlock_rdlock(&mapper->m_reg_lock);
+
+			if(!(list_empty(&mapper->m_reg_root)))
+			{
+				reg = list_first(&mapper->m_reg_root, struct vm_region_s, vm_shared_list);
+
+				page_lock(page);
+
+				//err = vmm_broadcast_inval(reg, page, &new);
+				err = vmm_migrate_shared_page_seq(reg, page, &new);
+
+				page_unlock(page);
+			}
+
+			rwlock_unlock(&mapper->m_reg_lock);
+
+			err2 = 0;
+
+			mcs_lock(&mapper->m_lock, &irq_state);
+
+			if(new == NULL)
+				(void) radix_item_info_apply(&mapper->m_radix, &info, RADIX_INFO_SET, page);
+
+			if((err == 0) && (new != NULL))
+				err2 = radix_item_info_apply(&mapper->m_radix, &info, RADIX_INFO_SET, new);
+
+			wakeup_all(&dummy.wait_queue);
+
+			mcs_unlock(&mapper->m_lock, irq_state);
+
+			if(new == NULL)
+				return page;
+
+			if((err != 0) || (err2 != 0))
+			{
+				/* TODO: differs this kmem_free */
+				req.ptr = new;
+				kmem_free(&req);
+				return page;
+			}
+
+			req.ptr = page;
+			kmem_free(&req);
+			return new;
+		}
+
 		mcs_unlock(&mapper->m_lock, irq_state);
 		return page;
 	}
@@ -346,7 +459,7 @@ fail_alloc_load:
 void mapper_destroy(struct mapper_s *mapper, bool_t doSync)
 {
 	kmem_req_t req;
-	struct page_s* pages[255];
+	struct page_s* pages[10];
 	uint_t count, j;
 
 	req.type  = KMEM_PAGE;
@@ -359,7 +472,7 @@ void mapper_destroy(struct mapper_s *mapper, bool_t doSync)
 			count = radix_tree_gang_lookup_tag(&mapper->m_radix,
 							   (void**)pages,
 							   0,
-							   254,
+							   10,
 							   TAG_PG_DIRTY);
 
 			for (j=0; (j < count) && (pages[j] != NULL); ++j) 
@@ -377,12 +490,16 @@ void mapper_destroy(struct mapper_s *mapper, bool_t doSync)
 
 	do   // freeing all pages
 	{
-		count = radix_tree_gang_lookup(&mapper->m_radix, (void**)pages, 0, 254);
+		count = radix_tree_gang_lookup(&mapper->m_radix, (void**)pages, 0, 10);
  
 		for (j=0; (j < count) && (pages[j] != NULL); ++j) 
 		{
 			if(PAGE_IS(pages[j], PG_DIRTY))
 			{
+				page_lock(pages[j]);
+				mapper->m_ops->sync_page(pages[j]);
+				page_unlock(pages[j]);
+
 				page_lock(pages[j]);
 				page_clear_dirty(pages[j]);
 				page_unlock(pages[j]);

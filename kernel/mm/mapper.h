@@ -26,6 +26,7 @@
 #include <types.h>
 #include <radix.h>
 #include <mcs_sync.h>
+#include <rwlock.h>
 #include <atomic.h>
 #include <list.h>
 
@@ -79,7 +80,7 @@ struct mapper_s
 	const struct mapper_op_s*    m_ops;	    // operations
 	struct vfs_node_s*           m_node;	    // owner
 	void*                        m_data;	    // private data
-	mcs_lock_t	             m_reg_lock;
+	struct rwlock_s	             m_reg_lock;
 	struct list_entry            m_reg_root;
 };
 
@@ -103,6 +104,14 @@ error_t mapper_init(struct mapper_s *mapper,
 		    const struct mapper_op_s *ops, 
 		    struct vfs_node_s *node,
 		    void *data);
+
+/**
+ * Set Auto-Migrate Strategy
+ *
+ * @mapper     mapper to apply
+ * @retrun     number of touched pages
+  */
+uint_t mapper_set_auto_migrate(struct mapper_s* mapper);
 
 /**
  * Finds and gets a page reference.
