@@ -216,7 +216,7 @@ struct page_s* ppm_alloc_pages(struct ppm_s *ppm, uint_t order, uint_t flags)
 
 	do_alloc:
 
-		if(ppm->free_pages_nr > threshold)
+		if(current_ppm->free_pages_nr > threshold)
 			ptr = ppm_do_alloc_pages(current_ppm, order, flags);
 
 		if(ptr != NULL) return ptr;
