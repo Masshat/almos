@@ -76,7 +76,7 @@ struct vm_region_s
 	struct vm_region_op_s *vm_op;
 	struct mapper_s *vm_mapper;
 	struct vfs_file_s *vm_file;
-	struct list_entry vm_mlist;
+	struct list_entry vm_shared_list;
 	void *vm_data;
 };
 

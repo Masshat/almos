@@ -278,7 +278,6 @@ error_t vm_region_detach(struct vmm_s *vmm, struct vm_region_s *region)
 	uint_t key_start;
 	uint_t count;
 	uint_t mapper_count;
-	uint_t irq_state;
 	bool_t isSharedAnon;
 
 	list_unlink(&region->vm_list);
@@ -297,9 +296,9 @@ error_t vm_region_detach(struct vmm_s *vmm, struct vm_region_s *region)
 	if(isSharedAnon)
 	{
 		mapper_count = atomic_add(&region->vm_mapper->m_refcount, -1);
-		mcs_lock(&region->vm_mapper->m_reg_lock, &irq_state);
-		list_unlink(&region->vm_mlist);
-		mcs_unlock(&region->vm_mapper->m_reg_lock, irq_state);
+		rwlock_wrlock(&region->vm_mapper->m_reg_lock);
+		list_unlink(&region->vm_shared_list);
+		rwlock_unlock(&region->vm_mapper->m_reg_lock);
 	}
 
 	while((count = atomic_get(&region->vm_refcount)) > 1)
@@ -342,8 +341,9 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	struct ppm_s *ppm;
 	struct task_s *task;
 	pmm_page_info_t info;
-	uint_t irq_state;
 	error_t err;
+	uint_t onln_clusters;
+	bool_t isFirstReg;
 
 	atomic_init(&dst->vm_refcount, 1);
 	dst->vm_begin   = src->vm_begin;
@@ -358,16 +358,38 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	dst->vm_mapper  = src->vm_mapper;
 	dst->vm_file    = src->vm_file;
 	dst->vm_data    = src->vm_data;
+	task            = vmm_get_task(dst->vmm);
 
 	if(src->vm_file != NULL)
 		atomic_add(&src->vm_file->f_count, 1);
   
 	if(dst->vm_flags & VM_REG_SHARED)
 	{
-		mcs_lock(&dst->vm_mapper->m_reg_lock, &irq_state);
-		list_add_last(&dst->vm_mapper->m_reg_root, &dst->vm_mlist);
-		mcs_unlock(&dst->vm_mapper->m_reg_lock, irq_state);
-		(void)atomic_add(&dst->vm_mapper->m_refcount, 1);
+		isFirstReg = false;
+
+		rwlock_wrlock(&dst->vm_mapper->m_reg_lock);
+
+		list_add_last(&dst->vm_mapper->m_reg_root, &dst->vm_shared_list);
+
+		rwlock_unlock(&dst->vm_mapper->m_reg_lock);
+
+		count = atomic_add(&dst->vm_mapper->m_refcount, 1);
+
+#if CONFIG_MAPPER_AUTO_MGRT
+		onln_clusters = arch_onln_cluster_nr();
+
+		if((dst->vm_flags & VM_REG_ANON) && (count == 1) && (onln_clusters > 1))
+		{
+			count = mapper_set_auto_migrate(dst->vm_mapper);
+
+			printk(INFO, "INFO: cpu %d, pid %d, reg <%x,%x> set auto-migrate for %d pages\n",
+			       cpu_get_id(),
+			       task->pid,
+			       dst->vm_start,
+			       dst->vm_limit,
+			       count);
+		}
+#endif
 		return 0;
 	}
 
@@ -375,7 +397,6 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	src_pmm = &src->vmm->pmm;
 	dst_pmm = &dst->vmm->pmm;
 	count   = (src->vm_limit - src->vm_start) >> PMM_PAGE_SHIFT;
-	task    = vmm_get_task(dst->vmm);
 
 	while(count)
 	{
@@ -450,6 +471,7 @@ error_t vm_region_split(struct vmm_s *vmm, struct vm_region_s *region, uint_t st
   
 	return vm_region_resize(vmm, region, start_addr + length, region->vm_limit);
 }
+
 
 error_t vm_region_update(struct vm_region_s *region, uint_t vaddr, uint_t flags)
 {
