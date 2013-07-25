@@ -104,6 +104,9 @@ error_t sched_init(struct scheduler_s *scheduler);
 /** Register a thread, must be called by a local thread */
 error_t sched_register(struct thread_s *thread);
 
+/** Add newly created thread */
+void sched_add_created(struct thread_s *thread);
+
 /** Add migrated thread, must be called by a local thread */
 void sched_add(struct thread_s *thread);
 
@@ -198,10 +201,10 @@ static inline uint_t sched_runnable_count(struct scheduler_s *scheduler)
 {
 	volatile uint16_t *ptr;
 	uint_t count;
-  
+
 	ptr = &scheduler->u_runnable;
 	count = *ptr;
-  
+
 	ptr = &scheduler->k_runnable;
 	count += *ptr;
 

@@ -21,6 +21,9 @@
  */
 
 #include <config.h>
+
+#if !(CONFIG_USE_SCHED_LOCKS)
+
 #include <types.h>
 #include <list.h>
 #include <kdmsg.h>
@@ -542,3 +545,5 @@ error_t rr_sched_init(struct scheduler_s *scheduler, struct sched_s *sched)
 	sched->data      = rQueues;
 	return 0;
 }
+
+#endif	/* !(CONFIG_USE_SCHED_LOCKS) */

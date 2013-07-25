@@ -34,8 +34,11 @@
 #include <rr-sched.h>
 #include <signal.h>
 #include <bits.h>
-#include <spinlock.h>
 #include <scheduler.h>
+
+#if CONFIG_USE_SCHED_LOCKS
+#include <spinlock.h>
+#endif
 
 #if CONFIG_SCHED_DEBUG
 #define SCHED_SCOPE
@@ -69,7 +72,7 @@ typedef struct
 /* Sched DataBase */
 struct sched_db_s
 {
-#if !(CONFIG_REMOTE_THREAD_CREATE)
+#if CONFIG_USE_SCHED_LOCKS
 	spinlock_t lock;
 #endif
 
@@ -92,7 +95,7 @@ error_t sched_init(struct scheduler_s *scheduler)
 
 	if(db == NULL) return ENOMEM;
 
-#if !(CONFIG_REMOTE_THREAD_CREATE)
+#if CONFIG_USE_SCHED_LOCKS
 	spinlock_init(&db->lock, "Sched-db");
 #endif
 
@@ -121,11 +124,11 @@ error_t sched_register(struct thread_s *thread)
 	cpu   = thread_current_cpu(thread);
 	db    = cpu->scheduler.db;
 
-#if (CONFIG_REMOTE_THREAD_CREATE && CONFIG_REMOTE_FORK)
+#if CONFIG_USE_SCHED_LOCKS
+	spinlock_lock(&db->lock);
+#else
 	uint_t irq_state;
 	cpu_disable_all_irq(&irq_state);
-#else
-	spinlock_lock(&db->lock);
 #endif
 
 	if(db->next.value >= SCHED_THREADS_NR)
@@ -140,10 +143,10 @@ error_t sched_register(struct thread_s *thread)
 		thread->ltid = index;
 	}
 
-#if (CONFIG_REMOTE_THREAD_CREATE && CONFIG_REMOTE_FORK)
-	cpu_restore_irq(irq_state);
-#else
+#if CONFIG_USE_SCHED_LOCKS
 	spinlock_unlock(&db->lock);
+#else
+	cpu_restore_irq(irq_state);
 #endif
 
 	return (index == -1) ? ERANGE : 0;
@@ -157,11 +160,11 @@ SCHED_SCOPE void sched_unregister(struct thread_s *thread)
 	cpu = thread_current_cpu(thread);
 	db  = cpu->scheduler.db;
 
-#if CONFIG_REMOTE_THREAD_CREATE
+#if CONFIG_USE_SCHED_LOCKS
+	spinlock_lock(&db->lock);
+#else
 	uint_t irq_state;
 	cpu_disable_all_irq(&irq_state);
-#else
-	spinlock_lock(&db->lock);
 #endif
   
 	memset(&db->tbl[thread->ltid],0,sizeof(sched_pinfo_t));
@@ -170,13 +173,16 @@ SCHED_SCOPE void sched_unregister(struct thread_s *thread)
 	if(thread->ltid < db->next.value)
 		db->next.value = thread->ltid;
 
-#if CONFIG_REMOTE_THREAD_CREATE  
-	cpu_restore_irq(irq_state);
-#else
+#if CONFIG_USE_SCHED_LOCKS
 	spinlock_unlock(&db->lock);
+#else
+	cpu_restore_irq(irq_state);
 #endif
 }
 
+#if CONFIG_USE_SCHED_LOCKS
+#define sched_event_notify(x)
+#else
 /* TODO: don't visit all threads, just sched->count one */
 SCHED_SCOPE void sched_event_notify(struct scheduler_s *scheduler)
 {
@@ -228,6 +234,7 @@ SCHED_SCOPE void sched_event_notify(struct scheduler_s *scheduler)
 		}
 	}
 }
+#endif	/* CONFIG_USE_SCHED_LOCKS */
 
 error_t sched_setpolicy(struct thread_s *thread, uint_t policy)
 {
@@ -280,7 +287,7 @@ void sched_clock(struct thread_s *this, uint_t ticks_nr)
 		cpu_get_thread_idle(cpu)->ticks_nr ++;
 
 	cpu_wbflush();
-  
+
 	sched_event_notify(&thread_current_cpu(this)->scheduler);
 
 	for(i = 0; i < SCHEDS_NR; i++)
@@ -297,7 +304,7 @@ void sched_strategy(struct scheduler_s *scheduler)
 
 void sched_idle(struct thread_s *this)
 {
-	sched_event_notify(&thread_current_cpu(this)->scheduler);
+	sched_event_notify(&(thread_current_cpu(this)->scheduler));
 }
 
 
@@ -314,6 +321,7 @@ SCHED_SCOPE void schedule(struct thread_s *this)
 	elected   = NULL;
 	cpu       = current_cpu;
 	scheduler = &cpu->scheduler;
+
 	sched_event_notify(scheduler);
 
 	for(i=0; (i < SCHEDS_NR) && (elected == NULL); i++)
@@ -449,11 +457,34 @@ void sched_exit(struct thread_s *this)
  
 	cpu_disable_all_irq(&irq_state);
   
+	sched_notify_dmsg(this,this->ltid,"EXIT");
+
 	this->local_sched->op.exit(this);
 
 	this->state = S_DEAD;
 	schedule(this);
 }
+
+void sched_add_created(struct thread_s *thread)
+{
+	cpu_trace_write(current_cpu, sched_add_created);
+
+	tm_create_compute(thread);
+	thread->state = S_CREATE;
+
+#if CONFIG_USE_SCHED_LOCKS
+	thread->local_sched->op.add(thread);
+#else
+	uint_t event;
+	void* listner;
+
+	listner = sched_get_listner(thread, SCHED_OP_ADD_CREATED);
+	event = sched_event_make(thread, SCHED_OP_ADD_CREATED);
+	sched_event_send(listner,event);
+	cpu_wbflush();
+#endif
+}
+
 
 void sched_add(struct thread_s *thread)
 {
@@ -462,6 +493,7 @@ void sched_add(struct thread_s *thread)
 	thread->state = S_READY;
 	tm_sys_compute(thread);
 	cpu_disable_all_irq(&irq_state);
+	sched_notify_dmsg(thread,thread->ltid,"ADD");
 	thread->local_sched->op.add(thread);
 	cpu_restore_irq(irq_state);
 }
@@ -481,6 +513,9 @@ void sched_remove(struct thread_s *this)
 	this->info.e_info = &e_info;
 
 	cpu_disable_all_irq(&irq_state);
+
+	sched_notify_dmsg(this,this->ltid,"REMOVE");
+
 	this->local_sched->op.remove(this);
 	this->type  = KTHREAD;
 	this->state = S_DEAD;
@@ -500,26 +535,34 @@ void sched_sleep(struct thread_s *this)
 	if(thread_isCapWakeup(this))
 		thread_set_wakeable(this);
 
+	sched_notify_dmsg(this,this->ltid,"GOING TO SLEEP");
+
 	this->local_sched->op.sleep(this);
 
 	schedule(this);
 
 	thread_clear_wakeable(this);
 
+	sched_notify_dmsg(this,this->ltid,"DONE");
+
 	cpu_restore_irq(irq_state);
 }
 
 void sched_wakeup (struct thread_s *thread)
 { 
+	cpu_trace_write(current_cpu, sched_wakeup);
+
+#if CONFIG_USE_SCHED_LOCKS
+	thread->local_sched->op.wakeup(thread);
+#else
 	uint_t event;
 	void* listner;
-  
-	cpu_trace_write(current_cpu, sched_wakeup);
-   
+
 	event = sched_event_make(thread, SCHED_OP_WAKEUP);
 	listner = sched_get_listner(thread, SCHED_OP_WAKEUP);
 	sched_event_send(listner,event);
 	cpu_wbflush();
+#endif
 }
 
 void* sched_get_listner(struct thread_s *thread, uint_t sched_op)
