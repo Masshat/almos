@@ -412,8 +412,6 @@ error_t task_load_init(struct task_s *task)
 	struct task_s *init;
 	struct dqdt_attr_s attr;
 	struct thread_s *main_thread;
-	void *listner;
-	uint_t event;
 	error_t err;
 	error_t err1;
 	error_t err2;
@@ -483,15 +481,11 @@ error_t task_load_init(struct task_s *task)
 		init->state = TASK_READY;
 		err = sched_register(main_thread);
 		assert(err == 0); 		/* FIXME: ask DQDT for another core */
-		main_thread->state = S_CREATE;
 
 #if CONFIG_ENABEL_TASK_TRACE
 		main_thread->info.isTraced = true;
 #endif
-		tm_create_compute(main_thread);
-		listner = sched_get_listner(main_thread, SCHED_OP_ADD_CREATED);
-		event = sched_event_make(main_thread, SCHED_OP_ADD_CREATED);
-		sched_event_send(listner,event);
+		sched_add_created(main_thread);
 		return 0;
 	}
 
