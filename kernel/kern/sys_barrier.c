@@ -69,13 +69,17 @@ int sys_barrier(struct barrier_s **barrier, uint_t operation, uint_t count)
 		break;
 
 	case BARRIER_WAIT:
+
+		if((err = vmm_check_object(ibarrier, struct barrier_s, BARRIER_ID)))
+			break;
+
+		err = barrier_wait(ibarrier);
+		break;
+
 	case BARRIER_DESTROY:
     
 		if((err = vmm_check_object(ibarrier, struct barrier_s, BARRIER_ID)))
 			break;
-    
-		if(operation == BARRIER_WAIT)
-			return ibarrier->wait(ibarrier);//barrier_wait(ibarrier);
     
 		if((err = barrier_destroy(ibarrier)))
 			break;
