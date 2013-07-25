@@ -38,7 +38,7 @@ static void cpu_sysfs_op_init(sysfs_op_t *op);
 error_t cpu_init(struct cpu_s *cpu, struct cluster_s *cluster, uint_t lid, uint_t gid)
 {
 	sysfs_op_t op;
-  
+
 	cpu->state   = CPU_DEACTIVE;
 	cpu->lid     = lid;
 	cpu->gid     = gid;
@@ -79,9 +79,9 @@ error_t cpu_init(struct cpu_s *cpu, struct cluster_s *cluster, uint_t lid, uint_
 	sysfs_entry_init(&cpu->node, &op, cpu->name);
 	sysfs_entry_register(&cluster->node, &cpu->node);
 
-	cpu->prng_A   = 65519;
-	cpu->prng_C   = 64037 & 0xFFFFFFFB;
-	cpu->last_num = gid;
+	cpu->prng_A = 65519;
+	cpu->prng_C = 64037 & 0xFFFFFFFB;
+	srand(cpu_time_stamp() & 0xFFF);
 	return 0;
 }
 
@@ -189,15 +189,24 @@ void cpu_clock(struct cpu_s *cpu)
 
 void cpu_ipi_notify(struct cpu_s *cpu)
 {
-	register struct thread_s *this;
-
-	this = current_thread;
-
+#if CONFIG_SHOW_CPU_IPI_MSG
 	isr_dmsg(INFO, "[IPI] cpu %d, U %d, B %d [%u]\n", 
 		 cpu->gid,
 		 cpu->usage,
 		 cpu->busy_percent,
 		 cpu_time_stamp());
+#endif
+}
+
+struct cpu_s* cpu_gid2ptr(uint_t gid)
+{
+	register struct cluster_s *cluster;
+	register struct cpu_s *ptr;
+
+	cluster = current_cluster;
+	ptr     = cluster->cores_tbl[gid];
+
+	return ptr;
 }
 
 static error_t cpu_sysfs_read_op(sysfs_entry_t *entry, sysfs_request_t *rq, uint_t *offset)

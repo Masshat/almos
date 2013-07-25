@@ -126,11 +126,11 @@ void kern_init (boot_info_t *info)
 		if(cluster_id == info->boot_cluster_id)
 		{
 			printk(INFO, "INFO: Building Distributed Quaternary Decision Tree (DQDT)\n");
-      
+
 			tm_start = cpu_time_stamp();
 
 			err = arch_dqdt_build(info);
-      
+
 			if(err)
 				PANIC("Failed to build DQDT, err %d\n", err);
 
@@ -168,6 +168,19 @@ void kern_init (boot_info_t *info)
 		}
 #endif	/* CONFIG_KERNEL_REPLICATE */
 
+		err = cluster_init_table();
+
+		if(err == 0)
+			err = cluster_init_cores_table();
+
+		if(err)
+		{
+			PANIC("%s: cpu %d, failed to initilize cluster's tables [%u]\n", 
+			      __FUNCTION__,
+			      cpu_get_id(),
+			      cpu_time_stamp());
+		}
+
 		mcs_barrier_wait(&kmem_sync);
 
 		///////////////////////////////////
@@ -184,11 +197,11 @@ void kern_init (boot_info_t *info)
 
 		clusters_tbl[cluster_id].boot_signal = BOOT_SIGNAL;
 	}
-  
+
 	cluster = clusters_tbl[cluster_id].cluster;
 	cpu = &cluster->cpu_tbl[cpu_lid];
 	thread = cpu_get_thread_idle(cpu);
-  
+
 	cpu_context_load(&thread->pws);
 }
 

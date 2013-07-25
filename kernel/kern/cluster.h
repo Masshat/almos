@@ -56,7 +56,7 @@ struct cluster_s
 	spinlock_t lock;
 	atomic_t buffers_nr;
 	atomic_t vfs_nodes_nr;
-  
+
 	/* Logical cluster */
 	struct dqdt_cluster_s *levels_tbl[CONFIG_DQDT_LEVELS_NR];
 
@@ -71,6 +71,12 @@ struct cluster_s
 
 	/* Cluster keys */
 	void *keys_tbl[CLUSTER_TOTAL_KEYS_NR];
+
+	/* Replica of Global Clusters Tabl */
+	struct cluster_s **clusters_tbl;
+
+	/* Replica of Global Cores Tbl */
+	struct cpu_s **cores_tbl;
 
 	/* Init Info */
 	uint_t id;
@@ -123,6 +129,8 @@ extern struct cluster_entry_s clusters_tbl[CLUSTER_NR];
 
 #define cluster_get_cpus_nr(cluster)
 
+struct cluster_s* cluster_cid2ptr(uint_t cid);
+
 void clusters_init(void);
 void clusters_sysfs_register(void);
 
@@ -130,6 +138,9 @@ error_t cluster_init(struct boot_info_s *info,
 		     uint_t start_paddr, 
 		     uint_t limit_paddr,
 		     uint_t begin_vaddr);
+
+error_t cluster_init_table(void);
+error_t cluster_init_cores_table(void);
 
 struct cluster_key_s;
 typedef struct cluster_key_s ckey_t;

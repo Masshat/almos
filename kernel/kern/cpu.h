@@ -60,9 +60,6 @@ struct cpu_s
 	/* Trace and auditing info */
 	struct cpu_trace_recorder_s *trace_recorder;
 #endif
-	/* CPU State */
-	uint_t state;
-
 	/* CPU IDs */
 	uint_t lid;
 	uint_t gid;
@@ -105,6 +102,9 @@ struct cpu_s
 	uint_t prng_C;
 	uint_t last_num;
 
+	/* CPU State */
+	uint_t state;
+
 	/* Sysfs informations */
 	char name[SYSFS_NAME_LEN];
 	sysfs_entry_t node;
@@ -143,6 +143,9 @@ void cpu_ipi_notify(struct cpu_s *cpu);
 
 /** Get CPU current cycles number */
 static inline uint64_t cpu_get_cycles(struct cpu_s *cpu);
+
+/** Convert CPU Global Id (GID) to desciptor pointer */
+struct cpu_s* cpu_gid2ptr(uint_t gid);
 
 ///////////////////////////////////////////////
 //             Private Section               //

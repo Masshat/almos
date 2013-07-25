@@ -188,6 +188,76 @@ error_t cluster_init(struct boot_info_s *info,
 	return 0;
 }
 
+
+error_t cluster_init_table(void)
+{
+	kmem_req_t req;
+	struct cluster_s *cluster;
+	struct page_s *page;
+	uint_t i;
+
+	req.flags = AF_BOOT;
+	req.size  = CONFIG_GLOBAL_CLUSTERS_ORDER;
+	req.type  = KMEM_PAGE;
+	cluster   = current_cluster;
+
+	page = kmem_alloc(&req);
+
+	if(page == NULL)
+		return ENOMEM;
+
+	cluster->clusters_tbl = ppm_page2addr(page);
+
+	for(i = 0; i < CLUSTER_NR; i++)
+		cluster->clusters_tbl[i] = clusters_tbl[i].cluster;
+
+	return 0;
+}
+
+error_t cluster_init_cores_table(void)
+{
+	kmem_req_t req;
+	struct cluster_s *cluster;
+	struct cluster_s *ptr;
+	struct page_s *page;
+	uint_t i, cpu;
+	uint_t cores_per_cluster;
+
+	req.flags = AF_BOOT;
+	req.size  = CONFIG_GLOBAL_CLUSTERS_ORDER;
+	req.type  = KMEM_PAGE;
+	cluster   = current_cluster;
+
+	page = kmem_alloc(&req);
+
+	if(page == NULL)
+		return ENOMEM;
+
+	cluster->cores_tbl = ppm_page2addr(page);
+	cores_per_cluster  = cluster->cpu_nr;
+
+	for(i = 0; i < CLUSTER_NR; i++)
+	{
+		ptr = clusters_tbl[i].cluster;
+
+		for(cpu = 0; ((ptr != NULL) && (cpu < cores_per_cluster)); cpu++)
+			cluster->cores_tbl[(i * cores_per_cluster) + cpu] = &ptr->cpu_tbl[cpu];
+	}
+
+	return 0;
+}
+
+struct cluster_s* cluster_cid2ptr(uint_t cid)
+{
+	register struct cluster_s *cluster;
+	register struct cluster_s *ptr;
+
+	cluster = current_cluster;
+	ptr     = cluster->clusters_tbl[cid];
+
+	return ptr;
+}
+
 EVENT_HANDLER(manager_alarm_event_handler)
 {
 	struct thread_s *manager;
@@ -204,7 +274,6 @@ EVENT_HANDLER(manager_alarm_event_handler)
 
 	return 0;
 }
-
 
 void* cluster_manager_thread(void *arg)
 {
