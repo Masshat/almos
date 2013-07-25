@@ -44,8 +44,6 @@ int sys_exec(char *filename, char **argv, char **envp)
 	uint_t len;
 	error_t err;
 	uint_t isFatal;
-	uint_t event;
-	void * listner;
 
 	req.type  = KMEM_PAGE;
 	req.size  = 0;
@@ -114,17 +112,13 @@ int sys_exec(char *filename, char **argv, char **envp)
     
 		err = sched_register(main_thread);
 		assert(err == 0);
-		main_thread->state = S_CREATE;
-		tm_create_compute(main_thread);
+
 		task->state = TASK_READY;
 
 #if CONFIG_ENABEL_TASK_TRACE
 		main_thread->info.isTraced = true;
 #endif
-
-		listner = sched_get_listner(main_thread, SCHED_OP_ADD_CREATED);
-		event   = sched_event_make(main_thread, SCHED_OP_ADD_CREATED);
-		sched_event_send(listner,event);
+		sched_add_created(main_thread);
 
 		thread_set_no_vmregion(this);
 		sched_exit(this);

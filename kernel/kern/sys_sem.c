@@ -53,12 +53,6 @@ int sys_sem(struct semaphore_s **sem, uint_t operation, uint_t pshared, int *val
 	switch(operation)
 	{
 	case SEM_INIT:
-		if(pshared)
-		{
-			err = ENOSYS;
-			break;
-		}
-    
 		if((err = vmm_check_address("usr sem op", task, value, sizeof(int*))))
 			break;
     

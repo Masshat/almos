@@ -107,8 +107,6 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	struct task_s *this_task;
 	struct thread_s *child_thread;
 	struct task_s *child_task;
-	uint_t event;
-	void *listner;
 	uint_t irq_state;
 	uint_t cpu_lid;
 	uint_t cid;
@@ -164,11 +162,10 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 		cpu_gid       = cpu_gid % arch_onln_cpu_nr();
 		cpu_lid       = arch_cpu_lid(cpu_gid, current_cluster->cpu_nr);
 		cid           = arch_cpu_cid(cpu_gid, current_cluster->cpu_nr);
-		attr.cluster  = clusters_tbl[cid].cluster;
-		attr.cpu      = &attr.cluster->cpu_tbl[cpu_lid];
+		attr.cluster  = cluster_cid2ptr(cid); //clusters_tbl[cid].cluster;
+		attr.cpu      = cpu_gid2ptr(cpu_gid); //&attr.cluster->cpu_tbl[cpu_lid];
 		err           = -100;
 		info.isPinned = true;
-		dqdt_update_threads_number(attr.cluster->levels_tbl[0], cpu_lid, 1);
 	}
 	else
 	{
@@ -230,6 +227,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 	child_task   = info.child_task;
 
 	spinlock_lock(&this_task->lock);
+
 	list_add(&this_task->children, &child_task->list);
 	spinlock_unlock(&this_task->lock);
 
@@ -238,12 +236,7 @@ int sys_fork(uint_t flags, uint_t cpu_gid)
 		  cpu_time_stamp());
   
 	fork_dmsg(1, "%s: going to add child to target scheduler\n", __FUNCTION__);
-	child_thread->state = S_CREATE;
-	tm_create_compute(child_thread);
-	listner = sched_get_listner(child_thread, SCHED_OP_ADD_CREATED);
-	event   = sched_event_make(child_thread, SCHED_OP_ADD_CREATED);
-	sched_event_send(listner,event);
-
+	sched_add_created(child_thread);
 	tm_end = cpu_time_stamp();
     
 	printk(INFO, "INFO: %s: cpu %d, pid %d, done [s:%u, bR:%u, aR:%u, e:%u, d:%u, t:%u, r:%u]\n",
@@ -286,12 +279,13 @@ error_t do_fork(fork_info_t *info)
 	child_task   = NULL;
 	page         = NULL;
 	attr.cluster = info->cpu->cluster;
-	
+	attr.cpu     = info->cpu;
+
+	dqdt_update_threads_number(attr.cluster->levels_tbl[0], attr.cpu->lid, 1);
+
 #if CONFIG_FORK_LOCAL_ALLOC
 	attr.cluster = info->current_clstr;
 #endif
-	attr.cpu = info->cpu;
-
 	err = task_create(&child_task, &attr, CPU_USR_MODE);
   
 #if CONFIG_FORK_LOCAL_ALLOC
@@ -432,6 +426,8 @@ fail_task_dup:
 
 fail_mem:
 fail_task:
+	dqdt_update_threads_number(attr.cluster->levels_tbl[0], attr.cpu->lid, -1);
+
 	printk(WARNING, "WARNING: %s: destroy child task\n", __FUNCTION__);
 
 	if(child_task != NULL)

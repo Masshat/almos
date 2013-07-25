@@ -56,14 +56,19 @@ const char* const thread_type_name[THREAD_TYPES_NR] =
 error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s **new_thread)
 {
 	kmem_req_t req;
+	struct cluster_s *cluster;
+	struct cpu_s *cpu;
 	register struct thread_s *thread;
 	struct page_s *page;
+
+	cluster = cluster_cid2ptr(attr->cid);
+	cpu     = cpu_gid2ptr(attr->cpu_gid);
 
 	// New Thread Ressources Allocation
 	req.type  = KMEM_PAGE;
 	req.size  = ARCH_THREAD_PAGE_ORDER;
 	req.flags = AF_KERNEL | AF_ZERO | AF_REMOTE;
-	req.ptr   = clusters_tbl[attr->cid].cluster;
+	req.ptr   = cluster;
 
 #if CONFIG_THREAD_LOCAL_ALLOC
 	req.ptr   = current_cluster;
@@ -78,7 +83,7 @@ error_t thread_create(struct task_s *task, pthread_attr_t *attr, struct thread_s
 	// Initialize new thread
 	spinlock_init(&thread->lock, "Thread");
 
-	thread_set_current_cpu(thread, &clusters_tbl[attr->cid].cluster->cpu_tbl[attr->cpu_lid]);
+	thread_set_current_cpu(thread,cpu);
 
 	sched_setpolicy(thread, attr->sched_policy);
 	thread->task = task;

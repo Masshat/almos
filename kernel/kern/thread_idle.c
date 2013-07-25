@@ -53,8 +53,6 @@ void* thread_idle(void *arg)
 	bool_t isBSCPU;
 	uint_t tm_now;
 	uint_t count;
-	uint_t event;
-	void *listner;
 	error_t err;
 
 	this    = current_thread;
@@ -87,13 +85,6 @@ void* thread_idle(void *arg)
 		{
 			reserved_pg = ppm_ppn2page(&cpu->cluster->ppm, reserved >> PMM_PAGE_SHIFT);
 			page_state_set(reserved_pg, PGINIT);       
-#if 0
-			printk(INFO, "INFO: Idle %d: Freeing Page %x [p 0x%x, v 0x%x]\n",
-			       id,
-			       reserved_pg, 
-			       reserved, 
-			       ppm_page2addr(reserved_pg));
-#endif
 			ppm_free_pages(reserved_pg);
 		}
 	}
@@ -113,14 +104,11 @@ void* thread_idle(void *arg)
 
 	err = sched_register(thread);
 	assert(err == 0);
-	thread->state = S_CREATE;
-	tm_create_compute(thread);
-	listner = sched_get_listner(thread, SCHED_OP_ADD_CREATED);
-	event   = sched_event_make(thread, SCHED_OP_ADD_CREATED);
-	sched_event_send(listner,event);
+
+	sched_add_created(thread);
 
 	if(isBSCPU)
-	{    
+	{
 		dqdt_update();
 #if 0
 		thread = kthread_create(this->task, 
@@ -142,11 +130,9 @@ void* thread_idle(void *arg)
 
 		err = sched_register(thread);
 		assert(err == 0);
-		thread->state = S_CREATE;
-		tm_create_compute(thread);
-		listner       = sched_get_listner(thread, SCHED_OP_ADD_CREATED);
-		event         = sched_event_make(thread, SCHED_OP_ADD_CREATED);
-		sched_event_send(listner,event);
+
+		sched_add_created(thread);
+
 #endif
 
 		if(clusters_tbl[cpu->cluster->id].flags & CLUSTER_IO)
@@ -168,12 +154,7 @@ void* thread_idle(void *arg)
 			wait_queue_init(&thread->info.wait_queue, "KVFSD");
 			err           = sched_register(thread);
 			assert(err == 0);
-			thread->state = S_CREATE;
-			tm_create_compute(thread);
-			listner       = sched_get_listner(thread, SCHED_OP_ADD_CREATED);
-			event         = sched_event_make(thread, SCHED_OP_ADD_CREATED);
-			sched_event_send(listner,event);
-
+			sched_add_created(thread);
 			printk(INFO,"INFO: kvfsd has been created\n");
 		}
 	}

@@ -77,7 +77,11 @@ EVENT_HANDLER(migrate_event_handler)
 	rinfo->event_tm = tm_end - tm_start;
 	cpu_wbflush();
 
+#if CONFIG_USE_SCHED_LOCKS
+	sched_wakeup(linfo.victim);
+#else
 	sched_event_send(rinfo->sched_listner, rinfo->sched_event);
+#endif
 	return 0;
 }
 
@@ -125,10 +129,6 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 		if((err) || (attr.cpu == cpu))
 		{
 			this->info.migration_fail_cntr ++;
-
-			if(err == 0)
-				dqdt_update_threads_number(logical, cpu->lid, -1);
-
 			return EAGAIN;
 		}
 	}
@@ -139,9 +139,7 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 		cluster         = clusters_tbl[cid].cluster;
 		attr.cpu        = &cluster->cpu_tbl[lid];
 		attr.cluster    = cluster;
-		attr.tm_request = (uint_t)-1;
-
-		dqdt_update_threads_number(cluster->levels_tbl[0], lid, 1);
+		attr.tm_request = 0;
 	}
 
 	cpu_disable_all_irq(&state);
@@ -171,8 +169,11 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 
 	info.victim        = this;
 	info.task          = task;
+
+#if !(CONFIG_USE_SCHED_LOCKS)
 	info.sched_listner = sched_get_listner(this, SCHED_OP_WAKEUP);
 	info.sched_event   = sched_event_make (this, SCHED_OP_WAKEUP);
+#endif
 
 	event_set_argument(&info.event, &info);
 	event_set_handler(&info.event, migrate_event_handler);
@@ -194,8 +195,6 @@ error_t thread_migrate(struct thread_s *this, sint_t target_gid)
 		thread_clear_exported(this);
 		return err;
 	}
-
-	dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
 
 	tm_end = cpu_time_stamp();
 
@@ -229,15 +228,22 @@ error_t do_migrate(th_migrate_info_t *info)
 	struct thread_s *victim;
 	error_t err;
 
-	cpu       = current_cpu;
 	task      = info->task;
 	victim    = info->victim;
+	cpu       = current_cpu;
+
+	dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, 1);
+
 	req.type  = KMEM_PAGE;
 	req.size  = 0;
 	req.flags = AF_KERNEL;
 	page      = kmem_alloc(&req);
 
-	if(page == NULL) return ENOMEM;
+	if(page == NULL)
+	{
+		err = ENOMEM;
+		goto fail_nomem;
+	}
 
 	new = ppm_page2addr(page);
   
@@ -285,5 +291,9 @@ error_t do_migrate(th_migrate_info_t *info)
 	new->info.migration_cntr ++;
 	sched_add(new);
 	return 0;
+
+fail_nomem:
+	dqdt_update_threads_number(cpu->cluster->levels_tbl[0], cpu->lid, -1);
+	return err;
 }
 

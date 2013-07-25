@@ -81,7 +81,6 @@ void task_default_placement(struct dqdt_attr_s *attr)
 	cpu_lid      %= current_cluster->cpu_nr;
 	attr->cluster = clusters_tbl[cid].cluster;
 	attr->cpu     = &attr->cluster->cpu_tbl[cpu_lid];
-	dqdt_update_threads_number(attr->cluster->levels_tbl[0], cpu_lid, 1);
 }
 
 struct task_s* task_lookup(uint_t pid)
@@ -538,6 +537,7 @@ error_t task_create(struct task_s **new_task, struct dqdt_attr_s *attr, uint_t m
 	task->childs_limit    = CONFIG_TASK_CHILDS_MAX_NR;
 	*new_task             = task;
 	tasks_mgr.tm_tbl[pid] = task;
+	cpu_wbflush();
 	return 0;
 
 fail_fd_info:

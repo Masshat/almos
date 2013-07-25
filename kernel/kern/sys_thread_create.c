@@ -94,7 +94,6 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	register error_t err;
 	sint_t order;
 	pthread_t new_key; 
-	uint_t sched_event;
 	uint_t tm_start;
 	uint_t tm_end;
 	uint_t tm_bRemote;
@@ -185,8 +184,6 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 			attr.cpu_gid = task->threads_nr % arch_onln_cpu_nr();
 			attr.cpu_lid = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
 			attr.cid     = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
-
-			dqdt_update_threads_number(clusters_tbl[attr.cid].cluster->levels_tbl[0], attr.cpu_lid, 1);
 		}
 	}
 	else
@@ -195,8 +192,6 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 		attr.cpu_lid  = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
 		attr.cid      = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
 		info.isPinned = true;
-
-		dqdt_update_threads_number(clusters_tbl[attr.cid].cluster->levels_tbl[0], attr.cpu_lid, 1);
 	}
 
 	info.isDone = false;
@@ -214,8 +209,8 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 	struct cluster_s *cluster;
 	struct cpu_s *cpu;
 
-	cluster = clusters_tbl[attr.cid].cluster;
-	cpu     = &cluster->cpu_tbl[attr.cpu_lid];
+	cluster = cluster_cid2ptr(attr.cid);
+	cpu     = cpu_gid2ptr(attr.cpu_gid);
 
 	event_send(&info.event, &cpu->re_listner);
 	cpu_wbflush();
@@ -257,8 +252,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 
 	if(err) goto fail_tid;
 
-	sched_event = sched_event_make(info.new_thread, SCHED_OP_ADD_CREATED);
-	sched_event_send(info.sched_listner, sched_event);
+	sched_add_created(info.new_thread);
 
 	/* Disable any sequential-phase affinity strategy */
 	this->info.attr.flags &= ~(PT_ATTR_MEM_PRIO | PT_ATTR_INTERLEAVE_SEQ);
@@ -310,6 +304,7 @@ fail_inval:
 error_t do_thread_create(thread_info_t *info)
 {
 	struct thread_s *new_thread;
+	struct cluster_s *cluster;
 	struct task_s *task;
 	pthread_attr_t *attr;
 	error_t err;
@@ -325,8 +320,11 @@ error_t do_thread_create(thread_info_t *info)
 
 	TIME_STAMP(tm_start);
 
-	task = info->task;
-	attr = info->attr;
+	task    = info->task;
+	attr    = info->attr;
+	cluster = cluster_cid2ptr(attr->cid);
+
+	dqdt_update_threads_number(cluster->levels_tbl[0], attr->cpu_lid, 1);
 
 	if(attr->stack_addr == NULL)
 	{
@@ -426,5 +424,6 @@ fail_create:
 	vmm_munmap(&task->vmm, (uint_t)attr->stack_addr, attr->stack_size + SIG_DEFAULT_STACK_SIZE);
 
 fail_nomem:
+	dqdt_update_threads_number(cluster->levels_tbl[0], attr->cpu_lid, -1);
 	return err;
 }
