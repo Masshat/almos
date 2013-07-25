@@ -32,7 +32,7 @@
  * so the modulus is implicit.
  */
 
-#if 1
+#if 0
 /* PRNG_A is a prime number */
 static uint32_t PRNG_A = 65519;
 
@@ -49,20 +49,22 @@ static atomic_t last_num;
  */
 void srand(unsigned int seed)
 {
-	//current_cpu->last_num = seed;
-	atomic_init(&last_num,seed);
+	current_cpu->last_num = seed;
+	//atomic_init(&last_num,seed);
 }
 
 uint_t rand(void)
 {  
+#if 0
 	uint_t old, new;
 	bool_t isAtomic = false;
 	uint_t count    = 1000;
+#endif
+	struct cpu_s *cpu;
 
-	//struct cpu_s *cpu;
-
-	//cpu = current_cpu;
-	//cpu->last_num = ((cpu->last_num * cpu->prng_A) + cpu->prng_C) ^ cpu_time_stamp();
+	cpu = current_cpu;
+	cpu->last_num = ((cpu->last_num * cpu->prng_A) + cpu->prng_C) ^ (cpu_time_stamp() & 0xFFF);
+#if 0
 	while((count > 0) && (isAtomic == false))
 	{
 		old = atomic_get(&last_num);
@@ -71,7 +73,8 @@ uint_t rand(void)
 		isAtomic = atomic_cas(&last_num, old, new);
 		count --;
 	}
+#endif
 
-	return new;
+	return cpu->last_num;
 }
 
