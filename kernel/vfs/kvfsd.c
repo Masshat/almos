@@ -110,8 +110,6 @@ void* kvfsd(void *arg)
 	if(err != 0)
 	{
 		struct thread_s *thread;
-		void *sched_listner;
-		uint_t sched_event;
 
 		printk(INFO, "INFO: Creating kernel level terminal\n"); 
 
@@ -124,11 +122,7 @@ void* kvfsd(void *arg)
 		list_add_last(&task->th_root, &thread->rope);
 		err = sched_register(thread);
 		assert(err == 0);
-		thread->state = S_CREATE;
-		tm_create_compute(thread);
-		sched_listner = sched_get_listner(thread, SCHED_OP_ADD_CREATED);
-		sched_event   = sched_event_make(thread, SCHED_OP_ADD_CREATED);
-		sched_event_send(sched_listner,sched_event);    
+		sched_add_created(thread);
 	}
 #endif
 
