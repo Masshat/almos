@@ -79,8 +79,6 @@ struct vfs_file_s* vfs_file_get(struct vfs_node_s *node)
 
 VFS_MMAP_FILE(vfs_default_mmap_file)
 {
-	uint_t irq_state;
-
 	region->vm_mapper = file->f_node->n_mapper;
 	region->vm_file   = file;
 
@@ -91,7 +89,11 @@ VFS_MMAP_FILE(vfs_default_mmap_file)
 	}
 
 #if CONFIG_USE_COA
-	if((region->vm_flags & VM_REG_SHARED) && (region->vm_flags & VM_REG_INST))
+	uint_t onln_clusters;
+
+	onln_clusters = arch_onln_cluster_nr();
+
+	if((region->vm_flags & VM_REG_SHARED) && (region->vm_flags & VM_REG_INST) && (onln_clusters > 1))
 	{
 		region->vm_pgprot &= ~(PMM_PRESENT);
 		region->vm_pgprot |= PMM_MIGRATE;
@@ -101,9 +103,9 @@ VFS_MMAP_FILE(vfs_default_mmap_file)
 
 	if(region->vm_flags & VM_REG_SHARED)
 	{
-		mcs_lock(&region->vm_mapper->m_reg_lock, &irq_state);
-		list_add_last(&region->vm_mapper->m_reg_root, &region->vm_mlist);
-		mcs_unlock(&region->vm_mapper->m_reg_lock, irq_state);
+		rwlock_wrlock(&region->vm_mapper->m_reg_lock);
+		list_add_last(&region->vm_mapper->m_reg_root, &region->vm_shared_list);
+		rwlock_unlock(&region->vm_mapper->m_reg_lock);
 		(void)atomic_add(&region->vm_mapper->m_refcount, 1);
 	}
 
@@ -119,14 +121,12 @@ VFS_MMAP_FILE(vfs_default_mmap_file)
 
 VFS_MUNMAP_FILE(vfs_default_munmap_file)
 {
-	uint_t irq_state;
-
 	if(region->vm_flags & VM_REG_SHARED)
 	{
 		(void)atomic_add(&region->vm_mapper->m_refcount, -1);
-		mcs_lock(&region->vm_mapper->m_reg_lock, &irq_state);
-		list_unlink(&region->vm_mlist);
-		mcs_unlock(&region->vm_mapper->m_reg_lock, irq_state);
+		rwlock_wrlock(&region->vm_mapper->m_reg_lock);
+		list_unlink(&region->vm_shared_list);
+		rwlock_unlock(&region->vm_mapper->m_reg_lock);
 	}
 
 	return 0;
