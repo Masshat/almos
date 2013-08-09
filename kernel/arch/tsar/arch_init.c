@@ -285,6 +285,13 @@ void arch_init(struct boot_info_s *info)
 
 	for(i=1; i < dev_nr; i++)
 	{
+		if((entry = drvdb_locate_byId(dev_tbl[i].id)) == NULL)
+		{
+			boot_dmsg("Warning: Unknown Device [cid %d, dev %d, base 0x%x, devid %d], Ignored\n",
+				  cid, i, dev_tbl[i].base, dev_tbl[i].id);
+			continue;
+		}
+
 		size = ARROUND_UP(dev_tbl[i].size, PMM_PAGE_SIZE);
 
 #if CONFIG_XICU_USR_ACCESS
@@ -299,12 +306,9 @@ void arch_init(struct boot_info_s *info)
 
 		arch_region_map(dev_base, dev_tbl[i].base, size, KDEV_ATTR);
 		dev_base += (dev_tbl[i].base & PMM_PAGE_MASK);
-    
+
 		if((dev = kmem_alloc(&req)) == NULL)
 			die("ERROR: Failed To Allocate Device [Cluster %d, Dev %d]\n",cid,i);
-      
-		if((entry = drvdb_locate_byId(dev_tbl[i].id)) == NULL)
-			die("ERROR: Unknown Device [Cluster %d, Dev %d, Devid %d]\n",cid,i,dev_tbl[i].id);
 
 		dev->base_paddr = (void*)dev_tbl[i].base;
 		driver          = drvdb_entry_get_driver(entry);
