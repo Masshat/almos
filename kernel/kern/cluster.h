@@ -71,6 +71,7 @@ struct cluster_s
 
 	/* Cluster keys */
 	void *keys_tbl[CLUSTER_TOTAL_KEYS_NR];
+	uint_t next_key;
 
 	/* Replica of Global Clusters Tabl */
 	struct cluster_s **clusters_tbl;
@@ -111,8 +112,11 @@ struct cluster_s
 	/* Hardware related info */
 	struct arch_cluster_s arch;
 
-	/* Cluter BootStrap Processor */
+	/* Cluter's BootStrap CPU */
 	struct cpu_s *bscpu;
+
+	/* BootStrap Cluster */
+	struct cluster_s *bscluster;
 };
 
 struct cluster_entry_s
@@ -145,11 +149,13 @@ error_t cluster_init_cores_table(void);
 struct cluster_key_s;
 typedef struct cluster_key_s ckey_t;
 
-#define cluster_get_keyVal(key_addr)
+#define cluster_get_keyValue(key_addr)
+
 error_t cluster_key_create(ckey_t *key);
 void* cluster_getspecific(ckey_t *key);
-error_t cluster_setspecific(ckey_t *key, void *val);
-void cluster_key_delete(ckey_t *key);
+void  cluster_setspecific(ckey_t *key, void *val);
+error_t cluster_key_delete(ckey_t *key);
+
 void* cluster_manager_thread(void *arg);
 
 /////////////////////////////////////////////
@@ -157,12 +163,11 @@ void* cluster_manager_thread(void *arg);
 /////////////////////////////////////////////
 struct cluster_key_s
 {
-	uint_t val;
-	uint_t pad[CONFIG_CACHE_LINE_LENGTH - 1];
-}__attribute__ ((packed));
+	uint_t val CACHELINE;
+};
 
-#undef cluster_get_keyVal
-#define cluster_get_keyVal(_key) ((_key)->val)
+#undef cluster_get_keyValue
+#define cluster_get_keyValue(_key) ((_key)->val)
 /* Nota: set_id_by_name/get_id_by_name */
 
 #undef cluster_get_cpus_nr

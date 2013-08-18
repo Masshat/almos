@@ -142,6 +142,7 @@ void kern_init (boot_info_t *info)
 		dqdt_init(info);
 
 		cluster = clusters_tbl[cluster_id].cluster;
+		cluster->bscluster = clusters_tbl[info->boot_cluster_id].cluster;
 
 #if CONFIG_KERNEL_REPLICATE
 		tm_start = cpu_time_stamp();

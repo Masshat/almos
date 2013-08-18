@@ -117,7 +117,8 @@ error_t cluster_init(struct boot_info_s *info,
 	atomic_init(&cluster->vfs_nodes_nr, 0);
 	memset(&cluster->levels_tbl[0], 0, sizeof(cluster->levels_tbl));
 	memset(&cluster->keys_tbl[0], 0, sizeof(cluster->keys_tbl));
-  
+	cluster->next_key = KMEM_TYPES_NR;
+
 	list_root_init(&cluster->devlist);
   
 	start_vaddr += sizeof(*cluster);
@@ -158,7 +159,7 @@ error_t cluster_init(struct boot_info_s *info,
 	}
 
 	cluster->cpu_tbl[info->local_cpu_id].state = CPU_ACTIVE;
-  
+
 	if(cid == info->boot_cluster_id)
 	{
 		entry->flags = CLUSTER_UP | CLUSTER_IO;
@@ -335,4 +336,112 @@ void* cluster_manager_thread(void *arg)
 	}
 
 	return NULL;
+}
+
+
+EVENT_HANDLER(cluster_key_create_event_handler)
+{
+	struct cluster_s *cluster;
+	struct thread_s *sender;
+	ckey_t *ckey;
+	uint_t key;
+
+	sender  = event_get_senderId(event);
+	ckey    = event_get_argument(event);
+	cluster = current_cluster;
+	key     = cluster->next_key;
+
+	while((key < CLUSTER_TOTAL_KEYS_NR) && (cluster->keys_tbl[key] != NULL))
+		key ++;
+
+	if(key < CLUSTER_TOTAL_KEYS_NR)
+	{
+		ckey->val = key;
+		cluster->keys_tbl[key] = (void *) 0x1; /* Reserved */
+		cluster->next_key = key;
+		event_set_error(event, 0);
+	}
+	else
+		event_set_error(event, ENOSPC);
+
+	sched_wakeup(sender);
+	return 0;
+}
+
+EVENT_HANDLER(cluster_key_delete_event_handler)
+{
+	struct cluster_s *cluster;
+	struct thread_s *sender;
+	ckey_t *ckey;
+	uint_t key;
+
+	sender  = event_get_senderId(event);
+	ckey    = event_get_argument(event);
+	cluster = current_cluster;
+	key     = ckey->val;
+
+	if(key < cluster->next_key)
+		cluster->next_key = key;
+
+	cluster->keys_tbl[key] = NULL;
+	event_set_error(event, 0);
+
+	sched_wakeup(sender);
+	return 0;
+}
+
+#define _CKEY_CREATE  0x0
+#define _CKEY_DELETE  0x1
+
+error_t cluster_do_key_op(ckey_t *key, uint_t op)
+{
+	struct event_s event;
+	struct thread_s *this;
+	struct cluster_s *cluster;
+	struct cpu_s *cpu;
+
+	this = current_thread;
+
+	event_set_priority(&event, E_FUNC);
+	event_set_senderId(&event, this);
+	event_set_argument(&event, key);
+
+	if(op == _CKEY_CREATE)
+		event_set_handler(&event, cluster_key_create_event_handler);
+	else
+		event_set_handler(&event, cluster_key_delete_event_handler);
+
+	cluster = current_cluster;
+	cpu     = cluster->bscluster->bscpu;
+	event_send(&event, &cpu->re_listner);
+
+	sched_sleep(this);
+
+	return event_get_error(&event);
+}
+
+error_t cluster_key_create(ckey_t *key)
+{
+	return cluster_do_key_op(key, _CKEY_CREATE);
+}
+
+error_t cluster_key_delete(ckey_t *key)
+{
+	return cluster_do_key_op(key, _CKEY_DELETE);
+}
+
+void* cluster_getspecific(ckey_t *key)
+{
+	struct cluster_s *cluster;
+
+	cluster = current_cluster;
+	return cluster->keys_tbl[key->val];
+}
+
+void  cluster_setspecific(ckey_t *key, void *val)
+{
+	struct cluster_s *cluster;
+
+	cluster = current_cluster;
+	cluster->keys_tbl[key->val] = val;
 }
