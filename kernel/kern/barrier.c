@@ -149,11 +149,11 @@ error_t barrier_wait(struct barrier_s *barrier)
 	register struct thread_s *this;
 	uint_t irq_state;
 	uint_t tm_now;
-  
+
 	tm_now = cpu_time_stamp(); 
 	this   = current_thread;
 	index  = this->info.order;
-  
+
 	if((barrier->signature != BARRIER_ID) || ((barrier->owner != NULL) && (barrier->owner != this->task)))
 		return EINVAL;
 
@@ -169,14 +169,14 @@ error_t barrier_wait(struct barrier_s *barrier)
 
 	wqdb->tbl[index % wqdbsz].event   = event;
 	wqdb->tbl[index % wqdbsz].listner = listner;
-  
+
 #if CONFIG_BARRIER_ACTIVE_WAIT
 	register uint_t current_phase;
 	current_phase = barrier->phase;
 #endif	/* CONFIG_BARRIER_ACTIVE_WAIT */
 
 	cpu_disable_all_irq(&irq_state);
-  
+
 	ticket = arch_barrier_wait(barrier->cluster, barrier->hwid);
 
 	cpu_restore_irq(irq_state);
@@ -188,7 +188,7 @@ error_t barrier_wait(struct barrier_s *barrier)
 
 	else if(ticket == 1)
 		barrier->tm_last  = tm_now;
-  
+
 #if CONFIG_BARRIER_ACTIVE_WAIT
 	while(cpu_uncached_read(&barrier->state[current_phase]) == 0)
 		sched_yield(this);
@@ -201,23 +201,35 @@ error_t barrier_wait(struct barrier_s *barrier)
 
 #else  /* ! ARCH_HAS_BARRIERS */
 
+/* TODO: reintroduce barrier's ops to deal with case-specific treatment */
 error_t barrier_wait(struct barrier_s *barrier)
 {
 	register uint_t ticket;
 	register uint_t index;
 	register uint_t wqdbsz;
 	register wqdb_t *wqdb;
+	register bool_t isShared;
 	struct thread_s *this;
 	uint_t tm_now;
 
-	tm_now = cpu_time_stamp();
-	this   = current_thread;
-	index  = this->info.order;
+	tm_now   = cpu_time_stamp();
+	this     = current_thread;
+	index    = this->info.order;
+	ticket   = 0;
+	isShared = (barrier->owner == NULL) ? true : false;
 
-	if((barrier->signature != BARRIER_ID) || ((barrier->owner != NULL) && (barrier->owner != this->task)))
+	if((barrier->signature != BARRIER_ID) || ((isShared == false) && (barrier->owner != this->task)))
 		return EINVAL;
 
 	wqdbsz = PMM_PAGE_SIZE / sizeof(wqdb_record_t);
+
+	if(isShared)
+	{
+		spinlock_lock(&barrier->lock);
+		index  = barrier->index ++;
+		ticket = barrier->count - index;
+	}
+
 	wqdb   = barrier->wqdb_tbl[index / wqdbsz];
 
 #if CONFIG_USE_SCHED_LOCKS
@@ -229,7 +241,8 @@ error_t barrier_wait(struct barrier_s *barrier)
 	wqdb->tbl[index % wqdbsz].listner = sched_get_listner(this, SCHED_OP_WAKEUP);
 #endif
 
-	ticket = atomic_add(&barrier->waiting, -1);
+	if(isShared == false)
+		ticket = atomic_add(&barrier->waiting, -1);
 
 	if(ticket == 1)
 	{
@@ -238,7 +251,15 @@ error_t barrier_wait(struct barrier_s *barrier)
 #endif
 		barrier->tm_last = tm_now;
 		wqdb->tbl[index % wqdbsz].listner = NULL;
-		atomic_init(&barrier->waiting, barrier->count);
+
+		if(isShared)
+		{
+			barrier->index = 0;
+			spinlock_unlock(&barrier->lock);
+		}
+		else
+			atomic_init(&barrier->waiting, barrier->count);
+
 		barrier_do_broadcast(barrier);
 		return PTHREAD_BARRIER_SERIAL_THREAD;
 	}
@@ -246,6 +267,7 @@ error_t barrier_wait(struct barrier_s *barrier)
 	if(ticket == barrier->count)
 		barrier->tm_first = tm_now;
 
+	spinlock_unlock_nosched(&barrier->lock);
 	sched_sleep(this);
 
 #if !(CONFIG_USE_SCHED_LOCKS)
@@ -307,7 +329,14 @@ error_t barrier_init(struct barrier_s *barrier, uint_t count, uint_t scope)
 	if(barrier->hwid < 0)
 		return ENOMEM;		/* TODO: we can use software barrier instead */
 #else
-	atomic_init(&barrier->waiting, count);
+	if(barrier->owner != NULL)
+		atomic_init(&barrier->waiting, count);
+	else
+	{
+		spinlock_init(&barrier->lock, "barrier");
+		barrier->index = 0;
+	}
+
 #endif	/* ARCH_HAS_BARRIERS */
 
 	req.type  = KMEM_PAGE;
@@ -368,7 +397,11 @@ error_t barrier_destroy(struct barrier_s *barrier)
 #if ARCH_HAS_BARRIERS
 	(void) arch_barrier_destroy(barrier->cluster, barrier->hwid);
 #else
-	cntr = atomic_get(&barrier->waiting);
+	if(barrier->owner == NULL)
+		cntr = barrier->index;
+	else
+		cntr = atomic_get(&barrier->waiting);
+
 	if(cntr != 0) return EBUSY;
 #endif	/* ARCH_HAS_BARRIERS */
 
@@ -380,6 +413,9 @@ error_t barrier_destroy(struct barrier_s *barrier)
 		req.ptr = barrier->pages_tbl[cntr];
 		kmem_free(&req);
 	}
+
+	if(barrier->owner == NULL)
+		spinlock_destroy(&barrier->lock);
 
 	return 0;
 }

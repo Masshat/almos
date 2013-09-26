@@ -32,7 +32,7 @@ typedef enum
 	BARRIER_INIT_PRIVATE,
 	BARRIER_WAIT,
 	BARRIER_DESTROY,
-	BARRIER_INIT_SHARED
+	BARRIER_INIT_SHARED,
 } barrier_operation_t;
 
 struct task_s;
@@ -43,11 +43,22 @@ struct cluster_s;
 
 struct barrier_s
 {
-	atomic_t waiting;
+	union
+	{
+		atomic_t waiting;
+		spinlock_t lock;
+	};
+
 	uint_t signature;
 	struct task_s *owner;
 	uint_t count;
-	uint_t hwid;
+
+	union
+	{
+		uint_t index;
+		uint_t hwid;
+	};
+
 	uint_t state[2];
 	uint_t phase;
 	uint_t tm_first;
