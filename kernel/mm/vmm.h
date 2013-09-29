@@ -25,6 +25,7 @@
 
 #include <types.h>
 #include <list.h>
+#include <rbtree.h>
 #include <spinlock.h>
 #include <rwlock.h>
 #include <pmm.h>
@@ -58,8 +59,10 @@ struct vmm_s
 
 	/* Attached Virtual Regions */
 	struct vm_region_s *last_region;
+	struct rb_root regions_tree;
 	struct list_entry regions_root;
 	struct keysdb_s regions_db;
+	uint_t last_mmap;
 	uint_t limit_addr;
 	uint_t devreg_addr;
 	

@@ -39,7 +39,9 @@ error_t vmm_init(struct vmm_s *vmm)
 	rwlock_init(&vmm->rwlock);
 
 	list_root_init(&vmm->regions_root);
+	vmm->regions_tree.rb_node = NULL;
 
+	vmm->last_mmap           = 0;
 	vmm->pgfault_nr          = 0;
 	vmm->spurious_pgfault_nr = 0;
 	vmm->remote_pages_nr     = 0;
@@ -1278,6 +1280,7 @@ const struct vm_region_op_s vm_region_default_op =
 	.page_lookup = NULL,
 	.page_fault  = vmm_default_pagefault
 };
+
 
 
 void vmm_keysdb_update(struct vmm_s *vmm, struct vm_region_s *region, uint_t vaddr)

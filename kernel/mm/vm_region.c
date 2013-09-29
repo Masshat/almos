@@ -59,6 +59,10 @@ KMEM_OBJATTR_INIT(vm_region_kmem_init)
 	return 0;
 }
 
+#if CONFIG_VMM_REGION_DEBUG
+static int browse_rb(struct rb_root *root);
+#endif
+
 error_t vm_region_init(struct vm_region_s *region,
 		       uint_t vma_start, 
 		       uint_t vma_end, 
@@ -112,12 +116,11 @@ error_t vm_region_init(struct vm_region_s *region,
 }
 
 error_t vm_region_destroy(struct vm_region_s *region)
-{
-  
+{  
 	return 0;
 }
 
-struct vm_region_s* vm_region_find(struct vmm_s *vmm, uint_t vaddr)
+struct vm_region_s* vm_region_find_list(struct vmm_s *vmm, uint_t vaddr)
 {
 	struct vm_region_s *region;
 	struct list_entry *iter;
@@ -136,76 +139,167 @@ struct vm_region_s* vm_region_find(struct vmm_s *vmm, uint_t vaddr)
 	return NULL;
 }
 
-error_t vm_region_add(struct vmm_s *vmm, struct vm_region_s *region)
+/* This function has been adapted from Linux source code */
+static struct vm_region_s* vm_region_find_prepare(struct vmm_s *vmm, uint_t addr,
+						  struct vm_region_s **pprev,
+						  struct rb_node ***rb_link,
+						  struct rb_node ** rb_parent)
 {
-	register struct vm_region_s *current_reg;
-	register struct vm_region_s *next_reg;
-	register struct list_entry *iter;
-	register struct list_entry *next;
-	register uint_t effective_size;
-  
-	effective_size = region->vm_end; // + ((PMM_PAGE_SIZE) << 1);
+	struct vm_region_s * vma;
+	struct rb_node ** __rb_link, * __rb_parent, * rb_prev;
 
-	list_foreach_forward(&vmm->regions_root, iter)
-	{
-		next = list_next(&vmm->regions_root, iter);
-		if(next == NULL) break;
+	__rb_link = &vmm->regions_tree.rb_node;
+	rb_prev = __rb_parent = NULL;
+	vma = NULL;
 
-		current_reg = list_element(iter, struct vm_region_s, vm_list);
-		next_reg    = list_element(next, struct vm_region_s, vm_list);
-    
-		if((current_reg->vm_end + effective_size) <= next_reg->vm_begin)
-		{
-			list_add_next(iter, &region->vm_list);
+	while (*__rb_link) {
+		struct vm_region_s *vma_tmp;
 
-			region->vm_start  = current_reg->vm_end;
-			region->vm_limit += region->vm_start;
-			region->vm_begin  = current_reg->vm_end;
-			region->vm_end   += region->vm_begin;
+		__rb_parent = *__rb_link;
+		vma_tmp = rb_entry(__rb_parent, struct vm_region_s, vm_node);
 
-			return 0;
+		if (vma_tmp->vm_end > addr) {
+			vma = vma_tmp;
+			if (vma_tmp->vm_begin <= addr)
+				break;
+			__rb_link = &__rb_parent->rb_left;
+		} else {
+			rb_prev = __rb_parent;
+			__rb_link = &__rb_parent->rb_right;
 		}
 	}
 
-	current_reg = list_last(&vmm->regions_root, struct vm_region_s, vm_list);
-  
-	if((current_reg->vm_end + effective_size) > vmm->limit_addr)
+	*pprev = NULL;
+	if (rb_prev)
+		*pprev = rb_entry(rb_prev, struct vm_region_s, vm_node);
+	*rb_link = __rb_link;
+	*rb_parent = __rb_parent;
+	return vma;
+}
+
+/* This function has been adapted from Linux source code */
+static void __vma_link_rb(struct vmm_s *mm, struct vm_region_s *vma,
+		struct rb_node **rb_link, struct rb_node *rb_parent)
+{
+	rb_link_node(&vma->vm_node, rb_parent, rb_link);
+	rb_insert_color(&vma->vm_node, &mm->regions_tree);
+}
+
+/* This function has been adapted from Linux source code */
+struct vm_region_s* vm_region_find(struct vmm_s *vmm, uint_t vaddr)
+{
+	struct vm_region_s *reg;
+	struct vm_region_s *ptr;
+	struct rb_node *node;
+
+	reg  = NULL;
+	node = vmm->regions_tree.rb_node;
+
+	while(node != NULL)
+	{
+		ptr = rb_entry(node, struct vm_region_s, vm_node);
+
+		if(vaddr < ptr->vm_end)
+		{
+			reg = ptr;
+
+			if (vaddr >= ptr->vm_begin)
+				break;
+
+			node = node->rb_left;
+		}
+		else
+			node = node->rb_right;
+	}
+
+	return reg;
+}
+
+static error_t vm_region_solve(struct vmm_s *vmm, struct vm_region_s *region)
+{
+	struct rb_node **rb_link, *rb_parent;
+	struct vm_region_s *reg, *prev;
+	uint_t start;
+	uint_t size;
+	uint_t limit;
+
+	size  = region->vm_end;
+	limit = CONFIG_USR_LIMIT - size;
+	reg   = NULL;
+	start = vmm->last_mmap;
+
+	while(start <= limit)
+	{
+		reg = vm_region_find_prepare(vmm, start, &prev, &rb_link, &rb_parent);
+
+		if((reg == NULL) || ((start + size) < reg->vm_begin))
+			break;
+
+		start = reg->vm_end;
+	}
+
+	if(start > limit)
 		return ENOMEM;
 
-	list_add_last(&vmm->regions_root, &region->vm_list);
-	region->vm_start  = current_reg->vm_end;
-	region->vm_limit += region->vm_start;
+	region->vm_begin  = start;
+	region->vm_start  = start;
+	region->vm_limit += start;
+	region->vm_end    = start + size;
+
+	__vma_link_rb(vmm, region, rb_link, rb_parent);
+
+	if(reg != NULL)
+	{
+		if(region->vm_begin < reg->vm_begin)
+			list_add_pred(&reg->vm_list, &region->vm_list);
+		else
+			list_add_next(&reg->vm_list, &region->vm_list);
+	}
+	else
+		list_add_last(&vmm->regions_root, &region->vm_list);
 
 	return 0;
 }
 
-error_t vm_region_attach(struct vmm_s *vmm, struct vm_region_s *region)
+static error_t vm_region_attach_rbtree(struct vmm_s *vmm, struct vm_region_s *region)
 {
-	struct vm_region_s *reg;
-	error_t err;
+	struct rb_node **rb_link, *rb_parent;
+	struct vm_region_s *reg, *prev;
 
 	region->vmm = vmm;
-  
+
 	if(region->vm_flags & VM_REG_FIXED)
 	{
-		reg = vm_region_find(vmm, region->vm_begin);
+		reg = vm_region_find_prepare(vmm, region->vm_begin, &prev, &rb_link, &rb_parent);
+
+		if((reg != NULL) && (region->vm_begin >= reg->vm_begin))
+			return EEXIST;
 
 		if(reg == NULL)
 			list_add_last(&vmm->regions_root, &region->vm_list);
 		else
-		{
-			if(reg->vm_begin < region->vm_end)
-				return ERANGE;
-     
 			list_add_pred(&reg->vm_list, &region->vm_list);
-		}
-    
+
+		__vma_link_rb(vmm, region, rb_link, rb_parent);
 		return 0;
 	}
 
-	err = vm_region_add(vmm,region);
+	return vm_region_solve(vmm, region);
+}
 
-	return err;
+error_t vm_region_attach(struct vmm_s *vmm, struct vm_region_s *region)
+{
+	error_t	err = vm_region_attach_rbtree(vmm, region);
+
+	if(err) return err;
+
+	vmm->last_mmap = region->vm_begin;
+
+#if CONFIG_VMM_REGION_DEBUG
+	uint_t count = browse_rb(&vmm->regions_tree);
+	printk(INFO, "%s: found %d regions\n", __FUNCTION__, count);
+#endif
+	return 0;
 }
 
 /* TODO: compute LAZY flag */
@@ -281,6 +375,13 @@ error_t vm_region_detach(struct vmm_s *vmm, struct vm_region_s *region)
 	bool_t isSharedAnon;
 
 	list_unlink(&region->vm_list);
+	rb_erase(&region->vm_node, &vmm->regions_tree);
+	
+	if(vmm->last_region == region)
+		vmm->last_region = NULL;
+
+	if(region->vm_end < vmm->last_mmap)
+		vmm->last_mmap = region->vm_begin;
 
 	if(!(region->vm_flags & VM_REG_LAZY))
 	{
@@ -333,6 +434,8 @@ error_t vm_region_resize(struct vmm_s *vmm, struct vm_region_s *region, uint_t s
 /* TODO: use a marker of last active page in the region, purpose is to reduce time of duplication */
 error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 {
+	struct rb_node **rb_link, *rb_parent;
+	struct vm_region_s *prev;
 	register struct pmm_s *src_pmm;
 	register struct pmm_s *dst_pmm;
 	register uint_t vaddr;
@@ -359,6 +462,9 @@ error_t vm_region_dup(struct vm_region_s *dst, struct vm_region_s *src)
 	dst->vm_file    = src->vm_file;
 	dst->vm_data    = src->vm_data;
 	task            = vmm_get_task(dst->vmm);
+
+	(void) vm_region_find_prepare(dst->vmm, dst->vm_begin, &prev, &rb_link, &rb_parent);
+	__vma_link_rb(dst->vmm, dst, rb_link, rb_parent);
 
 	if(src->vm_file != NULL)
 		atomic_add(&src->vm_file->f_count, 1);
@@ -549,3 +655,48 @@ update_end:
 	return err;
 }
 
+#if CONFIG_VMM_REGION_DEBUG
+/* This function is adapted from Linux source code */
+static int browse_rb(struct rb_root *root)
+{
+	int i = 0, j;
+	struct rb_node *nd, *pn = NULL;
+	unsigned long prev = 0, pend = 0;
+
+	for (nd = rb_first(root); nd; nd = rb_next(nd))
+	{
+		struct vm_region_s *vma;
+
+		vma = rb_entry(nd, struct vm_region_s, vm_node);
+
+		if (vma->vm_begin < prev)
+		{
+			vmm_reg_dmsg(1,"vm_begin %x prev %x\n", vma->vm_begin, prev);
+			i = -1;
+		}
+
+		if (vma->vm_begin < pend)
+			vmm_reg_dmsg(1,"vm_begin %x pend %x\n", vma->vm_begin, pend);
+
+		if (vma->vm_begin > vma->vm_end)
+			vmm_reg_dmsg(1,"vm_end %x < vm_start %x\n", vma->vm_end, vma->vm_begin);
+
+		i++;
+		pn = nd;
+		prev = vma->vm_begin;
+		pend = vma->vm_end;
+	}
+	
+	j = 0;
+	for (nd = pn; nd; nd = rb_prev(nd)) {
+		j++;
+	}
+
+	if (i != j)
+	{
+		vmm_reg_dmsg(1,"backwards %d, forwards %d\n", j, i); i = 0;
+	}
+
+	return i;
+}
+#endif /* CONFIG_VMM_REGION_DEBUG */

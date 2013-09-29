@@ -24,6 +24,7 @@
 #define _VM_REGION_H_
 
 #include <types.h>
+#include <rbtree.h>
 //#include <spinlock.h>
 #include <mcs_sync.h>
 #include <atomic.h>
@@ -60,6 +61,7 @@ struct vm_region_s;
 /* Virtual Memory Region */
 struct vm_region_s
 {
+	struct rb_node vm_node;
 //	spinlock_t vm_lock;
 	mcs_lock_t vm_lock;
 	atomic_t vm_refcount;
