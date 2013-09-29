@@ -192,6 +192,7 @@ int sys_thread_create (pthread_t *tid, pthread_attr_t *thread_attr)
 		attr.cpu_lid  = arch_cpu_lid(attr.cpu_gid, current_cluster->cpu_nr);
 		attr.cid      = arch_cpu_cid(attr.cpu_gid, current_cluster->cpu_nr);
 		info.isPinned = true;
+		dqdt_attr.tm_request = 0;
 	}
 
 	info.isDone = false;
