@@ -237,6 +237,10 @@ error_t put_block(struct kcm_s *kcm, void *ptr)
 
 	if(!(KCM_PAGE_IS(pinfo->flags, KCM_PAGE_ACTIVE)) && (pinfo->refcount == 0))
 	{
+		/* TODO: check if it is a remote page and there is more
+		 * pages than the low watermark, then return it to its ppm.
+		 * Returning back a remote page should be a deferred local event */
+
 		list_unlink(&pinfo->list);
 		list_add_first(&kcm->freelist, &pinfo->list);
 		kcm->free_pages_nr ++;
@@ -370,6 +374,8 @@ page_info_t* compute_active_page(struct kcm_s *kcm)
 	return pinfo_new;
 }
 
+/* TODO: deal with the caller AF_FLAGS
+ * check if the gotten page is a remote one */
 struct page_s* kcm_page_alloc(struct kcm_s *kcm)
 {
 	register struct cluster_s *cluster;
