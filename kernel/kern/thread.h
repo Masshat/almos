@@ -34,6 +34,7 @@ typedef enum
 	PTHREAD = 0,
 	KTHREAD,
 	TH_IDLE,
+	TH_BOOT,
 	THREAD_TYPES_NR
 } thread_type_t;
 
@@ -212,6 +213,7 @@ struct thread_s
 #define thread_clear_wakeable(thread)
 #define thread_set_no_vmregion(thread)
 #define thread_has_vmregion(thread)
+#define thread_isBootStrap(thread)
 
 /* Currents task, thread, cluster, cpu  */
 #define current_task
@@ -328,6 +330,8 @@ EVENT_HANDLER(thread_destroy_handler);
 #undef thread_clear_wakeable
 #undef thread_set_no_vmregion
 #undef thread_has_vmregion
+#undef thread_isBootStrap
+
 #define thread_isJoinable(_th)         ((_th)->joinable != 0)
 #define thread_set_joinable(_th)     do{(_th)->joinable = 1;}while(0)
 #define thread_clear_joinable(_th)   do{(_th)->joinable = 0;}while(0)
@@ -435,6 +439,8 @@ EVENT_HANDLER(thread_destroy_handler);
 
 #define thread_set_no_vmregion(_th) do{(_th)->flags |= TH_NO_VM_REGION;}while(0)
 #define thread_has_vmregion(_th)    (((_th)->flags & TH_NO_VM_REGION) == 0)
+
+#define thread_isBootStrap(_th) ((_th)->type == TH_BOOT)
 
 /* Currents task, thread, cluster, cpu  */
 #undef current_task

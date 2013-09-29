@@ -75,7 +75,7 @@ void kern_init (boot_info_t *info)
 
 	memset(&thread0, 0, sizeof(thread0));
 	cpu_set_current_thread(&thread0);
-	thread0.type  = TH_IDLE;
+	thread0.type  = TH_BOOT;
 	thread0.state = S_KERNEL;
 	thread0.task  = task0;
  
