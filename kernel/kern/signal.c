@@ -97,7 +97,7 @@ static error_t signal_rise_one(struct task_s *task, uint_t sig)
 	else
 		thread = task->sig_mgr.handler;
 
-	spinlock_unlock(&thread->lock);
+	spinlock_lock(&thread->lock);
 	thread->info.sig_state |= (1 << sig);
 	spinlock_unlock(&thread->lock);
 
