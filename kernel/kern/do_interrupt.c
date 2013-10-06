@@ -110,6 +110,6 @@ void do_interrupt(struct thread_s *this, uint_t irq_num)
 	}
 
 	tm_sys_compute(this);
-	this->state = old_state;
+	this->state = S_USR;
 	signal_notify(this);
 }

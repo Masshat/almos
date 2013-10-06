@@ -214,6 +214,9 @@ struct thread_s
 #define thread_set_no_vmregion(thread)
 #define thread_has_vmregion(thread)
 #define thread_isBootStrap(thread)
+#define thread_set_signaled(thread)
+#define thread_clear_signaled(thread)
+#define thread_isSignaled(thread)
 
 /* Currents task, thread, cluster, cpu  */
 #define current_task
@@ -292,6 +295,7 @@ EVENT_HANDLER(thread_destroy_handler);
 #define TH_EXPORTED         0x100
 #define TH_IMPORTED         0x200
 #define TH_FORCED_YIELD     0x400
+#define TH_DOING_SIGNAL     0x800
 
 /* Thread Attributes */
 #undef thread_isJoinable
@@ -331,6 +335,9 @@ EVENT_HANDLER(thread_destroy_handler);
 #undef thread_set_no_vmregion
 #undef thread_has_vmregion
 #undef thread_isBootStrap
+#undef thread_set_signaled
+#undef thread_clear_signaled
+#undef thread_isSignaled
 
 #define thread_isJoinable(_th)         ((_th)->joinable != 0)
 #define thread_set_joinable(_th)     do{(_th)->joinable = 1;}while(0)
@@ -441,6 +448,10 @@ EVENT_HANDLER(thread_destroy_handler);
 #define thread_has_vmregion(_th)    (((_th)->flags & TH_NO_VM_REGION) == 0)
 
 #define thread_isBootStrap(_th) ((_th)->type == TH_BOOT)
+
+#define thread_set_signaled(_th) do{(_th)->flags |= TH_DOING_SIGNAL;}while(0)
+#define thread_clear_signaled(_th) do{(_th)->flags &= ~TH_DOING_SIGNAL;}while(0)
+#define thread_isSignaled(_th) ((_th)->flags & TH_DOING_SIGNAL)
 
 /* Currents task, thread, cluster, cpu  */
 #undef current_task

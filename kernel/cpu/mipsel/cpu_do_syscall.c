@@ -62,7 +62,13 @@ static void sys_sigreturn(void)
 		sys_thread_exit((void*)EINTR);
 	}
 
-	cpu_fpu_disable();
+	if(current_cpu->fpu_owner == this)
+	{
+		current_cpu->fpu_owner = NULL;
+		cpu_fpu_disable();
+	}
+
+	thread_clear_signaled(this);
 
 	this->uzone.regs[V0]   = this->info.retval;
 	this->uzone.regs[V1]   = this->info.errno;

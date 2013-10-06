@@ -233,9 +233,6 @@ END_DO_SYSCALL:
 	}
 
 ABORT_DO_SYSCALL:
-	tm_sys_compute(this);
-	this->state = S_USR;
-
 	if(this->info.isTraced == true)
 	{
 		printk(DEBUG, "DEBUG: %s: Pid %d, Tid %d (%x), CPU %d, Service #%d, Return %x, Error %d\n",
@@ -249,7 +246,10 @@ ABORT_DO_SYSCALL:
 		       this->info.errno);
 	}
 
+	tm_sys_compute(this);
 	this->info.retval = return_val;
+	this->state = S_USR;
 	signal_notify(this);
+
 	return return_val;
 }

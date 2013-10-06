@@ -66,7 +66,10 @@ void cpu_signal_notify(struct thread_s *this, void *handler, uint_t sig)
 	error_t err;
   
 	cpu = current_cpu;
-	cpu_fpu_context_save(&cpu->fpu_owner->uzone);
+
+	if(cpu->fpu_owner != NULL)
+		cpu_fpu_context_save(&cpu->fpu_owner->uzone);
+
 	cpu->fpu_owner = this;
   
 	stack_top  = this->pws.sigstack_top;
