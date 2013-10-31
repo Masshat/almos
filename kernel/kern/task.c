@@ -140,14 +140,14 @@ inline void* task_vaddr2paddr(struct task_s* task, void *vma)
   
 	if((err) || ((info.attr & PMM_PRESENT) == 0))
 	{
-		printk(ERROR, "ERROR: %s: task (%x) vma (%x), thread (%x), CPU (%d), Err %d, attr %x, ppn %x\n", 
-		       __FUNCTION__, 
-		       task, 
-		       vma, 
-		       current_thread, 
-		       cpu_get_id(), 
-		       err, 
-		       info.attr, 
+		printk(WARNING, "WARNING: %s: core %d, pid %d, tid %d, vma 0x%x, err %d, attr 0x%x, ppn 0x%x\n",
+		       __FUNCTION__,
+		       cpu_get_id(),
+		       task->pid,
+		       current_thread->info.order,
+		       vma,
+		       err,
+		       info.attr,
 		       info.ppn);
 
 		return NULL;
