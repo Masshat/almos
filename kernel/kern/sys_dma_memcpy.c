@@ -33,11 +33,6 @@
 #include <cluster.h>
 #include <kcm.h>
 
-static void dma_request_ctor(struct kcm_s *kcm, void *ptr)
-{
-	memset(ptr, 0, kcm->size);
-}
-
 
 KMEM_OBJATTR_INIT(dma_kmem_request_init)
 {
@@ -47,12 +42,11 @@ KMEM_OBJATTR_INIT(dma_kmem_request_init)
 	attr->aligne = 0;
 	attr->min  = CONFIG_DMA_RQ_KCM_MIN;
 	attr->max  = CONFIG_DMA_RQ_KCM_MAX;
-	attr->ctor = dma_request_ctor;
+	attr->ctor = NULL;
 	attr->dtor = NULL;
   
 	return 0;
 }
-
 
 static EVENT_HANDLER(dma_async_request_event)
 {
@@ -90,6 +84,7 @@ static inline error_t dma_do_async_request(void *dst, void *src, size_t size)
 	rq->count = size;
 	rq->flags = DEV_RQ_NOBLOCK;
 
+	event_set_priority(&rq->event, E_FUNC);
 	event_set_handler(&rq->event, &dma_async_request_event);
 	event_set_argument(&rq->event, rq);
   
