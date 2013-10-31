@@ -44,6 +44,7 @@ typedef struct dev_params_s
 
 #define DEV_RQ_NOBLOCK   0x01
 #define DEV_RQ_KERNEL    0x02
+#define DEV_RQ_NESTED    0x04
 
 typedef struct dev_request_s
 {
