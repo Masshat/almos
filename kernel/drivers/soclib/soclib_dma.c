@@ -201,7 +201,7 @@ static error_t dma_fraglist_build(dev_request_t *rq)
 	error_t err;
 
 	if(rq->count == 0)
-		return EIO;
+		return EINVAL;
 
 	src_start = (uint_t)rq->src;
 	dst_start = (uint_t)rq->dst;
@@ -211,6 +211,10 @@ static error_t dma_fraglist_build(dev_request_t *rq)
 	{
 		rq->src = task_vaddr2paddr(current_task, rq->src);
 		rq->dst = task_vaddr2paddr(current_task, rq->dst);
+
+		if((rq->src == NULL) || (rq->dst == NULL))
+			return EPERM;
+
 		return 0;
 	}
 
