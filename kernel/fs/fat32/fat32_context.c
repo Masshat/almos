@@ -75,7 +75,10 @@ static error_t vfat_context_init(struct vfat_context_s *ctx)
 	ctx->last_allocated_sector = ctx->fat_begin_lba;
 	ctx->last_allocated_index  = 2;
 
-	vfat_dmsg(1, "%s:\n\tbegin_lba %d\n\tblk_count %d\n\tcluster_begin_lba %d\n\tsectors_per_cluster %d\n\trootdir_first_cluster  %d\n\tbytes_per_cluster %d\n\tMediaType %x (@%x)\n",
+	vfat_dmsg(1, 
+		  "%s:\n\tbegin_lba %d\n\tblk_count %d\n\tcluster_begin_lba %d\n\t"
+		  "sectors_per_cluster %d\n\trootdir_first_cluster  %d\n\tbytes_per_cluster %d\n\t"
+		  "MediaType %x (@%x)\n",
 		  __FUNCTION__,
 		  ctx->fat_begin_lba, 
 		  ctx->fat_blk_count,
