@@ -103,19 +103,17 @@ VFS_READ_FILE(devfs_read)
 	register struct device_s *dev;
 	dev_request_t rq;
 	uint_t count;
-	uint8_t buff[1024];
-  
+
 	dev = ((struct devfs_node_s*)file->f_node->n_pv)->dev;
-  
-	rq.dst   = &buff[0];
-	rq.count = 1024;
+
+	rq.dst   = buffer;
+	rq.count = size;
 	rq.flags = 0;
 	rq.file  = file;
-  
+
 	if((count = dev->op.dev.read(dev, &rq)) < 0)
 		return count;
-  
-	memcpy(buffer, &buff[0], count);
+
 	return count;
 }
 
