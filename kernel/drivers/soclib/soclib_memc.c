@@ -30,50 +30,6 @@
 #include <soclib_memc.h>
 #include <vmm.h>
 
-#if 0
-#define MEMC_CNF_FUNC         0x000
-#define MEMC_PRF_FUNC         0x200
-#define MEMC_ERR_FUNC         0x400
-
-#define MEMC_RD_UPDATE_SEL    0x000
-#define MEMC_WR_MINVAL_SEL    0x008
-#define MEMC_LL_CLENUP_SEL    0x010
-#define MEMC_SC_MUPDTT_SEL    0x018
-#define MEMC_CS_MINVLT_SEL    0x020
-#define MEMC_XX_BINVLT_SEL    0x028
-
-#define MEMC_LOC_SEL          0x000
-#define MEMC_REM_SEL          0x040
-#define MEMC_OTH_SEL          0x0C0
-
-#define MEMC_DIRCT_SEL        0x000
-#define MEMC_COHER_SEL        0x010
-
-#define MEMC_LO_SEL           0x000
-#define MEMC_HI_SEL           0x004
-
-#define READ_LOCAL     (MEMC_PRF_FUNC | MEMC_DIRCT_SEL | MEMC_LOC_SEL | MEMC_RD_UPDATE_SEL | MEMC_LO_SEL)
-#define READ_REMOTE    (MEMC_PRF_FUNC | MEMC_DIRCT_SEL | MEMC_REM_SEL | MEMC_RD_UPDATE_SEL | MEMC_LO_SEL)
-#define READ_COST      (MEMC_PRF_FUNC | MEMC_DIRCT_SEL | MEMC_OTH_SEL | MEMC_RD_UPDATE_SEL | MEMC_LO_SEL)
-
-#define WRITE_LOCAL    (MEMC_PRF_FUNC | MEMC_DIRCT_SEL | MEMC_LOC_SEL | MEMC_WR_MINVAL_SEL | MEMC_LO_SEL)
-#define WRITE_REMOTE   (MEMC_PRF_FUNC | MEMC_DIRCT_SEL | MEMC_REM_SEL | MEMC_WR_MINVAL_SEL | MEMC_LO_SEL)
-#define WRITE_COST     (MEMC_PRF_FUNC | MEMC_DIRCT_SEL | MEMC_OTH_SEL | MEMC_WR_MINVAL_SEL | MEMC_LO_SEL)
-
-#define MEMC_PRF_FUNC | MEMC_DIRCT_SEL | MEMC_LOC_SEL | MEMC_LL_CLENUP_SEL | MEMC_LO_SEL,
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_REM_SEL | MEMC_LL_CLENUP_SEL | MEMC_LO_SEL,
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_OTH_SEL | MEMC_LL_CLENUP_SEL | MEMC_LO_SEL,
-
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_LOC_SEL | MEMC_SC_MUPDTT_SEL | MEMC_LO_SEL,
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_REM_SEL | MEMC_SC_MUPDTT_SEL | MEMC_LO_SEL,
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_OTH_SEL | MEMC_SC_MUPDTT_SEL | MEMC_LO_SEL,
-		/* CS Registers: Local, Remote and Cost */
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_LOC_SEL | MEMC_CS_MINVLT_SEL | MEMC_LO_SEL,
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_REM_SEL | MEMC_CS_MINVLT_SEL | MEMC_LO_SEL,
-		MEMC_PRF_FUND | MEMC_DIRCT_SEL | MEMC_OTH_SEL | MEMC_CS_MINVLT_SEL | MEMC_LO_SEL,
-
-#endif
-
 #define MEMC_CNF_FUNC         0x0
 #define MEMC_PRF_FUNC         0x1
 #define MEMC_ERR_FUNC         0x2
@@ -209,7 +165,7 @@ static const uint16_t reg_tbl[MEMC_REG_NR] = {
 		MEMC_MINVL_TOTAL,
 		MEMC_BINVL_TOTAL};
 
-sint_t memc_read(struct device_s *memc, dev_request_t *rq)
+static sint_t memc_read(struct device_s *memc, dev_request_t *rq)
 {	
 	register size_t count;
 	register uint_t i;
@@ -223,11 +179,10 @@ sint_t memc_read(struct device_s *memc, dev_request_t *rq)
 
 	count = (count > MEMC_REG_NR) ? MEMC_REG_NR : count;
 
-	/* TODO: use  */
 	for(i = 0; i < count; i++)
 	{
 		err = cpu_uspace_copy(&dst[i], (void *)((uint_t)memc->base + reg_tbl[i]), 4);
-		//dst[i] = *((volatile uint32_t*)((uint_t)memc->base + reg_tbl[i]));
+
 		if(err)
 			return -err;
 	}
