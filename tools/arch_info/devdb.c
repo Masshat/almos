@@ -43,6 +43,9 @@ static record_dev_t dev_db[] = {
   {"FB", "Frame Buffer Controler", SOCLIB_FB_ID},
   {"ICU","Interrupt Control Unite", SOCLIB_ICU_ID},
   {"TIMER", "Real-Time Timer", SOCLIB_TIMER_ID},
+  {"MEMC", "L2 Configuration Interface", SOCLIB_MEMC_ID},
+  {"MNIC", "Multi-Channels GMII-Compliant NIC Controller", SOCLIB_MNIC_ID},
+  {"CHDMA", "Multi-Channels DMA Controller Supporting Chained Buffers", SOCLIB_CHDMA_ID},
   {NULL, NULL, SOCLIB_RESERVED_ID}};
 
 int dev_locate_by_name(char *devid, uint8_t *id)

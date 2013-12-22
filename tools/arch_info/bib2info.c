@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#define _ARCH_BIB_SIGNATURE_
 #include "arch-bib.h"
 #include "devdb.h"
 #include "params.h"

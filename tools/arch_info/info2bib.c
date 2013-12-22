@@ -150,7 +150,6 @@ static int info2bib(char *src_name, char *dst_name)
   uint16_t i,j;
   dev_info_t *dev_tbl;
   cluster_info_t *clusters_tbl;
-  dev_info_t *dev_info;
   uint16_t offset;
   uint16_t bootstrap_cid;
   int retval;
@@ -160,7 +159,6 @@ static int info2bib(char *src_name, char *dst_name)
   fdst = NULL;
   clusters_tbl = NULL;
   dev_tbl = NULL;
-  dev_info = NULL;
   header.onln_clstr_nr = 0;
   header.onln_cpu_nr = 0;
 
