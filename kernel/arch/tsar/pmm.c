@@ -180,9 +180,9 @@ error_t pmm_set_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info)
 	uint_t cpu_id;
 
 	cpu_id = cpu_get_id();
-	pde = &pmm->pgdir[MMU_PDE(vaddr)];
-	attr = info->attr;
-	ppn  = info->ppn;
+	pde    = &pmm->pgdir[MMU_PDE(vaddr)];
+	attr   = info->attr;
+	ppn    = info->ppn;
 	isHuge = (attr & PMM_HUGE);
 
 	if(info->attr & PMM_CLEAR)
@@ -193,7 +193,7 @@ error_t pmm_set_page(struct pmm_s *pmm, vma_t vaddr, pmm_page_info_t *info)
 
 	pde_val = *pde;
 	pte_ppn = 0;
-	pte = NULL;
+	pte     = NULL;
   
 	if(isHuge)
 	{
