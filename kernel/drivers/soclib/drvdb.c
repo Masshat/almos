@@ -32,6 +32,7 @@
 #include <soclib_dma.h>
 #include <soclib_block.h>
 #include <soclib_fb.h>
+#include <soclib_memc.h>
 
 
 static struct drvdb_entry_s drivers_db[SOCLIB_DRVID_NR] = 
@@ -44,6 +45,9 @@ static struct drvdb_entry_s drivers_db[SOCLIB_DRVID_NR] =
 	{SOCLIB_FB_ID,"FB","Frame Buffer Controler", &soclib_fb_driver},
 	{SOCLIB_ICU_ID,"ICU","Interrupt Control Unite", &soclib_icu_driver},
 	{SOCLIB_TIMER_ID,"TIMER","Real-Time Timer", &soclib_timer_driver},
+	{SOCLIB_MEMC_ID,"MEMC","L2 Configuration Interface", &soclib_memc_driver},
+	{SOCLIB_MNIC_ID,"MNIC","Multi-Channels GMII-Compliant NIC Controller", NULL},
+	{SOCLIB_CHDMA_ID,"CHDMA","Multi-Channels DMA Controller Supporting Chained Buffers", NULL},
 	{SOCLIB_RESERVED_ID, NULL, NULL, NULL}
 };
 
