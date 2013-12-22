@@ -285,7 +285,9 @@ void arch_init(struct boot_info_s *info)
 
 	for(i=1; i < dev_nr; i++)
 	{
-		if((entry = drvdb_locate_byId(dev_tbl[i].id)) == NULL)
+		entry = drvdb_locate_byId(dev_tbl[i].id);
+
+		if((entry == NULL) || (drvdb_entry_get_driver(entry) == NULL))
 		{
 			boot_dmsg("Warning: Unknown Device [cid %d, dev %d, base 0x%x, devid %d], Ignored\n",
 				  cid, i, dev_tbl[i].base, dev_tbl[i].id);
