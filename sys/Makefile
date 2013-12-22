@@ -1,5 +1,5 @@
 
-SUBDIR=	dietlibc libm libpthread libgomp \
+SUBDIR=	dietlibc libm libpthread libgomp libmemc \
 	libz libcrypto libupc libphoenix TinyGL mk
 
 
