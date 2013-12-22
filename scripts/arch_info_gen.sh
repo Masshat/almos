@@ -24,11 +24,14 @@
 #     YMAX: number of clusters in a column
 #     NPROCS: number of CPUs per Cluster
 #     BSCPU: bootstrap cpu id (global one) declared as operationnal
-#   Default values are (in order) 0x800000 2 2 4 (io-cid) 
+#   Default values are (in order) 0xC00000 2 2 4 (io-cid)
 #--------------------------------------------------------------------
 
 # XICU Segment Base
 XICU_BASE=0xF00000
+
+# MEMC Segment Base
+MEMC_BASE=0xF40000
 
 # FrameBuffer size
 FB_SIZE=0x200000
@@ -79,41 +82,46 @@ print_cluster()
 {
     offset=$1
     cid=$2
-    memc_base=$(printf "0x%x" $offset)
-    memc_size=$(printf "0x%x" $MEMSZ)
+    ram_base=$(printf "0x%x" $offset)
+    ram_size=$(printf "0x%x" $MEMSZ)
     xicu_base=$(printf "0x%x" $((offset + $XICU_BASE)))
+    memc_base=$(printf "0x%x" $((offset + $MEMC_BASE)))
     
     echo "[CLUSTER]"
     echo "         CID="$cid
     echo "         CPU_NR="$NPROCS
-    echo "         DEV_NR=2"
-    echo "         DEVID=RAM       BASE=$memc_base         SIZE=$memc_size   IRQ=-1"
-    echo "         DEVID=XICU      BASE=$xicu_base         SIZE=0x1000     IRQ=-1"
+    echo "         DEV_NR=3"
+    echo "         DEVID=RAM      BASE=$ram_base     SIZE=$ram_size    IRQ=-1"
+    echo "         DEVID=XICU     BASE=$xicu_base     SIZE=0x1000      IRQ=-1"
+    echo "         DEVID=MEMC     BASE=$memc_base     SIZE=0x1000      IRQ=-1"
     echo " "
     echo " "
+
 }
 
 print_io_cluster()
 {
     offset=$1
     cid=$2
-    memc_base=$(printf "0x%x" $offset)
-    memc_size=$(printf "0x%x" $MEMSZ)
+    ram_base=$(printf "0x%x" $offset)
+    ram_size=$(printf "0x%x" $MEMSZ)
     xicu_base=$(printf "0x%x" $((offset + $XICU_BASE)))
-    
+    memc_base=$(printf "0x%x" $((offset + $MEMC_BASE)))
+
     echo "[CLUSTER]"
     echo "         CID="$cid
     echo "         CPU_NR="$NPROCS
-    echo "         DEV_NR=9"
-    echo "         DEVID=RAM       BASE=$memc_base         SIZE=$memc_size   IRQ=-1"
-    echo "         DEVID=XICU      BASE=$xicu_base         SIZE=0x1000     IRQ=-1"
-    echo "         DEVID=FB        BASE=0xBFD00000         SIZE=$FB_SIZE    IRQ=-1"
-    echo "         DEVID=BLKDEV    BASE=0xBFF10000         SIZE=0x20       IRQ=0"
-    echo "         DEVID=TTY       BASE=0xBFF20000         SIZE=0x10       IRQ=2"
-    echo "         DEVID=TTY       BASE=0xBFF20010         SIZE=0x10       IRQ=3"
-    echo "         DEVID=TTY       BASE=0xBFF20020         SIZE=0x10       IRQ=4"
-    echo "         DEVID=TTY       BASE=0xBFF20030         SIZE=0x10       IRQ=5"
-    echo "         DEVID=DMA       BASE=0xBFF30000         SIZE=0x14       IRQ=1"
+    echo "         DEV_NR=10"
+    echo "         DEVID=RAM      BASE=$ram_base     SIZE=$ram_size  IRQ=-1"
+    echo "         DEVID=XICU     BASE=$xicu_base     SIZE=0x1000    IRQ=-1"
+    echo "         DEVID=FB       BASE=0xBFD00000     SIZE=$FB_SIZE  IRQ=-1"
+    echo "         DEVID=MEMC     BASE=$memc_base     SIZE=0x1000    IRQ=-1"
+    echo "         DEVID=BLKDEV   BASE=0xBFF10000     SIZE=0x20      IRQ=0"
+    echo "         DEVID=TTY      BASE=0xBFF20000     SIZE=0x10      IRQ=2"
+    echo "         DEVID=TTY      BASE=0xBFF20010     SIZE=0x10      IRQ=3"
+    echo "         DEVID=TTY      BASE=0xBFF20020     SIZE=0x10      IRQ=4"
+    echo "         DEVID=TTY      BASE=0xBFF20030     SIZE=0x10      IRQ=5"
+    echo "         DEVID=DMA      BASE=0xBFF30000     SIZE=0x14      IRQ=1"
     echo " "
     echo " "
 }

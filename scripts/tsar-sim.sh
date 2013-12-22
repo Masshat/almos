@@ -15,15 +15,16 @@
 #   compile it to BIB binary format and than it will start 
 #   TSAR simulator.
 #
-# - Four arguments can be passed to this script (order is not relevant)
-#     -xmax : number of clusters in a row
-#     -ymax : number of clusters in a column
-#     -nproc : number of CPUs per Cluster
+# - The following arguments can be passed to this script (order is not relevant)
+#     -xmax: number of clusters in a row
+#     -ymax: number of clusters in a column
+#     -nproc: number of CPUs per Cluster
 #     -xfb: frameBuffer's X-length
 #     -yfb: frameBuffer's Y-length
 #     -bscpu: BootStrap CPU (0 to xmax*ymax*nproc-1)
 #     -memsz: per cluster memory size in bytes.
 #     -o: output file name
+#     -g: generate TSAR hardware description, dont call the simulator.
 #   Default values are (in order) 2 2 4 XX 0x800000 "arch-info.bin"
 #--------------------------------------------------------------------
 
@@ -41,20 +42,38 @@ yfb=512
 memsz=0xC00000
 bscpu= # let gen-arch-info choose for us #
 output="arch-info.bin"
+noSim="false"
+
+usage()
+{
+    echo "The following arguments can be passed to this script (order is not relevant)"
+    echo "   -xmax: number of clusters in a row"
+    echo "   -ymax: number of clusters in a column"
+    echo "   -nproc: number of CPUs per Cluster"
+    echo "   -xfb: frameBuffer's X-length"
+    echo "   -yfb: frameBuffer's Y-length"
+    echo "   -bscpu: BootStrap CPU (0 to xmax*ymax*nproc-1)"
+    echo "   -memsz: per cluster memory size in bytes"
+    echo "   -o: output file name"
+    echo "   -g: generate TSAR hardware description, dont call the simulator"
+    echo ""
+    echo "Default values are (in order) $xmax $ymax $ncpu $xfb $yfb $bscpu $memsz $output"
+}
 
 while [ $# -gt 0 ]
 do
     case "$1" in
-	-xmax)  xmax=$2;     shift;;
-	-ymax)  ymax=$2;     shift;;
-	-nproc) ncpu=$2;     shift;;
-	-xfb)   xfb=$2;      shift;;
-	-yfb)   yfb=$2;      shift;;
-	-o)     output="$2"; shift;;
-	-bscpu) bscpu=$2;    shift;;
-	-memsz) memsz=$2;    shift;;
-	-*) echo "$0: error - unrecognized option $1" 1>&2; exit 1;;
-	*) echo "unexpected option/argument $1" 1>&2; exit 1;;
+	-xmax)  xmax=$2;      shift;;
+	-ymax)  ymax=$2;      shift;;
+	-nproc) ncpu=$2;      shift;;
+	-xfb)   xfb=$2;       shift;;
+	-yfb)   yfb=$2;       shift;;
+	-o)     output="$2";  shift;;
+	-bscpu) bscpu=$2;     shift;;
+	-memsz) memsz=$2;     shift;;
+	-g)     noSim="true";;
+	-*) echo "$0: error - unrecognized option $1" 1>&2; usage 1>&2; exit 1;;
+	*) echo "unexpected option/argument $1" 1>&2; usage 1>$2; exit 2;;
     esac
     shift
 done
@@ -85,7 +104,10 @@ error_sim()
 
 $GEN_ARCH_INFO $memsz $xmax $ymax $ncpu $bscpu > $INFO_FILE             || error_arch_info
 $INFO2BIB -i $INFO_FILE -o $output                               || error_info2bib
-$SIM -XMAX $xmax -YMAX $ymax -NPROCS $ncpu -XFB $xfb -YFB $yfb -MEMSZ $memsz || error_sim
+
+if [ $noSim = "false" ]; then
+    $SIM -XMAX $xmax -YMAX $ymax -NPROCS $ncpu -XFB $xfb -YFB $yfb -MEMSZ $memsz || error_sim
+fi
 
 #-------------------------------------------------------------------------------#
 #                                End of script                                  # 
