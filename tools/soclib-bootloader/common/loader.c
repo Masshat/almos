@@ -225,9 +225,9 @@ static void boot_loader(int cpu_id)
 static void * boot_memcpy (uint_t *dma, void *dest, void *src, unsigned long size)
 {
 	register uint_t i = 0;
-	volatile uint_t *dma_base = (volatile uint_t *)dma;
 
 #if CONFIG_BOOT_USE_DMA
+	volatile uint_t *dma_base = (volatile uint_t *)dma;
 	volatile uint_t cntr = 0;
    
 	*(dma_base + DMA_RESET_REG) = 0;
