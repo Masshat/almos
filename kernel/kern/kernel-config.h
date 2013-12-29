@@ -49,7 +49,7 @@
 //         TASK MANAGEMENT CONFIGURATIONS         //
 ////////////////////////////////////////////////////
 #define CONFIG_TASK_MAX_NR               1024
-#define CONFIG_TASK_FILE_MAX_NR          128
+#define CONFIG_TASK_FILE_MAX_NR          2048
 #define CONFIG_TASK_CHILDS_MAX_NR        512
 #define CONFIG_TASK_ARGS_PAGES_MAX_NR    32
 #define CONFIG_TASK_HEAP_MIN_SIZE        0x00010000
@@ -83,7 +83,7 @@
 #define CONFIG_CPU_LOAD_PERIOD           4
 #define CONFIG_CLUSTER_KEYS_NR           8
 #define CONFIG_REL_KFIFO_SIZE            32
-#define CONFIG_VFS_NODES_PER_CLUSTER     40
+#define CONFIG_VFS_NODES_PER_CLUSTER     128
 #define CONFIG_SCHED_THREADS_NR          32
 #define CONFIG_BARRIER_WQDB_NR           4
 #define CONFIG_BARRIER_ACTIVE_WAIT       no
