@@ -31,9 +31,9 @@ int sys_creat (char *pathname, uint_t mode)
 {
 	register error_t err = 0;
 	register uint32_t flags;
-	register struct vfs_file_s **file;
 	register struct thread_s *this;
 	register struct task_s *task;
+	struct vfs_file_s *file;
 	uint_t fd = 0;
 
 	this = current_thread;
@@ -44,12 +44,11 @@ int sys_creat (char *pathname, uint_t mode)
 		this->info.errno = ENFILE;
 		return -1;
 	}
-    
-	file  = &task_fd_lookup(task,fd);
+
 	flags = 0;
 	rwlock_rdlock(&task->cwd_lock);
 
-	if((err = vfs_create(task->vfs_cwd, pathname, flags, mode, file)))
+	if((err = vfs_create(task->vfs_cwd, pathname, flags, mode, &file)))
 	{
 		this->info.errno = (err < 0 ) ? -err : err;
 		task_fd_put(task, fd);
@@ -57,5 +56,7 @@ int sys_creat (char *pathname, uint_t mode)
 		return -1;
 	}
 	rwlock_unlock(&task->cwd_lock);
+
+	task_fd_set(task, fd, file);
 	return fd;
 }

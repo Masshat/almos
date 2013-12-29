@@ -46,10 +46,6 @@
 #define DEV_STDOUT  CONFIG_DEV_STDOUT
 #define DEV_STDERR  CONFIG_DEV_STDERR
 
-#define STDIN       0
-#define STDOUT      1
-#define STDERR      2
-
 #define TASK_DEFAULT_HEAP_SIZE  CONFIG_TASK_HEAP_MIN_SIZE
 
 #define INIT_PATH   "/bin/init"
@@ -412,6 +408,9 @@ error_t task_load_init(struct task_s *task)
 	struct task_s *init;
 	struct dqdt_attr_s attr;
 	struct thread_s *main_thread;
+	struct vfs_file_s *stdin;
+	struct vfs_file_s *stdout;
+	struct vfs_file_s *stderr;
 	error_t err;
 	error_t err1;
 	error_t err2;
@@ -455,21 +454,25 @@ error_t task_load_init(struct task_s *task)
   
 	list_add_last(&task->children, &init->list);
 
-	err  = vfs_open(init->vfs_cwd, DEV_STDIN,  VFS_O_RDONLY, 0, &init->fd_info->tbl[STDIN]);
-	err1 = vfs_open(init->vfs_cwd, DEV_STDOUT, VFS_O_WRONLY, 0, &init->fd_info->tbl[STDOUT]);
-	err2 = vfs_open(init->vfs_cwd, DEV_STDERR, VFS_O_WRONLY, 0, &init->fd_info->tbl[STDERR]);
+	err  = vfs_open(init->vfs_cwd, DEV_STDIN,  VFS_O_RDONLY, 0, &stdin);
+	err1 = vfs_open(init->vfs_cwd, DEV_STDOUT, VFS_O_WRONLY, 0, &stdout);
+	err2 = vfs_open(init->vfs_cwd, DEV_STDERR, VFS_O_WRONLY, 0, &stderr);
 
 	if(err || err1 || err2)
 	{
-		if(!err)  vfs_close(init->fd_info->tbl[STDIN],  NULL);
-		if(!err1) vfs_close(init->fd_info->tbl[STDOUT], NULL);
-		if(!err2) vfs_close(init->fd_info->tbl[STDERR], NULL);
+		if(!err)  vfs_close(stdin,  NULL);
+		if(!err1) vfs_close(stdout, NULL);
+		if(!err2) vfs_close(stderr, NULL);
     
 		printk(ERROR,"ERROR: do_exec: connot open fds [%d, %d, %d]\n", err, err1, err2);
 		err = ENOMEM;
     
 		goto INIT_ERR;
 	}
+
+	task_fd_set(init, 0, stdin);
+	task_fd_set(init, 1, stdout);
+	task_fd_set(init, 2, stderr);
 
 	current_thread->info.attr.flags = PT_ATTR_AUTO_NXTT | PT_ATTR_MEM_PRIO | PT_ATTR_AUTO_MGRT;
 
