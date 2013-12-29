@@ -27,68 +27,68 @@
 
 void do_memset_8(void *dst, uint32_t val, size_t size)
 {
-  volatile uint32_t *dst_ptr;
-  register uint32_t *limit_ptr;
+	volatile uint32_t *dst_ptr;
+	register uint32_t *limit_ptr;
   
-  dst_ptr   = dst;
-  limit_ptr = (uint32_t*)((uint8_t*)dst + (size << 5));
+	dst_ptr   = dst;
+	limit_ptr = (uint32_t*)((uint8_t*)dst + (size << 5));
   
-  while(dst_ptr != limit_ptr)
-  {
-    dst_ptr[0] = val;
-    dst_ptr[1] = val;
-    dst_ptr[2] = val;
-    dst_ptr[3] = val;
-    dst_ptr[4] = val;
-    dst_ptr[5] = val;
-    dst_ptr[6] = val;
-    dst_ptr[7] = val;
+	while(dst_ptr != limit_ptr)
+	{
+		dst_ptr[0] = val;
+		dst_ptr[1] = val;
+		dst_ptr[2] = val;
+		dst_ptr[3] = val;
+		dst_ptr[4] = val;
+		dst_ptr[5] = val;
+		dst_ptr[6] = val;
+		dst_ptr[7] = val;
 
-    dst_ptr += 8;
-  }
+		dst_ptr += 8;
+	}
 }
 
 #include <kdmsg.h>
 #include <cpu.h>
 void *memset(void *s, int c, unsigned int size)
 {
-  register uint8_t  *ptr = s;
-  register uint32_t *wptr;
-  register uint32_t val;
-  register uint32_t isize;
-  register uint32_t count;
+	register uint8_t  *ptr = s;
+	register uint32_t *wptr;
+	register uint32_t val;
+	register uint32_t isize;
+	register uint32_t count;
   
-  c&=0xFF;
-  ptr = s;
+	c&=0xFF;
+	ptr = s;
 
-  while(((uint32_t) ptr & 0x3) && size && size--)
-    *(ptr++) = (uint8_t) c;
+	while(((uint32_t) ptr & 0x3) && size && size--)
+		*(ptr++) = (uint8_t) c;
 
-  if(size == 0) return s;
+	if(size == 0) return s;
 
-  val = c << 24 | c << 16 | c << 8 | (c & 0xFF); 
-  isize = size >> 5;
+	val = c << 24 | c << 16 | c << 8 | (c & 0xFF);
+	isize = size >> 5;
 
-  if(isize != 0)
-    do_memset_8(ptr, val, isize);
+	if(isize != 0)
+		do_memset_8(ptr, val, isize);
 
-  count = isize << 5;
-  size -= count;
+	count = isize << 5;
+	size -= count;
   
-  if(size == 0) return s;
+	if(size == 0) return s;
 
-  wptr = (uint32_t*)(ptr + count); 
-  isize = size >> 2;
-  count = isize;
+	wptr = (uint32_t*)(ptr + count);
+	isize = size >> 2;
+	count = isize;
 
-  while(isize--)
-    *(wptr++) = val;
+	while(isize--)
+		*(wptr++) = val;
 
-  size = size - (count << 2);
-  ptr = (uint8_t*)wptr;
+	size = size - (count << 2);
+	ptr = (uint8_t*)wptr;
 
-  while(size--)
-    *(ptr++) = (uint8_t)c;
+	while(size--)
+		*(ptr++) = (uint8_t)c;
   
-  return s;
+	return s;
 }
