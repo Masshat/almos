@@ -42,6 +42,229 @@
 #define TASK_PID_BUSY        0x2
 #define TASK_PID_BUSY_BITS   0x2
 
+struct vfs_file_s;
+
+struct fd_info_s
+{
+	spinlock_t lock;
+	uint_t first;
+	uint_t last;
+	uint_t count;
+	uint_t fds_per_tbl;
+	struct vfs_file_s **fd_tbls[16];
+	struct page_s *pgs_tbl[16];
+};
+
+error_t task_fd_init(struct task_s *task)
+{
+	kmem_req_t req;
+	struct fd_info_s *info;
+	uint_t count,i;
+	uint_t fds_per_tbl;
+
+	req.type  = KMEM_FDINFO;
+	req.flags = AF_KERNEL | AF_ZERO;
+	req.size  = sizeof(*info);
+	info      = kmem_alloc(&req);
+
+	if(info == NULL)
+		return ENOMEM;
+
+	count = (CONFIG_TASK_FILE_MAX_NR * sizeof(struct vfs_file_s*)) >> PMM_PAGE_SHIFT;
+
+	if(count > 16)
+		return ERANGE;
+
+	fds_per_tbl = PMM_PAGE_SIZE / sizeof(struct vfs_file_s*);
+	req.type    = KMEM_PAGE;
+	req.size    = 0;
+
+	for(i = 0; i < count; i++)
+	{
+		info->pgs_tbl[i] = kmem_alloc(&req);
+
+		if(info->pgs_tbl[i] == NULL)
+			goto fail_nomem;
+
+		info->fd_tbls[i] = ppm_page2addr(info->pgs_tbl[i]);
+	}
+
+	spinlock_init(&info->lock, "Task FDs");
+	info->first = 0;
+	info->last  = 2;	/* stdin, stdout, stderr */
+	info->count = count;
+	info->fds_per_tbl = fds_per_tbl;
+	task->fd_info = info;
+
+	return 0;
+
+fail_nomem:
+	count = i;
+
+	for(i = 0; i < count; i++)
+	{
+		req.ptr = info->pgs_tbl[i];
+		kmem_free(&req);
+	}
+
+	req.type = KMEM_FDINFO;
+	req.ptr  = info;
+	kmem_free(&req);
+
+	return ENOMEM;
+}
+
+void task_fd_destroy(struct task_s *task)
+{
+	struct fd_info_s *info;
+	struct vfs_file_s *file;
+	kmem_req_t req;
+	uint_t i;
+
+	req.type = KMEM_PAGE;
+	info     = task->fd_info;
+
+	for(i=0; i <= info->last; i++)
+	{
+		file = task_fd_lookup(task, i);
+
+		if(file != NULL)
+			vfs_close(file, NULL);
+	}
+
+	for(i = 0; i < info->count; i++)
+	{
+		req.ptr = info->pgs_tbl[i];
+		kmem_free(&req);
+	}
+
+	req.type = KMEM_FDINFO;
+	req.ptr  = info;
+	kmem_free(&req);
+
+	task->fd_info = NULL;
+}
+
+error_t task_fd_get(struct task_s *task, uint_t *new_fd, uint_t limit)
+{
+	register struct fd_info_s *info;
+	register struct vfs_file_s **tbl;
+	register uint_t fds_per_tbl;
+	register uint_t fd, count, i;
+	register bool_t isFound;
+	error_t err;
+
+	info  = task->fd_info;
+	count = info->count;
+	fds_per_tbl = info->fds_per_tbl;
+	isFound = false;
+
+	spinlock_lock(&info->lock);
+
+	fd = info->first;
+
+	while((fd < limit) && ((fd / fds_per_tbl) < count) && (isFound == false))
+	{
+		tbl = info->fd_tbls[fd / fds_per_tbl];
+		i   = fd % info->fds_per_tbl;
+
+		for(; ((tbl[i] != NULL) && (fd < limit) && (i < fds_per_tbl)); i++, fd++)
+			;
+
+		if(tbl[i] == NULL)
+		{
+			isFound  = true;
+			tbl[i] = (struct vfs_file_s *) 0x1; /* reserved */
+		}
+	}
+
+	if(isFound == true)
+	{
+		info->first = fd;
+		info->last  = (fd > info->last) ? fd : info->last;
+		err = 0;
+	}
+	else
+		err = -1;
+
+	spinlock_unlock(&info->lock);
+
+	*new_fd = fd;
+	return err;
+}
+
+void task_fd_put(struct task_s *task, uint_t fd)
+{
+	struct fd_info_s *info;
+	struct vfs_file_s **tbl;
+	uint_t i;
+
+	info = task->fd_info;
+	tbl  = info->fd_tbls[fd / info->fds_per_tbl];
+	i    = fd % info->fds_per_tbl;
+
+	spinlock_lock(&info->lock);
+
+	if(fd < info->first)
+		info->first = fd;
+
+	tbl[i] = NULL;
+
+	spinlock_unlock(&info->lock);
+}
+
+
+struct vfs_file_s* task_fd_lookup(struct task_s *task, uint_t fd)
+{
+	struct fd_info_s *info;
+	struct vfs_file_s **tbl;
+
+	info = task->fd_info;
+	tbl  = info->fd_tbls[fd / info->fds_per_tbl];
+
+	return tbl[fd % info->fds_per_tbl];
+}
+
+void task_fd_set(struct task_s *task, uint_t fd, struct vfs_file_s *file)
+{
+	struct fd_info_s *info;
+	struct vfs_file_s **tbl;
+
+	info = task->fd_info;
+	tbl  = info->fd_tbls[fd / info->fds_per_tbl];
+	tbl[fd % info->fds_per_tbl] = file;
+}
+
+static void task_fd_fork(struct task_s *dst, struct task_s *src)
+{
+	struct fd_info_s *dst_info;
+	register struct fd_info_s *src_info;
+	register struct vfs_file_s *file;
+	register uint_t i;
+
+	src_info = src->fd_info;
+	dst_info = dst->fd_info;
+
+	spinlock_lock(&src_info->lock);
+
+	for(i=0; i <= src_info->last; i++)
+	{
+		file = task_fd_lookup(src, i);
+
+		if(file != NULL)
+		{
+			atomic_add(&file->f_count, 1);
+			task_fd_set(dst, i, file);
+		}
+	}
+
+	dst_info->first = src_info->first;
+	dst_info->last  = src_info->last;
+
+	spinlock_unlock(&src_info->lock);
+}
+
+
 static struct task_s task0;
 
 /* TODO: use atomic counter instead of spinlock */
@@ -512,18 +735,13 @@ error_t task_create(struct task_s **new_task, struct dqdt_attr_s *attr, uint_t m
 
 	task->th_tbl = ppm_page2addr(task->th_tbl_pg);
   
-	req.type      = KMEM_FDINFO;
-	req.size      = sizeof(*task->fd_info);
-	task->fd_info = kmem_alloc(&req);
+	err = task_fd_init(task);
 
-	if(task->fd_info == NULL)
-	{
-		err = ENOMEM;
+	if(err)
 		goto fail_fd_info;
-	}
 
 	memset(&task->vmm, 0, sizeof(task->vmm));
-	memset(&task->fd_info->tbl[0], 0, sizeof(task->fd_info->tbl));
+
 	task->cluster         = attr->cluster;
 	task->cpu             = attr->cpu;
 	task->bin             = NULL;
@@ -559,8 +777,6 @@ fail_task_desc:
 
 error_t task_dup(struct task_s *dst, struct task_s *src)
 {
-	uint_t i;
-
 	rwlock_wrlock(&src->cwd_lock);
 
 	vfs_node_up_atomic(src->vfs_root);
@@ -571,18 +787,7 @@ error_t task_dup(struct task_s *dst, struct task_s *src)
 
 	rwlock_unlock(&src->cwd_lock);
   
-	spinlock_lock(&src->fd_info->lock);
-
-	for(i=0; i < (CONFIG_TASK_FILE_MAX_NR); i++)
-	{
-		if(src->fd_info->tbl[i] != NULL)
-		{
-			atomic_add(&src->fd_info->tbl[i]->f_count, 1);
-			dst->fd_info->tbl[i] = src->fd_info->tbl[i];
-		}
-	}
-
-	spinlock_unlock(&src->fd_info->lock);
+	task_fd_fork(dst, src);
 
 	assert(src->bin != NULL);
 	(void)atomic_add(&src->bin->f_count, 1);
@@ -593,7 +798,6 @@ error_t task_dup(struct task_s *dst, struct task_s *src)
 void task_destroy(struct task_s *task)
 {
 	kmem_req_t req;
-	register uint_t i;
 	register uint_t pid;
 	uint_t pgfault_nr;
 	uint_t spurious_pgfault_nr;
@@ -611,11 +815,7 @@ void task_destroy(struct task_s *task)
 	tasks_mgr.tm_tbl[task->pid] = NULL;
 	cpu_wbflush();
 
-	for(i=0; i < (CONFIG_TASK_FILE_MAX_NR); i++)
-	{
-		if(task->fd_info->tbl[i] != NULL)
-			vfs_close(task->fd_info->tbl[i], NULL);
-	}
+	task_fd_destroy(task);
 
 	if(task->bin != NULL)
 		vfs_close(task->bin, NULL);
@@ -682,12 +882,6 @@ KMEM_OBJATTR_INIT(task_kmem_init)
 	return 0;
 }
 
-static void fdinfo_ctor(struct kcm_s *kcm, void *ptr)
-{
-	struct fd_info_s *info = ptr;
-	spinlock_init(&info->lock, "Task FDs");
-}
-
 KMEM_OBJATTR_INIT(task_fdinfo_kmem_init)
 {
 	attr->type   = KMEM_FDINFO;
@@ -696,7 +890,7 @@ KMEM_OBJATTR_INIT(task_fdinfo_kmem_init)
 	attr->aligne = 0;
 	attr->min    = CONFIG_FDINFO_KCM_MIN;
 	attr->max    = CONFIG_FDINFO_KCM_MAX;
-	attr->ctor   = fdinfo_ctor;
+	attr->ctor   = NULL;
 	attr->dtor   = NULL;
 	return 0;
 }

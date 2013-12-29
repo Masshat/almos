@@ -122,10 +122,10 @@ int sys_fork(uint_t flags, uint_t cpu_gid);
 int sys_exec(char *filename, char **argv, char **envp);
 
 /* File-Management Operations */
-#define task_fd_put(task,fd)
-#define task_fd_lookup(task,fd)
-#define task_fd_set(task,fd,file)
-static inline error_t task_fd_get(struct task_s *task, uint_t *new_fd, uint_t limit);
+void task_fd_put(struct task_s *task, uint_t fd);
+struct vfs_file_s* task_fd_lookup(struct task_s *task, uint_t fd);
+void task_fd_set(struct task_s *task, uint_t fd, struct vfs_file_s *file);
+error_t task_fd_get(struct task_s *task, uint_t *new_fd, uint_t limit);
 
 /* Memory-Management Operations */
 inline void* task_vaddr2paddr(struct task_s *task, void *vma);
@@ -138,46 +138,6 @@ KMEM_OBJATTR_INIT(task_kmem_init);
 ////////////////////////////////////
 //        Private Section         //
 ////////////////////////////////////
-struct vfs_file_s;
-
-struct fd_info_s
-{
-	spinlock_t lock;
-	struct vfs_file_s *tbl[CONFIG_TASK_FILE_MAX_NR];
-};
-
-/* TODO: use atomic counter instead of spinlock */
-static inline error_t task_fd_get(struct task_s *task, uint_t *new_fd, uint_t limit)
-{
-	register struct fd_info_s *info;
-	register uint_t fd;
-
-	info = task->fd_info;
-
-	spinlock_lock(&info->lock);
-  
-	for(fd=0; ((fd < limit) && (info->tbl[fd] != NULL)); fd++);
-   
-	if(fd == limit)
-	{
-		spinlock_unlock(&info->lock);
-		return -1;
-	}
-  
-	info->tbl[fd] = (struct vfs_file_s *)fd;
-	spinlock_unlock(&info->lock);
-	*new_fd = fd;
-	return 0;
-}
-
-#undef task_fd_put
-#define task_fd_put(_task,_fd) do {(_task)->fd_info->tbl[(_fd)] = NULL;} while(0)
-
-#undef task_fd_lookup
-#define task_fd_lookup(_task,_fd) ((_task)->fd_info->tbl[(_fd)])
-
-#undef task_fd_set
-#define task_fd_set(_task,_fd, _file_) do {(_task)->fd_info->tbl[(_fd)] = (_file_);} while(0)
 
 /* for debug only */
 #define TASK_PS_TRACE_OFF    0
