@@ -37,7 +37,7 @@ error_t vfs_node_freelist_init(uint_t length)
 	return 0;
 }
 
-void vfs_node_freelist_add (struct vfs_node_s *node, uint_t hasError)
+void vfs_node_freelist_add(struct vfs_node_s *node, uint_t hasError)
 {
 	if(VFS_IS(node->n_attr,VFS_PIPE))
 	{
@@ -68,7 +68,7 @@ void vfs_node_freelist_add (struct vfs_node_s *node, uint_t hasError)
 }
 
 
-struct vfs_node_s* vfs_node_freelist_get (struct vfs_context_s* parent_ctx)
+struct vfs_node_s* vfs_node_freelist_get(struct vfs_context_s* parent_ctx)
 {
 	register struct vfs_node_s *node;
 	struct cluster_s *cluster;
@@ -79,13 +79,15 @@ struct vfs_node_s* vfs_node_freelist_get (struct vfs_context_s* parent_ctx)
 	current_nodes_nr = atomic_get(&cluster->vfs_nodes_nr);
 	node             = NULL;
 
-	if((current_nodes_nr <= CONFIG_VFS_NODES_PER_CLUSTER))
+	if((current_nodes_nr < CONFIG_VFS_NODES_PER_CLUSTER) || (list_empty(&vfs_node_freelist.root)))
 	{
 		req.type  = KMEM_VFS_NODE;
 		req.size  = sizeof(*node);
 		req.flags = AF_KERNEL;
 
-		if((node = kmem_alloc(&req)) != NULL)
+		node = kmem_alloc(&req);
+
+		if(node != NULL)
 		{
 			atomic_add(&cluster->vfs_nodes_nr, 1);
 			node->n_op     = NULL;
