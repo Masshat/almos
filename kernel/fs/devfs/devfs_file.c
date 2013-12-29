@@ -80,7 +80,7 @@ VFS_OPEN_FILE(devfs_open)
 		return 0;
 	}
 
-	if((file->f_pv == NULL))
+	if(info == NULL)
 	{
 		req.type  = KMEM_DEVFS_FILE;
 		req.size  = sizeof(*info);
