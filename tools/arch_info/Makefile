@@ -26,11 +26,15 @@
 CC=gcc
 CFLAGS=-W -Wall -Werror
 BIN=$(ALMOS_TOP)/tools/bin
-RM=rm -f
+RM=rm -rf
+MKDIR=mkdir -p
 
 BINS=$(BIN)/bib2info $(BIN)/info2bib
 
-all: $(BINS)
+all: folder $(BINS)
+
+folder:
+	@$(MKDIR) $(BIN)
 
 $(BIN)/bib2info: bib2info.c devdb.c
 	@echo '   [  CC  ]        '$^
@@ -40,14 +44,10 @@ $(BIN)/info2bib : info2bib.c devdb.c
 	@echo '   [  CC  ]        '$^
 	@$(CC) $(CFLAGS) $^ -o $@
 
-.PHONY: clean realclean
+.PHONY: clean
 
 clean:
-	@echo '   [  RM  ]        '*~
-	@$(RM) *~
-
-realclean: clean
-	@echo '   [  RM  ]        '$(BINS)
-	@$(RM) $(BINS)
+	@echo '   [  RM  ]        '$(BIN)
+	@$(RM) $(BIN)
 
 #=====================================================================

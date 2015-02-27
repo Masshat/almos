@@ -1,5 +1,5 @@
 
-SUBDIR= kernel sys
+SUBDIR= kernel sys tools/arch_info
 
 
 default: all
